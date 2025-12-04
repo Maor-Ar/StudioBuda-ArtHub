@@ -1,0 +1,46 @@
+openapi: 3.0.0
+info:
+  title: StudioBuda ArtHub API
+  version: 1.0.0
+  description: GraphQL API for StudioBuda art studio class registration platform
+
+servers:
+  - url: http://localhost:4000
+    description: Development server
+
+paths:
+  /graphql:
+    post:
+      summary: GraphQL endpoint
+      description: All GraphQL queries and mutations are sent to this endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                variables:
+                  type: object
+      responses:
+        '200':
+          description: Successful response
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - BearerAuth: []
+
