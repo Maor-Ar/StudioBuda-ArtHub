@@ -14,6 +14,10 @@ A user-friendly web platform backend for seamless registration to StudioBuda art
 - **Testing**: Jest
 - **Deployment**: Google Cloud Run
 
+## Quick Start
+
+See [QUICK_START.md](./QUICK_START.md) for a 5-minute setup guide.
+
 ## Setup
 
 1. Install dependencies:
@@ -21,12 +25,12 @@ A user-friendly web platform backend for seamless registration to StudioBuda art
 npm install
 ```
 
-2. Copy environment variables:
-```bash
-cp .env.example .env
-```
+2. Create `.env` file (see [QUICK_START.md](./QUICK_START.md) or [SETUP_GUIDE.md](./SETUP_GUIDE.md))
 
-3. Configure your `.env` file with the required credentials.
+3. Configure your `.env` file with the required credentials:
+   - Firebase credentials (required)
+   - Redis connection details (required)
+   - Optional: Grow API, Email service
 
 4. Start the development server:
 ```bash
@@ -37,6 +41,17 @@ npm run dev
 ```bash
 npm start
 ```
+
+## Detailed Setup
+
+For complete setup instructions including:
+- Firebase configuration
+- Redis setup
+- Local development
+- Google Cloud deployment
+- Custom domain setup
+
+See [SETUP_GUIDE.md](./SETUP_GUIDE.md)
 
 ## Project Structure
 

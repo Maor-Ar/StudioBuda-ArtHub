@@ -9,6 +9,16 @@ export const getRedisClient = async () => {
     return redisClient;
   }
 
+  // Check if Redis config is available
+  if (!config.redis.host) {
+    const isDevelopment = config.server.nodeEnv === 'development';
+    if (isDevelopment) {
+      logger.warn('⚠️  Redis not configured. Cache will be disabled.');
+      return null;
+    }
+    throw new Error('Redis host is required');
+  }
+
   try {
     redisClient = createClient({
       socket: {
@@ -38,6 +48,11 @@ export const getRedisClient = async () => {
     return redisClient;
   } catch (error) {
     logger.error('Redis connection error:', error);
+    const isDevelopment = config.server.nodeEnv === 'development';
+    if (isDevelopment) {
+      logger.warn('⚠️  Redis connection failed. Continuing without cache.');
+      return null;
+    }
     throw error;
   }
 };

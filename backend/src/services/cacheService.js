@@ -6,6 +6,7 @@ class CacheService {
   async get(key) {
     try {
       const client = await getRedisClient();
+      if (!client) return null; // Cache disabled
       const value = await client.get(key);
       return value ? JSON.parse(value) : null;
     } catch (error) {
@@ -17,6 +18,7 @@ class CacheService {
   async set(key, value, ttl = null) {
     try {
       const client = await getRedisClient();
+      if (!client) return false; // Cache disabled
       const serialized = JSON.stringify(value);
       if (ttl) {
         await client.setEx(key, ttl, serialized);
@@ -33,6 +35,7 @@ class CacheService {
   async del(key) {
     try {
       const client = await getRedisClient();
+      if (!client) return false; // Cache disabled
       await client.del(key);
       return true;
     } catch (error) {
@@ -44,6 +47,7 @@ class CacheService {
   async delPattern(pattern) {
     try {
       const client = await getRedisClient();
+      if (!client) return false; // Cache disabled
       const keys = await client.keys(pattern);
       if (keys.length > 0) {
         await client.del(keys);

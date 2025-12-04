@@ -20,11 +20,21 @@ const optionalEnvVars = {
 };
 
 // Validate required environment variables
+// Only validate in production - allow missing vars in development for easier testing
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+const isDevelopment = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
 
-if (missingVars.length > 0) {
+if (missingVars.length > 0 && !isDevelopment) {
   throw new Error(
     `Missing required environment variables: ${missingVars.join(', ')}`
+  );
+}
+
+// Warn in development but don't fail
+if (missingVars.length > 0 && isDevelopment) {
+  console.warn(
+    `⚠️  Warning: Missing environment variables: ${missingVars.join(', ')}\n` +
+    `   Server may not function correctly without these.`
   );
 }
 
