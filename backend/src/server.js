@@ -17,7 +17,56 @@ import swaggerJsdoc from 'swagger-jsdoc';
 const app = express();
 
 // Security middleware
-app.use(helmet());
+// Configure Helmet with CSP that allows Apollo Sandbox in development
+const isDevelopment = config.server.nodeEnv === 'development' || !config.server.nodeEnv || config.server.nodeEnv === '';
+
+// Log security configuration (using both console and logger)
+console.log('=== Security Configuration ===');
+console.log(`NODE_ENV: ${config.server.nodeEnv || 'undefined'}`);
+console.log(`isDevelopment: ${isDevelopment}`);
+console.log(`CSP enabled: ${!isDevelopment}`);
+logger.info('=== Security Configuration ===');
+logger.info(`NODE_ENV: ${config.server.nodeEnv || 'undefined'}`);
+logger.info(`isDevelopment: ${isDevelopment}`);
+logger.info(`CSP enabled: ${!isDevelopment}`);
+
+if (isDevelopment) {
+  // In development, conditionally apply Helmet without CSP
+  app.use(helmet({
+    contentSecurityPolicy: false, // Explicitly disable CSP
+  }));
+  
+  // Explicitly remove any CSP headers (in case they were cached)
+  app.use((req, res, next) => {
+    res.removeHeader('Content-Security-Policy');
+    res.removeHeader('X-Content-Security-Policy');
+    res.removeHeader('X-WebKit-CSP');
+    next();
+  });
+  
+  console.log('CSP disabled in development mode - Apollo Sandbox should work');
+  logger.info('CSP disabled in development mode - Apollo Sandbox should work');
+} else {
+  // In production, use strict CSP
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'", "https:", "data:"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'self'"],
+      },
+    },
+  }));
+  
+  console.log('CSP enabled in production mode with strict rules');
+  logger.info('CSP enabled in production mode with strict rules');
+}
 
 // CORS
 app.use(cors({
@@ -38,6 +87,11 @@ app.use('/graphql', generalRateLimiter);
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Favicon endpoint (to prevent 404 errors)
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end(); // No content, but successful
 });
 
 // Swagger configuration
@@ -66,6 +120,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 const apolloServer = new ApolloServer({
   typeDefs,
   resolvers,
+  introspection: true, // Enable introspection for GraphQL playground/sandbox
   formatError: (error) => {
     logger.error('GraphQL Error:', error);
     return {

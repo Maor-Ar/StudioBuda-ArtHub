@@ -7,13 +7,24 @@ const PORT = config.server.port;
 
 // Start server
 const startServer = async () => {
+  console.log('=== Starting Server ===');
+  console.log(`Environment: ${config.server.nodeEnv || 'undefined'}`);
+  console.log(`Port: ${PORT}`);
+  console.log(`CORS Origin: ${config.cors.origin}`);
+  logger.info('=== Starting Server ===');
+  logger.info(`Environment: ${config.server.nodeEnv || 'undefined'}`);
+  logger.info(`Port: ${PORT}`);
+  logger.info(`CORS Origin: ${config.cors.origin}`);
+  
   // Setup GraphQL
   await setupGraphQL();
 
   const server = app.listen(PORT, () => {
+    logger.info('=== Server Started Successfully ===');
     logger.info(`Server running on port ${PORT}`);
     logger.info(`GraphQL endpoint: http://localhost:${PORT}/graphql`);
     logger.info(`API docs: http://localhost:${PORT}/api-docs`);
+    logger.info(`Health check: http://localhost:${PORT}/health`);
   });
 
   return server;
