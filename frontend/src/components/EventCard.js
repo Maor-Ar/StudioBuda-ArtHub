@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import UserHeadIcon from '../assets/icons/user-head.svg';
 import UsersFourIcon from '../assets/icons/users-four.svg';
 
-const EventCard = ({ event, onRegister, isRegistered }) => {
+const EventCard = ({ event, onRegister, isRegistered, onPress }) => {
   const formatTime = (time) => {
     if (!time) return '';
     return time.substring(0, 5); // HH:mm format
@@ -13,14 +13,20 @@ const EventCard = ({ event, onRegister, isRegistered }) => {
     if (!startTime || !duration) return '';
     const start = formatTime(startTime);
     const [hours, minutes] = startTime.split(':');
-    const endHour = parseInt(hours) + Math.floor(duration / 60);
-    const endMinute = parseInt(minutes) + (duration % 60);
+    const startMinutes = parseInt(hours) * 60 + parseInt(minutes);
+    const endMinutes = startMinutes + duration;
+    const endHour = Math.floor(endMinutes / 60);
+    const endMinute = endMinutes % 60;
     const endTime = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
     return `${start} - ${endTime}`;
   };
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity 
+      style={styles.card} 
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
       {/* Left side - Instructor and Participants */}
       <View style={styles.leftSection}>
         <View style={styles.infoRow}>
@@ -30,7 +36,7 @@ const EventCard = ({ event, onRegister, isRegistered }) => {
         <View style={styles.infoRow}>
           <UsersFourIcon width={20} height={20} style={styles.icon} />
           <Text style={styles.infoText}>
-            {event.registeredCount || 4}/{event.maxRegistrations || 6}
+            {event.registeredCount ?? 0}/{event.maxRegistrations ?? 8}
           </Text>
         </View>
       </View>
@@ -57,7 +63,7 @@ const EventCard = ({ event, onRegister, isRegistered }) => {
           <Text style={styles.registerButtonText}>תרשמו אותי</Text>
         </TouchableOpacity>
       )}
-    </View>
+    </TouchableOpacity>
   );
 };
 

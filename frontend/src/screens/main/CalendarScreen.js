@@ -1,41 +1,104 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Image } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery } from '@apollo/client';
+import { GET_EVENTS } from '../../services/graphql/queries';
 import EventCard from '../../components/EventCard';
+import EventDetailModal from '../../components/EventDetailModal';
+import { showErrorToast } from '../../utils/toast';
+import LeftArrow from '../../assets/icons/LeftArrow.svg';
+import RightArrow from '../../assets/icons/RightArrow.svg';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Helper function to get week dates (defined outside component to avoid hoisting issues)
+const getWeekDates = (date) => {
+  const weekDates = [];
+  const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+  const startOfWeek = new Date(date);
+  startOfWeek.setDate(date.getDate() - dayOfWeek); // Go to Sunday of the week
+
+  for (let i = 0; i < 7; i++) {
+    const weekDate = new Date(startOfWeek);
+    weekDate.setDate(startOfWeek.getDate() + i);
+    weekDates.push(weekDate);
+  }
+  return weekDates;
+};
 
 const CalendarScreen = () => {
   const insets = useSafeAreaInsets();
   const [selectedTab, setSelectedTab] = useState('יומן'); // 'יומן' or 'הרישומים שלי'
-  
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false);
+
   // Initialize with current date
   const today = new Date();
   const [selectedDateObj, setSelectedDateObj] = useState(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
 
-  // Mock events data - replace with actual data from GraphQL
-  const mockEvents = [
-    {
-      id: '1',
-      title: 'שיעור רישום',
-      instructorName: 'יערה בודה',
-      startTime: '18:00',
-      duration: 90,
-      registeredCount: 4,
-      maxRegistrations: 6,
-      availableSpots: 2,
+  // Calculate date range for the current week
+  const dateRange = useMemo(() => {
+    const weekDates = getWeekDates(selectedDateObj);
+    const startDate = weekDates[0].toISOString();
+    const endDate = new Date(weekDates[6]);
+    endDate.setHours(23, 59, 59, 999);
+    return {
+      startDate,
+      endDate: endDate.toISOString(),
+    };
+  }, [selectedDateObj]);
+
+  // Fetch events from GraphQL
+  const { data, loading, error } = useQuery(GET_EVENTS, {
+    variables: {
+      dateRange,
     },
-    {
-      id: '2',
-      title: 'שיעור רישום',
-      instructorName: 'יערה בודה',
-      startTime: '18:00',
-      duration: 90,
-      registeredCount: 4,
-      maxRegistrations: 6,
-      availableSpots: 2,
-    },
-  ];
+    fetchPolicy: 'cache-and-network',
+  });
+
+  // Show error toast if query fails
+  useEffect(() => {
+    if (error) {
+      showErrorToast('לא הצלחנו לטעון את האירועים, נסה שוב');
+    }
+  }, [error]);
+
+  // Filter and sort events for the selected date
+  const eventsForSelectedDate = useMemo(() => {
+    if (!data?.events) return [];
+
+    const selectedDateString = selectedDateObj.toISOString().split('T')[0];
+    const selectedDayOfWeek = selectedDateObj.getDay();
+
+    const filteredEvents = data.events.filter((event) => {
+      // For event instances (generated from recurring events), check occurrenceDate
+      if (event.isInstance && event.occurrenceDate) {
+        const occurrenceDateString = new Date(event.occurrenceDate).toISOString().split('T')[0];
+        return occurrenceDateString === selectedDateString;
+      }
+
+      // For recurring events (base events), check if they occur on the selected day of week
+      if (event.isRecurring && !event.isInstance) {
+        const eventDate = new Date(event.date);
+        const eventDayOfWeek = eventDate.getDay();
+        return eventDayOfWeek === selectedDayOfWeek;
+      }
+
+      // For one-time events, check exact date match
+      const eventDateString = new Date(event.date).toISOString().split('T')[0];
+      return eventDateString === selectedDateString;
+    });
+
+    // Sort by start time in ascending order (earliest first, top to bottom)
+    return filteredEvents.sort((a, b) => {
+      const timeA = a.startTime || '00:00';
+      const timeB = b.startTime || '00:00';
+      // Compare times (HH:mm format)
+      if (timeA < timeB) return -1; // Earlier time comes first
+      if (timeA > timeB) return 1;
+      return 0;
+    });
+  }, [data, selectedDateObj]);
 
   const formatMonthYear = (date) => {
     const months = [
@@ -43,21 +106,6 @@ const CalendarScreen = () => {
       'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'
     ];
     return `${months[date.getMonth()]} ${date.getFullYear()}`;
-  };
-
-  // Get the week containing the selected date
-  const getWeekDates = (date) => {
-    const weekDates = [];
-    const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
-    const startOfWeek = new Date(date);
-    startOfWeek.setDate(date.getDate() - dayOfWeek); // Go to Sunday of the week
-    
-    for (let i = 0; i < 7; i++) {
-      const weekDate = new Date(startOfWeek);
-      weekDate.setDate(startOfWeek.getDate() + i);
-      weekDates.push(weekDate);
-    }
-    return weekDates;
   };
 
   const weekDates = useMemo(() => getWeekDates(selectedDateObj), [selectedDateObj]);
@@ -89,6 +137,16 @@ const CalendarScreen = () => {
   const handleRegister = (eventId) => {
     // TODO: Implement registration logic
     console.log('Register for event:', eventId);
+  };
+
+  const handleEventPress = (event) => {
+    setSelectedEvent(event);
+    setModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setSelectedEvent(null);
   };
 
   // Days of week in Hebrew (RTL) - Sunday to Saturday
@@ -143,29 +201,29 @@ const CalendarScreen = () => {
           </View>
         </View>
 
-        {/* Month Navigation */}
+        {/* Month Navigation - RTL: Right arrow = previous week, Left arrow = next week */}
         <View style={styles.monthNavigation}>
-          <TouchableOpacity onPress={handlePreviousWeek} style={styles.arrowButton}>
-            <Text style={styles.arrowText}>←</Text>
+          <TouchableOpacity onPress={handleNextWeek} style={styles.arrowButton}>
+            <LeftArrow width={23} height={23} />
           </TouchableOpacity>
           <Text style={styles.monthText}>{displayMonth}</Text>
-          <TouchableOpacity onPress={handleNextWeek} style={styles.arrowButton}>
-            <Text style={styles.arrowText}>→</Text>
+          <TouchableOpacity onPress={handlePreviousWeek} style={styles.arrowButton}>
+            <RightArrow width={23} height={23} />
           </TouchableOpacity>
         </View>
 
-        {/* Days of Week */}
+        {/* Days of Week - RTL: Saturday to Sunday */}
         <View style={styles.daysOfWeekContainer}>
-          {daysOfWeek.map((day, index) => (
+          {[...daysOfWeek].reverse().map((day, index) => (
             <View key={index} style={styles.dayOfWeek}>
               <Text style={styles.dayOfWeekText}>{day}</Text>
             </View>
           ))}
         </View>
 
-        {/* Date Selection */}
+        {/* Date Selection - RTL: Saturday to Sunday */}
         <View style={styles.datesContainer}>
-          {weekDates.map((date, index) => {
+          {[...weekDates].reverse().map((date, index) => {
             const isSelected = isDateSelected(date);
             return (
               <TouchableOpacity
@@ -188,20 +246,46 @@ const CalendarScreen = () => {
         </View>
 
         {/* Events List - transparent background to show global purple + logo */}
-        <ScrollView 
+        <ScrollView
           style={[styles.eventsContainer, { backgroundColor: 'transparent' }]}
           contentContainerStyle={[styles.eventsContent, { backgroundColor: 'transparent' }]}
           showsVerticalScrollIndicator={false}
         >
-          {mockEvents.map((event, index) => (
-            <EventCard
-              key={event.id}
-              event={event}
-              onRegister={() => handleRegister(event.id)}
-              isRegistered={index === 0} // First event is registered for demo
-            />
-          ))}
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#AB5FBD" />
+              <Text style={styles.loadingText}>טוען אירועים...</Text>
+            </View>
+          ) : eventsForSelectedDate.length > 0 ? (
+            eventsForSelectedDate.map((event) => (
+              <EventCard
+                key={event.id}
+                event={event}
+                onRegister={() => handleRegister(event.id)}
+                onPress={() => handleEventPress(event)}
+                isRegistered={false} // TODO: Check user's registrations
+              />
+            ))
+          ) : (
+            <View style={styles.emptyStateContainer}>
+              <Text style={styles.emptyStateText}>אין שיעורים מתוכננים ליום זה</Text>
+            </View>
+          )}
         </ScrollView>
+
+        {/* Event Detail Modal */}
+        <EventDetailModal
+          event={selectedEvent}
+          visible={modalVisible}
+          onClose={handleCloseModal}
+          onRegister={() => {
+            if (selectedEvent) {
+              handleRegister(selectedEvent.id);
+            }
+            handleCloseModal();
+          }}
+          isRegistered={false} // TODO: Check user's registrations
+        />
     </View>
   );
 };
@@ -279,11 +363,8 @@ const styles = StyleSheet.create({
   },
   arrowButton: {
     padding: 5,
-  },
-  arrowText: {
-    fontSize: 20,
-    color: '#FFD1E3', // Pink arrows
-    fontWeight: 'bold',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   monthText: {
     fontSize: 20,
@@ -346,6 +427,30 @@ const styles = StyleSheet.create({
   },
   eventsContent: {
     paddingBottom: 120, // Space for bottom navigation
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 50,
+  },
+  loadingText: {
+    marginTop: 15,
+    fontSize: 16,
+    color: '#FFD1E3',
+    fontWeight: '600',
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 50,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#FFD1E3',
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });
 
