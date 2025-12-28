@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Dimensions, ActivityIndicator, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
-import { LOGIN, LOGIN_WITH_OAUTH } from '../../services/graphql/mutations';
+import { LOGIN_WITH_OAUTH } from '../../services/graphql/mutations';
 import authService from '../../services/authService';
 import { OAUTH_PROVIDERS } from '../../utils/constants';
 import { validateEmail } from '../../utils/validation';
-import { getGraphQLErrorMessage, getOAuthErrorMessage, SUCCESS_MESSAGES } from '../../utils/errorMessages';
+import { getOAuthErrorMessage } from '../../utils/errorMessages';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
 import AppleIcon from '../../assets/icons/Apple.svg';
 import GoogleIcon from '../../assets/icons/Google.svg';
@@ -15,36 +15,19 @@ import FacebookIcon from '../../assets/icons/Facebook.svg';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-const LoginScreen = ({ navigation }) => {
+const RegisterStep1Screen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
   const [oauthLoading, setOauthLoading] = useState(false);
   const { login } = useAuth();
-
-  const [loginMutation, { loading }] = useMutation(LOGIN, {
-    onCompleted: async (data) => {
-      try {
-        await login(data.login.token, data.login.user);
-        showSuccessToast(SUCCESS_MESSAGES.LOGIN_SUCCESS);
-      } catch (error) {
-        showErrorToast('נכשל בשמירת נתוני הכניסה');
-      }
-    },
-    onError: (error) => {
-      const friendlyMessage = getGraphQLErrorMessage(error);
-      showErrorToast(friendlyMessage);
-    },
-  });
 
   const [loginWithOAuthMutation] = useMutation(LOGIN_WITH_OAUTH, {
     onCompleted: async (data) => {
       try {
         await login(data.loginWithOAuth.token, data.loginWithOAuth.user);
         setOauthLoading(false);
-        showSuccessToast(SUCCESS_MESSAGES.OAUTH_SUCCESS);
+        showSuccessToast('התחברת בהצלחה!');
       } catch (error) {
         setOauthLoading(false);
         showErrorToast('נכשל בשמירת נתוני הכניסה');
@@ -52,14 +35,18 @@ const LoginScreen = ({ navigation }) => {
     },
     onError: (error) => {
       setOauthLoading(false);
-      const friendlyMessage = getGraphQLErrorMessage(error);
-      showErrorToast(friendlyMessage);
+      const errorMessage = error.graphQLErrors?.[0]?.message || error.message || 'ההרשמה נכשלה';
+
+      if (errorMessage.toLowerCase().includes('already exists')) {
+        showErrorToast('כתובת האימייל כבר קיימת במערכת');
+      } else if (errorMessage.toLowerCase().includes('server')) {
+        showErrorToast('אופס, נראה שיש בעיה בשרת, תנסה שוב מאוחר יותר');
+      } else {
+        showErrorToast('משהו השתבש, נסה שוב');
+      }
     },
   });
 
-  /**
-   * Handles email input change
-   */
   const handleEmailChange = (text) => {
     setEmail(text);
     // Clear error when user starts typing
@@ -68,70 +55,20 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
-  /**
-   * Handles password input change
-   */
-  const handlePasswordChange = (text) => {
-    setPassword(text);
-    // Clear error when user starts typing
-    if (passwordError) {
-      setPasswordError('');
-    }
-  };
-
-  /**
-   * Validates login form
-   */
-  const validateForm = () => {
-    let isValid = true;
-
+  const handleEmailContinue = () => {
     // Validate email
-    const emailValidation = validateEmail(email);
-    if (!emailValidation.isValid) {
-      setEmailError(emailValidation.error);
-      showErrorToast(emailValidation.error);
-      isValid = false;
-    }
+    const validation = validateEmail(email);
 
-    // Validate password
-    if (!password) {
-      setPasswordError('אנא הזן סיסמה');
-      if (isValid) {
-        // Only show toast if email was valid
-        showErrorToast('אנא הזן סיסמה');
-      }
-      isValid = false;
-    }
-
-    return isValid;
-  };
-
-  /**
-   * Handles login submission
-   */
-  const handleLogin = async () => {
-    // Validate form
-    if (!validateForm()) {
+    if (!validation.isValid) {
+      setEmailError(validation.error);
+      showErrorToast(validation.error);
       return;
     }
 
-    try {
-      await loginMutation({
-        variables: {
-          input: {
-            email: email.toLowerCase().trim(),
-            password,
-          },
-        },
-      });
-    } catch (error) {
-      console.error('Login error:', error);
-    }
+    // Navigate to step 2 with email
+    navigation.navigate('RegisterStep2', { email: email.trim().toLowerCase() });
   };
 
-  /**
-   * Handles OAuth authentication
-   */
   const handleOAuth = async (provider) => {
     try {
       setOauthLoading(true);
@@ -168,7 +105,10 @@ const LoginScreen = ({ navigation }) => {
         keyboardShouldPersistTaps="handled"
       >
         {/* Title */}
-        <Text style={styles.title}>ברוכים הבאים</Text>
+        <Text style={styles.title}>הרשמה</Text>
+
+      {/* Subtitle */}
+      <Text style={styles.subtitle}>בואו ניצור לכם משתמש</Text>
 
       {/* Email Input */}
       <TextInput
@@ -186,30 +126,13 @@ const LoginScreen = ({ navigation }) => {
       />
       {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
-      {/* Password Input */}
-      <TextInput
-        style={[styles.input, passwordError && styles.inputError]}
-        placeholder="סיסמה"
-        placeholderTextColor="#4E0D66"
-        value={password}
-        onChangeText={handlePasswordChange}
-        secureTextEntry
-        textAlign="right"
-        autoComplete="off"
-        autoCorrect={false}
-        spellCheck={false}
-      />
-      {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
-
-      {/* Login Button */}
+      {/* Continue Button */}
       <TouchableOpacity
-        style={[styles.loginButton, loading && styles.buttonDisabled]}
-        onPress={handleLogin}
-        disabled={loading}
+        style={[styles.continueButton, !email.trim() && styles.continueButtonDisabled]}
+        onPress={handleEmailContinue}
+        disabled={!email.trim()}
       >
-        <Text style={styles.loginButtonText}>
-          {loading ? 'נכנס...' : 'תכניסו אותי'}
-        </Text>
+        <Text style={styles.continueButtonText}>המשך</Text>
       </TouchableOpacity>
 
       {/* Or Separator */}
@@ -225,7 +148,7 @@ const LoginScreen = ({ navigation }) => {
         <TouchableOpacity
           style={styles.appleButton}
           onPress={() => handleOAuth(OAUTH_PROVIDERS.APPLE)}
-          disabled={oauthLoading || loading}
+          disabled={oauthLoading}
         >
           <AppleIcon width={20} height={20} style={styles.icon} />
           <Text style={styles.appleButtonText}>המשך עם אפל</Text>
@@ -235,7 +158,7 @@ const LoginScreen = ({ navigation }) => {
         <TouchableOpacity
           style={styles.googleButton}
           onPress={() => handleOAuth(OAUTH_PROVIDERS.GOOGLE)}
-          disabled={oauthLoading || loading}
+          disabled={oauthLoading}
         >
           <GoogleIcon width={20} height={20} style={styles.icon} />
           <Text style={styles.googleButtonText}>המשך עם גוגל</Text>
@@ -245,7 +168,7 @@ const LoginScreen = ({ navigation }) => {
         <TouchableOpacity
           style={styles.facebookButton}
           onPress={() => handleOAuth(OAUTH_PROVIDERS.FACEBOOK)}
-          disabled={oauthLoading || loading}
+          disabled={oauthLoading}
         >
           <FacebookIcon width={20} height={20} style={styles.icon} />
           <Text style={styles.facebookButtonText}>המשך עם פייסבוק</Text>
@@ -255,9 +178,9 @@ const LoginScreen = ({ navigation }) => {
         {/* Footer Link */}
         <TouchableOpacity
           style={styles.footerLink}
-          onPress={() => navigation.navigate('RegisterStep1')}
+          onPress={() => navigation.navigate('Login')}
         >
-          <Text style={styles.footerLinkText}>אין לך עדיין חשבון? הרשם כאן</Text>
+          <Text style={styles.footerLinkText}>כבר יש לך חשבון? היכנס</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -290,10 +213,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFD1E3',
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 7,
     textShadowColor: 'rgba(78, 13, 102, 0.3)',
     textShadowOffset: { width: 0, height: 4 },
     textShadowRadius: 4,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#FFD1E3',
+    textAlign: 'center',
+    marginBottom: 32,
   },
   input: {
     width: '100%',
@@ -324,7 +253,7 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  loginButton: {
+  continueButton: {
     width: '100%',
     height: 44,
     backgroundColor: '#4E0D66',
@@ -332,16 +261,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 6,
+    marginBottom: 28,
     shadowColor: '#4E0D66',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 1,
     shadowRadius: 4,
     elevation: 4,
   },
-  buttonDisabled: {
-    opacity: 0.6,
+  continueButtonDisabled: {
+    opacity: 0.5,
   },
-  loginButtonText: {
+  continueButtonText: {
     color: '#FFD1E3',
     fontSize: 16,
     fontWeight: '600',
@@ -349,7 +279,6 @@ const styles = StyleSheet.create({
   separatorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 28,
     marginBottom: 24,
     marginHorizontal: 9,
   },
@@ -464,4 +393,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default LoginScreen;
+export default RegisterStep1Screen;

@@ -1,7 +1,34 @@
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+
+// Helper function to get the correct API URL based on platform
+const getGraphQLEndpoint = () => {
+  if (!__DEV__) {
+    return 'https://your-production-url.com/graphql';
+  }
+
+  // For web, use localhost
+  if (Platform.OS === 'web') {
+    return 'http://localhost:4000/graphql';
+  }
+
+  // For mobile (iOS/Android), use the Expo dev server's IP
+  // Constants.expoConfig.hostUri gives us something like "192.168.1.100:8081"
+  // We need to extract the IP and change the port to 4000
+  if (Constants.expoConfig?.hostUri) {
+    const hostUri = Constants.expoConfig.hostUri;
+    // Extract IP address (remove port if present)
+    const ip = hostUri.split(':')[0];
+    return `http://${ip}:4000/graphql`;
+  }
+
+  // Fallback: use localhost (will only work on emulator/simulator, not physical device)
+  console.warn('Could not detect Expo dev server IP. Using localhost. This may not work on physical devices.');
+  return 'http://localhost:4000/graphql';
+};
+
 // API Configuration
-export const GRAPHQL_ENDPOINT = __DEV__
-  ? 'http://localhost:4000/graphql' // Change to your local IP for physical device testing
-  : 'https://your-production-url.com/graphql';
+export const GRAPHQL_ENDPOINT = getGraphQLEndpoint();
 
 // Storage Keys
 export const STORAGE_KEYS = {

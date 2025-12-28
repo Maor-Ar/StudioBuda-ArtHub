@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { EVENT_TYPES } from '../utils/constants';
+import UserHeadIcon from '../assets/icons/user-head.svg';
+import UsersFourIcon from '../assets/icons/users-four.svg';
 
 const EventCard = ({ event, onRegister, isRegistered }) => {
   const formatTime = (time) => {
@@ -8,55 +9,53 @@ const EventCard = ({ event, onRegister, isRegistered }) => {
     return time.substring(0, 5); // HH:mm format
   };
 
-  const getEventTypeLabel = (type) => {
-    switch (type) {
-      case EVENT_TYPES.TRIAL:
-        return 'שיעור ניסיון';
-      case EVENT_TYPES.SUBSCRIPTION_ONLY:
-        return 'מנוי בלבד';
-      case EVENT_TYPES.PAID_WORKSHOP:
-        return 'סדנה בתשלום';
-      default:
-        return type;
-    }
+  const formatTimeRange = (startTime, duration) => {
+    if (!startTime || !duration) return '';
+    const start = formatTime(startTime);
+    const [hours, minutes] = startTime.split(':');
+    const endHour = parseInt(hours) + Math.floor(duration / 60);
+    const endMinute = parseInt(minutes) + (duration % 60);
+    const endTime = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
+    return `${start} - ${endTime}`;
   };
 
   return (
     <View style={styles.card}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{event.title}</Text>
-        <Text style={styles.type}>{getEventTypeLabel(event.eventType)}</Text>
+      {/* Left side - Instructor and Participants */}
+      <View style={styles.leftSection}>
+        <View style={styles.infoRow}>
+          <UserHeadIcon width={18} height={18} style={styles.icon} />
+          <Text style={styles.infoText}>{event.instructorName || 'יערה בודה'}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <UsersFourIcon width={20} height={20} style={styles.icon} />
+          <Text style={styles.infoText}>
+            {event.registeredCount || 4}/{event.maxRegistrations || 6}
+          </Text>
+        </View>
       </View>
 
-      {event.description && <Text style={styles.description}>{event.description}</Text>}
-
-      <View style={styles.details}>
-        <Text style={styles.detailText}>
-          🕐 {formatTime(event.startTime)} ({event.duration} דקות)
+      {/* Right side - Event Title and Time */}
+      <View style={styles.rightSection}>
+        <Text style={styles.eventTitle}>{event.title || 'שיעור רישום'}</Text>
+        <Text style={styles.eventTime}>
+          {formatTimeRange(event.startTime, event.duration) || '18:00 - 19:30'}
         </Text>
-        <Text style={styles.detailText}>👤 {event.instructorName}</Text>
-        <Text style={styles.detailText}>
-          👥 {event.registeredCount}/{event.maxRegistrations} נרשמו
-        </Text>
-        {event.price && <Text style={styles.detailText}>💰 ₪{event.price}</Text>}
       </View>
 
-      {event.availableSpots > 0 && !isRegistered && (
-        <TouchableOpacity style={styles.registerButton} onPress={onRegister}>
-          <Text style={styles.registerButtonText}>הירשם</Text>
+      {/* Register Button or Registered State */}
+      {isRegistered ? (
+        <View style={styles.registeredButton}>
+          <Text style={styles.registeredButtonText}>נרשמת</Text>
+        </View>
+      ) : (
+        <TouchableOpacity 
+          style={styles.registerButton} 
+          onPress={onRegister}
+          disabled={event.availableSpots === 0}
+        >
+          <Text style={styles.registerButtonText}>תרשמו אותי</Text>
         </TouchableOpacity>
-      )}
-
-      {isRegistered && (
-        <View style={styles.registeredBadge}>
-          <Text style={styles.registeredText}>✓ נרשמת</Text>
-        </View>
-      )}
-
-      {event.availableSpots === 0 && !isRegistered && (
-        <View style={styles.fullBadge}>
-          <Text style={styles.fullText}>מלא</Text>
-        </View>
       )}
     </View>
   );
@@ -64,88 +63,92 @@ const EventCard = ({ event, onRegister, isRegistered }) => {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#f9f9f9',
-    borderRadius: 8,
+    width: '100%',
+    minHeight: 106,
+    backgroundColor: '#FFD1E3', // Pink background
+    borderRadius: 20,
     padding: 15,
     marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    shadowColor: '#4E0D66',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+    paddingBottom: 55, // Space for button at bottom
+  },
+  leftSection: {
+    width: '45%',
+    justifyContent: 'flex-start',
+    paddingRight: 10,
+  },
+  infoRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  title: {
-    fontSize: 18,
+  icon: {
+    marginRight: 8,
+  },
+  infoText: {
+    fontSize: 16,
+    color: '#AB5FBD', // Purple color
+    fontWeight: '500',
+  },
+  rightSection: {
+    width: '55%',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+    paddingLeft: 10,
+  },
+  eventTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
-    flex: 1,
+    color: '#4E0D66', // Dark purple
+    marginBottom: 4,
+    textAlign: 'right',
+    textShadowColor: 'rgba(0, 0, 0, 0.25)',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 4,
   },
-  type: {
-    fontSize: 12,
-    color: '#6200ee',
-    backgroundColor: '#e0d4ff',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  description: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 10,
-  },
-  details: {
-    marginTop: 10,
-  },
-  detailText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 5,
+  eventTime: {
+    fontSize: 16,
+    color: '#4E0D66', // Dark purple
+    textAlign: 'right',
   },
   registerButton: {
-    backgroundColor: '#6200ee',
-    padding: 12,
-    borderRadius: 8,
+    position: 'absolute',
+    bottom: 15,
+    left: 15,
+    right: 15,
+    height: 31,
+    backgroundColor: '#AB5FBD', // Purple background
+    borderRadius: 20,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 10,
   },
   registerButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
-  registeredBadge: {
-    backgroundColor: '#4caf50',
-    padding: 12,
-    borderRadius: 8,
+  registeredButton: {
+    position: 'absolute',
+    bottom: 15,
+    left: 15,
+    right: 15,
+    height: 31,
+    backgroundColor: '#4E0D66', // Dark purple background
+    borderRadius: 20,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 10,
   },
-  registeredText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  fullBadge: {
-    backgroundColor: '#f44336',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  fullText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+  registeredButtonText: {
+    color: '#FFD1E3', // Pink text
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 
 export default EventCard;
-
-
-
-
-
-
