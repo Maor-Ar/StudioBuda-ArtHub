@@ -9,22 +9,66 @@ const getGraphQLEndpoint = () => {
 
   // For web, use localhost
   if (Platform.OS === 'web') {
-    return 'http://localhost:4000/graphql';
+    const endpoint = 'http://localhost:4000/graphql';
+    console.log('[CONSTANTS] 🌐 Web platform - using endpoint:', endpoint);
+    return endpoint;
   }
 
-  // For mobile (iOS/Android), use the Expo dev server's IP
-  // Constants.expoConfig.hostUri gives us something like "192.168.1.100:8081"
-  // We need to extract the IP and change the port to 4000
+  // For mobile (iOS/Android), try multiple methods to detect the IP
+  console.log('[CONSTANTS] 📱 Mobile platform detected');
+  console.log('[CONSTANTS] Constants.expoConfig:', JSON.stringify(Constants.expoConfig, null, 2));
+  
+  // Method 1: Try hostUri (most common)
   if (Constants.expoConfig?.hostUri) {
     const hostUri = Constants.expoConfig.hostUri;
-    // Extract IP address (remove port if present)
+    console.log('[CONSTANTS] 📱 Method 1 - Detected hostUri:', hostUri);
     const ip = hostUri.split(':')[0];
-    return `http://${ip}:4000/graphql`;
+    const endpoint = `http://${ip}:4000/graphql`;
+    console.log('[CONSTANTS] ✅ Using endpoint from hostUri:', endpoint);
+    return endpoint;
   }
 
-  // Fallback: use localhost (will only work on emulator/simulator, not physical device)
-  console.warn('Could not detect Expo dev server IP. Using localhost. This may not work on physical devices.');
-  return 'http://localhost:4000/graphql';
+  // Method 2: Try debuggerHost
+  if (Constants.expoConfig?.debuggerHost) {
+    const debuggerHost = Constants.expoConfig.debuggerHost;
+    console.log('[CONSTANTS] 📱 Method 2 - Detected debuggerHost:', debuggerHost);
+    const ip = debuggerHost.split(':')[0];
+    const endpoint = `http://${ip}:4000/graphql`;
+    console.log('[CONSTANTS] ✅ Using endpoint from debuggerHost:', endpoint);
+    return endpoint;
+  }
+
+  // Method 3: Try manifest2.extra.expoClient.hostUri
+  if (Constants.manifest2?.extra?.expoClient?.hostUri) {
+    const hostUri = Constants.manifest2.extra.expoClient.hostUri;
+    console.log('[CONSTANTS] 📱 Method 3 - Detected manifest2 hostUri:', hostUri);
+    const ip = hostUri.split(':')[0];
+    const endpoint = `http://${ip}:4000/graphql`;
+    console.log('[CONSTANTS] ✅ Using endpoint from manifest2:', endpoint);
+    return endpoint;
+  }
+
+  // Method 4: Try to extract from the Expo dev server URL in the terminal
+  // This is a fallback - we'll use the IP from the Expo terminal output
+  // The user should see the IP in their Expo terminal (e.g., "exp://192.168.15.238:8081")
+  // For now, we'll use a common development IP pattern
+  console.warn('[CONSTANTS] ⚠️ Could not auto-detect IP. Please check your Expo terminal for the IP address.');
+  console.warn('[CONSTANTS] ⚠️ Look for a line like: "Metro waiting on exp://192.168.X.X:8081"');
+  console.warn('[CONSTANTS] ⚠️ You can manually set the IP by creating a .env file with: EXPO_PUBLIC_API_IP=192.168.X.X');
+  
+  // Try environment variable as last resort
+  if (process.env.EXPO_PUBLIC_API_IP) {
+    const ip = process.env.EXPO_PUBLIC_API_IP;
+    const endpoint = `http://${ip}:4000/graphql`;
+    console.log('[CONSTANTS] ✅ Using endpoint from EXPO_PUBLIC_API_IP:', endpoint);
+    return endpoint;
+  }
+
+  // Final fallback: use localhost (will only work on emulator/simulator, not physical device)
+  console.error('[CONSTANTS] ❌ Could not detect IP. Using localhost (will NOT work on physical devices)');
+  const fallbackEndpoint = 'http://localhost:4000/graphql';
+  console.log('[CONSTANTS] 📱 Fallback endpoint:', fallbackEndpoint);
+  return fallbackEndpoint;
 };
 
 // API Configuration

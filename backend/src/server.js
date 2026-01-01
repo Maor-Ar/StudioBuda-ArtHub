@@ -69,11 +69,14 @@ if (isDevelopment) {
 }
 
 // CORS
-// In development, allow both localhost:3000 and localhost:8081 (Expo dev server)
+// In development, allow requests from any origin (including mobile devices)
 const corsOrigin = isDevelopment 
   ? (origin, callback) => {
       // Allow requests with no origin (like mobile apps, Postman, etc.)
-      if (!origin) return callback(null, true);
+      if (!origin) {
+        console.log('[CORS] ✅ Allowing request with no origin (mobile app)');
+        return callback(null, true);
+      }
       
       // Allow localhost origins
       const allowedOrigins = [
@@ -85,11 +88,9 @@ const corsOrigin = isDevelopment
         'http://127.0.0.1:19006',
       ];
       
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
+      // In development, allow all origins (including mobile device IPs)
+      console.log('[CORS] 📱 Allowing request from origin:', origin);
+      callback(null, true);
     }
   : config.cors.origin;
 

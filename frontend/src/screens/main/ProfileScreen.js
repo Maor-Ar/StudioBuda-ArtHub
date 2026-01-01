@@ -75,18 +75,18 @@ const ProfileScreen = () => {
               <View style={styles.userInfo}>
                 <View style={styles.infoRow}>
                   <Text style={styles.value}>{currentUser.firstName} {currentUser.lastName}</Text>
-                  <Text style={styles.label}>:שם</Text>
+                  <Text style={styles.label}>שם:</Text>
                 </View>
 
                 <View style={styles.infoRow}>
                   <Text style={styles.value}>{currentUser.email}</Text>
-                  <Text style={styles.label}>:אימייל</Text>
+                  <Text style={styles.label}>אימייל:</Text>
                 </View>
 
                 {currentUser.phone && (
                   <View style={styles.infoRow}>
                     <Text style={styles.value}>{currentUser.phone}</Text>
-                    <Text style={styles.label}>:טלפון</Text>
+                    <Text style={styles.label}>טלפון:</Text>
                   </View>
                 )}
               </View>
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  label: {
+  label: {  
     fontSize: 14,
     color: '#5D3587', // Purple
     marginLeft: 10,

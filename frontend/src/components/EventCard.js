@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import UserHeadIcon from '../assets/icons/user-head.svg';
 import UsersFourIcon from '../assets/icons/users-four.svg';
 
-const EventCard = ({ event, onRegister, onCancel, isRegistered, isFull = false, onPress, disabled = false }) => {
+const EventCard = ({ event, onRegister, onCancel, isRegistered, isFull = false, onPress, disabled = false, showDate = false }) => {
   const formatTime = (time) => {
     if (!time) return '';
     return time.substring(0, 5); // HH:mm format
@@ -19,6 +19,16 @@ const EventCard = ({ event, onRegister, onCancel, isRegistered, isFull = false, 
     const endMinute = endMinutes % 60;
     const endTime = `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
     return `${start} - ${endTime}`;
+  };
+
+  const formatDate = (dateValue) => {
+    if (!dateValue) return '';
+    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+    // Format as DD.MM.YYYY for Hebrew locale
+    const day = date.getDate();
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    return `${day}.${month}.${year}`;
   };
 
   return (
@@ -44,9 +54,16 @@ const EventCard = ({ event, onRegister, onCancel, isRegistered, isFull = false, 
       {/* Right side - Event Title and Time */}
       <View style={styles.rightSection}>
         <Text style={styles.eventTitle}>{event.title || 'שיעור רישום'}</Text>
-        <Text style={styles.eventTime}>
-          {formatTimeRange(event.startTime, event.duration) || '18:00 - 19:30'}
-        </Text>
+        <View style={styles.timeContainer}>
+          <Text style={styles.eventTime}>
+            {formatTimeRange(event.startTime, event.duration) || '18:00 - 19:30'}
+          </Text>
+          {showDate && (event.occurrenceDate || event.date) && (
+            <Text style={styles.eventDate}>
+              {formatDate(event.occurrenceDate || event.date)}
+            </Text>
+          )}
+        </View>
       </View>
 
       {/* Button States: Cancel, Full, or Register */}
@@ -130,10 +147,22 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 4 },
     textShadowRadius: 4,
   },
+  timeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
   eventTime: {
     fontSize: 16,
     color: '#4E0D66', // Dark purple
     textAlign: 'right',
+  },
+  eventDate: {
+    fontSize: 14,
+    color: '#AB5FBD', // Purple color
+    textAlign: 'right',
+    fontWeight: '500',
   },
   registerButton: {
     position: 'absolute',

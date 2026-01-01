@@ -17,8 +17,37 @@ if (Platform.OS === 'web') {
 }
 
 // Create HTTP link
+console.log('[APOLLO] 🔗 Creating HTTP link with endpoint:', GRAPHQL_ENDPOINT);
 const httpLink = createHttpLink({
   uri: GRAPHQL_ENDPOINT,
+  // Add error handling to see connection issues
+  fetch: async (uri, options) => {
+    console.log('[APOLLO] 📡 Making request to:', uri);
+    console.log('[APOLLO] 📡 Request options:', {
+      method: options?.method,
+      headers: options?.headers ? Object.keys(options.headers) : 'none',
+    });
+    
+    try {
+      const response = await fetch(uri, options);
+      console.log('[APOLLO] ✅ Response status:', response.status, response.statusText);
+      if (!response.ok) {
+        console.error('[APOLLO] ❌ Response not OK:', response.status, response.statusText);
+        const text = await response.text();
+        console.error('[APOLLO] ❌ Response body:', text.substring(0, 200));
+      }
+      return response;
+    } catch (error) {
+      console.error('[APOLLO] ❌ Network error:', error.message);
+      console.error('[APOLLO] ❌ Error details:', error);
+      console.error('[APOLLO] ❌ Failed to connect to:', uri);
+      console.error('[APOLLO] ❌ Make sure:');
+      console.error('[APOLLO]    1. Backend is running on port 4000');
+      console.error('[APOLLO]    2. Your phone and computer are on the same Wi-Fi network');
+      console.error('[APOLLO]    3. Firewall allows connections on port 4000');
+      throw error;
+    }
+  },
 });
 
 // Create auth link to attach token to requests

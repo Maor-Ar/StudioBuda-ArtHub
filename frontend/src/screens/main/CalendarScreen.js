@@ -573,6 +573,7 @@ const CalendarScreen = () => {
                   isRegistered={true}
                   isFull={false}
                   disabled={cancelling}
+                  showDate={true}
                 />
               ))
             ) : (

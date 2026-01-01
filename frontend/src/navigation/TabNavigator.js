@@ -34,7 +34,7 @@ const TabNavigator = () => {
             borderTopColor: '#FFD1E3', // Pink top border for visual separation
             height: 90,
             paddingBottom: 20,
-            paddingTop: 10,
+            paddingTop: 25, // Increased from 10 to add more margin above buttons
             position: 'absolute',
             shadowColor: '#000',
             shadowOffset: { width: 0, height: -4 },
@@ -58,20 +58,28 @@ const TabNavigator = () => {
             title: 'רכישות',
             tabBarLabel: 'רכישות',
             tabBarIcon: ({ color, size, focused }) => (
-              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ alignItems: 'center', justifyContent: 'center', width: 50, height: 50 }}>
                 {focused && (
                   <View style={{
                     position: 'absolute',
-                    width: 35,
-                    height: 35,
-                    borderRadius: 17.5,
-                    backgroundColor: 'rgba(93, 53, 135, 0.5)',
+                    width: 50,
+                    height: 50,
+                    borderRadius: 25,
+                    backgroundColor: '#FFD1E3', // Bright pink background for active state
+                    opacity: 0.3,
+                    shadowColor: '#FFD1E3',
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.5,
+                    shadowRadius: 8,
+                    elevation: 5,
                   }} />
                 )}
-                <PurchasesButton 
-                  width={25} 
-                  height={25}
-                />
+                <View style={{ opacity: focused ? 1 : 0.6 }}>
+                  <PurchasesButton 
+                    width={25} 
+                    height={25}
+                  />
+                </View>
               </View>
             ),
           }}
@@ -98,20 +106,28 @@ const TabNavigator = () => {
             title: 'יומן',
             tabBarLabel: 'יומן',
             tabBarIcon: ({ color, size, focused }) => (
-              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ alignItems: 'center', justifyContent: 'center', width: 50, height: 50 }}>
                 {focused && (
                   <View style={{
                     position: 'absolute',
-                    width: 35,
-                    height: 35,
-                    borderRadius: 17.5,
-                    backgroundColor: 'rgba(93, 53, 135, 0.5)',
+                    width: 50,
+                    height: 50,
+                    borderRadius: 25,
+                    backgroundColor: '#FFD1E3', // Bright pink background for active state
+                    opacity: 0.3,
+                    shadowColor: '#FFD1E3',
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.5,
+                    shadowRadius: 8,
+                    elevation: 5,
                   }} />
                 )}
-                <CalendarButton 
-                  width={25} 
-                  height={25}
-                />
+                <View style={{ opacity: focused ? 1 : 0.6 }}>
+                  <CalendarButton 
+                    width={25} 
+                    height={25}
+                  />
+                </View>
               </View>
             ),
           }}
@@ -123,20 +139,28 @@ const TabNavigator = () => {
             title: 'פרופיל',
             tabBarLabel: 'פרופיל',
             tabBarIcon: ({ color, size, focused }) => (
-              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+              <View style={{ alignItems: 'center', justifyContent: 'center', width: 50, height: 50 }}>
                 {focused && (
                   <View style={{
                     position: 'absolute',
-                    width: 35,
-                    height: 35,
-                    borderRadius: 17.5,
-                    backgroundColor: 'rgba(93, 53, 135, 0.5)',
+                    width: 50,
+                    height: 50,
+                    borderRadius: 25,
+                    backgroundColor: '#FFD1E3', // Bright pink background for active state
+                    opacity: 0.3,
+                    shadowColor: '#FFD1E3',
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.5,
+                    shadowRadius: 8,
+                    elevation: 5,
                   }} />
                 )}
-                <ProfileButton 
-                  width={25} 
-                  height={25}
-                />
+                <View style={{ opacity: focused ? 1 : 0.6 }}>
+                  <ProfileButton 
+                    width={25} 
+                    height={25}
+                  />
+                </View>
               </View>
             ),
           }}
@@ -149,17 +173,28 @@ const TabNavigator = () => {
               title: 'ניהול',
               tabBarLabel: 'ניהול',
               tabBarIcon: ({ color, size, focused }) => (
-                <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ alignItems: 'center', justifyContent: 'center', width: 50, height: 50 }}>
                   {focused && (
                     <View style={{
                       position: 'absolute',
-                      width: 35,
-                      height: 35,
-                      borderRadius: 17.5,
-                      backgroundColor: 'rgba(93, 53, 135, 0.5)',
+                      width: 50,
+                      height: 50,
+                      borderRadius: 25,
+                      backgroundColor: '#FFD1E3', // Bright pink background for active state
+                      opacity: 0.3,
+                      shadowColor: '#FFD1E3',
+                      shadowOffset: { width: 0, height: 0 },
+                      shadowOpacity: 0.5,
+                      shadowRadius: 8,
+                      elevation: 5,
                     }} />
                   )}
-                  <ProfileButton width={25} height={25} />
+                  <View style={{ opacity: focused ? 1 : 0.6 }}>
+                    <ProfileButton 
+                      width={25} 
+                      height={25}
+                    />
+                  </View>
                 </View>
               ),
             }}

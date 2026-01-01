@@ -19,12 +19,16 @@ const startServer = async () => {
   // Setup GraphQL
   await setupGraphQL();
 
-  const server = app.listen(PORT, () => {
+  // Listen on all network interfaces (0.0.0.0) to allow mobile device connections
+  const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info('=== Server Started Successfully ===');
     logger.info(`Server running on port ${PORT}`);
+    logger.info(`Server listening on all network interfaces (0.0.0.0:${PORT})`);
     logger.info(`GraphQL endpoint: http://localhost:${PORT}/graphql`);
     logger.info(`API docs: http://localhost:${PORT}/api-docs`);
     logger.info(`Health check: http://localhost:${PORT}/health`);
+    console.log(`\n📱 Mobile devices can connect using your computer's IP address on port ${PORT}`);
+    console.log(`   Example: http://192.168.1.100:${PORT}/graphql\n`);
   });
 
   return server;
