@@ -14,6 +14,7 @@ import { db } from '../src/config/firebase.js';
 import { EVENT_TYPES } from '../src/config/constants.js';
 
 // Get next occurrence of a day of week
+// Returns a Date object set to UTC midnight for the intended date
 const getNextOccurrence = (dayOfWeek) => {
   const today = new Date();
   const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -25,9 +26,11 @@ const getNextOccurrence = (dayOfWeek) => {
     daysToAdd += 7;
   }
 
+  // Calculate the target date
   const nextDate = new Date(today);
-  nextDate.setDate(today.getDate() + daysToAdd);
-  nextDate.setHours(0, 0, 0, 0);
+  nextDate.setUTCDate(today.getUTCDate() + daysToAdd);
+  // Set to UTC midnight to ensure the date is correct regardless of server timezone
+  nextDate.setUTCHours(0, 0, 0, 0);
 
   return nextDate;
 };

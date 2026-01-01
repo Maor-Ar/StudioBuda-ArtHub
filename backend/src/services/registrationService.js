@@ -21,9 +21,10 @@ class RegistrationService {
         // Everything before the last underscore is the baseEventId
         actualEventId = parts.slice(0, -1).join('_');
         
-        // Parse the date
+        // Parse the date - use UTC to avoid timezone issues
         try {
-          occurrenceDate = new Date(datePart + 'T00:00:00');
+          // Create date in UTC midnight to avoid timezone shifts
+          occurrenceDate = new Date(datePart + 'T00:00:00.000Z');
           if (isNaN(occurrenceDate.getTime())) {
             // If date parsing fails, treat as regular eventId
             actualEventId = eventId;
@@ -399,25 +400,42 @@ class RegistrationService {
       return {};
     }
 
+    console.log('[COUNT REGISTRATIONS] 📊 Counting registrations for eventIds:', eventIds);
+
     // Get all registrations for these events
     const snapshot = await db.collection('event_registrations')
       .where('eventId', 'in', eventIds)
       .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
       .get();
 
+    console.log('[COUNT REGISTRATIONS] 📊 Found registrations:', snapshot.size);
+
     const counts = {};
-    
+
     snapshot.docs.forEach(doc => {
       const reg = doc.data();
-      const regDate = reg.date?.toDate ? reg.date.toDate() : new Date(reg.date || reg.occurrenceDate);
-      
+      // Use occurrenceDate as primary field (it identifies the specific event occurrence)
+      const dateField = reg.occurrenceDate || reg.date;
+      const regDate = dateField?.toDate ? dateField.toDate() : new Date(dateField);
+
       // Format date as YYYY-MM-DD for consistent grouping
       const dateKey = regDate.toISOString().split('T')[0];
       const key = `${reg.eventId}:${dateKey}`;
-      
+
+      console.log('[COUNT REGISTRATIONS] ✅ Registration found:', {
+        eventId: reg.eventId,
+        userId: reg.userId,
+        dateKey,
+        key,
+        rawDate: reg.date,
+        occurrenceDate: reg.occurrenceDate,
+        usedField: reg.occurrenceDate ? 'occurrenceDate' : 'date'
+      });
+
       counts[key] = (counts[key] || 0) + 1;
     });
 
+    console.log('[COUNT REGISTRATIONS] 📊 Final counts:', counts);
     return counts;
   }
 }

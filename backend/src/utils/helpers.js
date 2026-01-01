@@ -16,27 +16,45 @@ export const generateRecurringInstances = (baseEvent, startDate, endDate) => {
   const baseDate = baseEvent.date.toDate();
   const intervalDays = baseEvent.recurringIntervalDays;
 
+  // Normalize baseDate to UTC midnight
+  const baseDateUTC = new Date(baseDate);
+  baseDateUTC.setUTCHours(0, 0, 0, 0);
+
+  // Normalize startDate to UTC midnight for comparison
+  const startDateUTC = new Date(startDate);
+  startDateUTC.setUTCHours(0, 0, 0, 0);
+
   // Find the first occurrence on or after startDate
-  let currentDate = new Date(baseDate);
-  while (currentDate < startDate) {
+  let currentDate = new Date(baseDateUTC);
+  while (currentDate < startDateUTC) {
     currentDate = new Date(currentDate);
-    currentDate.setDate(currentDate.getDate() + intervalDays);
+    currentDate.setUTCDate(currentDate.getUTCDate() + intervalDays);
+    currentDate.setUTCHours(0, 0, 0, 0);
   }
+  
+  // Normalize endDate to UTC midnight for comparison
+  const endDateUTC = new Date(endDate);
+  endDateUTC.setUTCHours(23, 59, 59, 999);
 
   // Generate instances until endDate
-  while (currentDate <= endDate) {
+  while (currentDate <= endDateUTC) {
+    // Ensure the date is at UTC midnight to preserve the intended date
+    const instanceDate = new Date(currentDate);
+    instanceDate.setUTCHours(0, 0, 0, 0);
+    
     const instance = {
       ...baseEvent,
-      id: `${baseEvent.id}_${currentDate.toISOString().split('T')[0]}`,
-      date: currentDate,
-      occurrenceDate: currentDate,
+      id: `${baseEvent.id}_${instanceDate.toISOString().split('T')[0]}`,
+      date: instanceDate,
+      occurrenceDate: instanceDate,
       isInstance: true,
       baseEventId: baseEvent.id,
     };
     instances.push(instance);
     
     currentDate = new Date(currentDate);
-    currentDate.setDate(currentDate.getDate() + intervalDays);
+    currentDate.setUTCDate(currentDate.getUTCDate() + intervalDays);
+    currentDate.setUTCHours(0, 0, 0, 0);
   }
 
   return instances;

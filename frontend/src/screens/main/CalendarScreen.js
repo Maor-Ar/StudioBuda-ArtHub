@@ -199,15 +199,28 @@ const CalendarScreen = () => {
       return [];
     }
 
-    const selectedDateString = selectedDateObj.toISOString().split('T')[0];
+    // Normalize selected date to local date string (YYYY-MM-DD) for comparison
+    const selectedYear = selectedDateObj.getFullYear();
+    const selectedMonth = String(selectedDateObj.getMonth() + 1).padStart(2, '0');
+    const selectedDay = String(selectedDateObj.getDate()).padStart(2, '0');
+    const selectedDateString = `${selectedYear}-${selectedMonth}-${selectedDay}`;
     const selectedDayOfWeek = selectedDateObj.getDay();
     console.log('[EVENTS FILTER] 📊 selectedDateString:', selectedDateString);
     console.log('[EVENTS FILTER] 📊 selectedDayOfWeek:', selectedDayOfWeek);
 
+    // Helper function to get local date string from a Date object or ISO string
+    const getLocalDateString = (dateValue) => {
+      const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     const filteredEvents = data.events.filter((event) => {
       // For event instances (generated from recurring events), check occurrenceDate
       if (event.isInstance && event.occurrenceDate) {
-        const occurrenceDateString = new Date(event.occurrenceDate).toISOString().split('T')[0];
+        const occurrenceDateString = getLocalDateString(event.occurrenceDate);
         return occurrenceDateString === selectedDateString;
       }
 
@@ -219,7 +232,7 @@ const CalendarScreen = () => {
       }
 
       // For one-time events, check exact date match
-      const eventDateString = new Date(event.date).toISOString().split('T')[0];
+      const eventDateString = getLocalDateString(event.date);
       return eventDateString === selectedDateString;
     });
 

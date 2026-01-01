@@ -6,20 +6,26 @@ export const eventResolvers = {
   Query: {
     events: async (_, { dateRange, filters }, context) => {
       const events = await eventService.getEvents(filters || {}, dateRange);
-      
+
       if (events.length === 0) {
         return events;
       }
-      
+
       // Get unique event IDs (use baseEventId for recurring instances, otherwise event id)
       const eventIds = [...new Set(events.map(e => e.baseEventId || e.id))];
-      
+
+      console.log('[EVENTS QUERY] 📊 Fetching events for date range:', dateRange);
+      console.log('[EVENTS QUERY] 📊 Found', events.length, 'events');
+      console.log('[EVENTS QUERY] 📊 Unique event IDs:', eventIds);
+
       // Count registrations by eventId and date
       const registrationCounts = await registrationService.countRegistrationsByEventAndDate(
         eventIds,
         []
       );
-      
+
+      console.log('[EVENTS QUERY] 📊 Registration counts received:', registrationCounts);
+
       // Attach registration counts to events
       return events.map(event => {
         // For recurring instances, use baseEventId; for one-time events, use id
@@ -29,10 +35,21 @@ export const eventResolvers = {
         const dateObj = eventDate?.toDate ? eventDate.toDate() : new Date(eventDate);
         const dateKey = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD format
         const countKey = `${eventId}:${dateKey}`;
-        
+
         // Use the per-date count, or fallback to the event's registeredCount
         const perDateCount = registrationCounts[countKey] || 0;
-        
+
+        console.log('[EVENTS QUERY] 🔍 Event:', {
+          id: event.id,
+          title: event.title,
+          baseEventId: event.baseEventId,
+          eventId,
+          dateKey,
+          countKey,
+          perDateCount,
+          availableInCounts: countKey in registrationCounts
+        });
+
         return {
           ...event,
           registeredCount: perDateCount,
