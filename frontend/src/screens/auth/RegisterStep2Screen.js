@@ -29,7 +29,7 @@ const RegisterStep2Screen = ({ navigation, route }) => {
   const [registerMutation, { loading }] = useMutation(REGISTER, {
     onCompleted: async (data) => {
       try {
-        await login(data.register.token, data.register.user);
+        await login(data.register.token, data.register.user, data.register.activeTransactions || []);
         showSuccessToast(SUCCESS_MESSAGES.REGISTER_SUCCESS);
       } catch (error) {
         showErrorToast('נכשל בשמירת נתוני ההרשמה');

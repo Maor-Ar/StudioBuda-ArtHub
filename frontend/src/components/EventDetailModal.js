@@ -4,7 +4,7 @@ import UserHeadIcon from '../assets/icons/user-head.svg';
 import UsersFourIcon from '../assets/icons/users-four.svg';
 import LeftArrow from '../assets/icons/LeftArrow.svg';
 
-const EventDetailModal = ({ event, visible, onClose, onRegister, isRegistered }) => {
+const EventDetailModal = ({ event, visible, onClose, onRegister, onCancel, isRegistered, isFull = false, disabled = false }) => {
   if (!event) return null;
 
   const formatTime = (time) => {
@@ -88,7 +88,7 @@ const EventDetailModal = ({ event, visible, onClose, onRegister, isRegistered })
             {/* Participants */}
             <View style={styles.detailRow}>
               <Text style={styles.detailValue}>
-                {event.registeredCount ?? 0} מתוך {event.maxRegistrations ?? 8} משתתפים
+                {event.registeredCount ?? 0} מתוך {event.maxRegistrations ?? 0} משתתפים
               </Text>
               <UsersFourIcon width={20} height={20} style={styles.detailIcon} />
             </View>
@@ -101,19 +101,29 @@ const EventDetailModal = ({ event, visible, onClose, onRegister, isRegistered })
               </View>
             )}
 
-            {/* Register Button */}
+            {/* Button States: Cancel, Full, or Register */}
             {isRegistered ? (
-              <View style={styles.registeredButton}>
-                <Text style={styles.registeredButtonText}>נרשמת לשיעור זה</Text>
+              <TouchableOpacity 
+                style={[styles.cancelButton, disabled && styles.cancelButtonDisabled]} 
+                onPress={onCancel}
+                disabled={disabled}
+              >
+                <Text style={styles.cancelButtonText}>
+                  {disabled ? 'מבטל...' : 'ביטול הרשמה'}
+                </Text>
+              </TouchableOpacity>
+            ) : isFull ? (
+              <View style={styles.fullButton}>
+                <Text style={styles.fullButtonText}>השיעור מלא</Text>
               </View>
             ) : (
               <TouchableOpacity 
-                style={[styles.registerButton, event.availableSpots === 0 && styles.registerButtonDisabled]} 
+                style={[styles.registerButton, disabled && styles.registerButtonDisabled]} 
                 onPress={onRegister}
-                disabled={event.availableSpots === 0}
+                disabled={disabled}
               >
                 <Text style={styles.registerButtonText}>
-                  {event.availableSpots === 0 ? 'אין מקומות פנויים' : 'תרשמו אותי'}
+                  {disabled ? 'מרשם...' : 'תרשמו אותי'}
                 </Text>
               </TouchableOpacity>
             )}
@@ -248,7 +258,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     writingDirection: 'rtl',
   },
-  registeredButton: {
+  cancelButton: {
     width: '100%',
     height: 50,
     backgroundColor: '#4E0D66',
@@ -256,9 +266,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 20,
+    shadowColor: '#4E0D66',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  registeredButtonText: {
+  cancelButtonDisabled: {
+    opacity: 0.6,
+  },
+  cancelButtonText: {
     color: '#FFD1E3',
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  fullButton: {
+    width: '100%',
+    height: 50,
+    backgroundColor: '#999',
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+    opacity: 0.6,
+  },
+  fullButtonText: {
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',

@@ -7,7 +7,7 @@
  * 3. רישום (Sunday)
  *
  * Each class has 2 time slots: 18:00-19:30 and 19:30-21:00
- * Max 8 attendees per slot
+ * Max 6 attendees per slot
  */
 
 import { db } from '../src/config/firebase.js';
@@ -42,8 +42,8 @@ const weeklyClasses = [
       { startTime: '19:30', duration: 90 },
     ],
     instructorName: 'יערה בודה',
-    maxRegistrations: 8,
-    eventType: EVENT_TYPES.TRIAL,
+    maxRegistrations: 6,
+    eventType: EVENT_TYPES.SUBSCRIPTION_ONLY,
     price: null,
   },
   {
@@ -55,8 +55,8 @@ const weeklyClasses = [
       { startTime: '19:30', duration: 90 },
     ],
     instructorName: 'יערה בודה',
-    maxRegistrations: 8,
-    eventType: EVENT_TYPES.TRIAL,
+    maxRegistrations: 6,
+    eventType: EVENT_TYPES.SUBSCRIPTION_ONLY,
     price: null,
   },
   {
@@ -68,8 +68,8 @@ const weeklyClasses = [
       { startTime: '19:30', duration: 90 },
     ],
     instructorName: 'יערה בודה',
-    maxRegistrations: 8,
-    eventType: EVENT_TYPES.TRIAL,
+    maxRegistrations: 6,
+    eventType: EVENT_TYPES.SUBSCRIPTION_ONLY,
     price: null,
   },
 ];
@@ -103,7 +103,7 @@ const seedWeeklyClasses = async () => {
           eventType,
           price,
           isActive: true,
-          registeredCount: 0,
+          // Note: registeredCount is calculated on-the-fly from registrations
           registeredUsers: [],
           createdAt: new Date(),
           updatedAt: new Date(),

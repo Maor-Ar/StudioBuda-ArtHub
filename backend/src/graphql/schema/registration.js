@@ -7,6 +7,7 @@ export const registrationTypeDefs = gql`
     transactionId: String!
     eventId: String!
     occurrenceDate: String!
+    date: String!
     registrationDate: String!
     status: String!
     createdAt: String!

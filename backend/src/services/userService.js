@@ -6,13 +6,17 @@ import cacheService from './cacheService.js';
 
 class UserService {
   async createUser(userData) {
-    const { firstName, lastName, phone, email, passwordHash, userType, role } = userData;
+    const { firstName, lastName, phone, email, passwordHash, userType, role, firebaseUid } = userData;
 
     // Validate inputs
     validateName(firstName, 'firstName');
     validateName(lastName, 'lastName');
     validatePhone(phone);
     validateEmail(email);
+
+    if (!firebaseUid) {
+      throw new ValidationError('Firebase UID is required to create user');
+    }
 
     const userDoc = {
       firstName,
@@ -28,12 +32,16 @@ class UserService {
       isActive: true,
     };
 
-    const docRef = await db.collection('users').add(userDoc);
+    // Use Firebase UID as the document ID so it matches the auth token
+    const docRef = db.collection('users').doc(firebaseUid);
+    console.log(`[USER_SERVICE] Creating user document with ID: ${firebaseUid}`);
+    await docRef.set(userDoc);
+    console.log(`[USER_SERVICE] User document created successfully: ${firebaseUid}`);
     
     // Invalidate cache
     await cacheService.delPattern('user:*');
 
-    return { id: docRef.id, ...userDoc };
+    return { id: firebaseUid, ...userDoc };
   }
 
   async getUserById(userId) {

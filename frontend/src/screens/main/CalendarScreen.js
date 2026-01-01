@@ -1,11 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from '@apollo/client';
-import { GET_EVENTS } from '../../services/graphql/queries';
+import { useMutation, useQuery } from '@apollo/client';
+import { useCachedEvents, clearEventsCacheForRange } from '../../hooks/useCachedEvents';
+import { REGISTER_FOR_EVENT, CANCEL_REGISTRATION } from '../../services/graphql/mutations';
+import { GET_MY_REGISTRATIONS } from '../../services/graphql/queries';
 import EventCard from '../../components/EventCard';
 import EventDetailModal from '../../components/EventDetailModal';
-import { showErrorToast } from '../../utils/toast';
+import { showErrorToast, showSuccessToast } from '../../utils/toast';
+import { getGraphQLErrorMessage } from '../../utils/errorMessages';
 import LeftArrow from '../../assets/icons/LeftArrow.svg';
 import RightArrow from '../../assets/icons/RightArrow.svg';
 
@@ -48,12 +51,134 @@ const CalendarScreen = () => {
     };
   }, [selectedDateObj]);
 
-  // Fetch events from GraphQL
-  const { data, loading, error } = useQuery(GET_EVENTS, {
-    variables: {
-      dateRange,
+  // Fetch events from GraphQL with caching
+  const { data, loading, error, refetch: refetchEvents } = useCachedEvents(dateRange);
+  
+  // Log events data changes
+  useEffect(() => {
+    console.log('[EVENTS DATA] 📊 Events data changed:', data);
+    console.log('[EVENTS DATA] 📊 Events list:', data?.events);
+    if (data?.events) {
+      console.log('[EVENTS DATA] 📊 Events count:', data.events.length);
+      data.events.forEach((event, index) => {
+        console.log(`[EVENTS DATA] 📊 Event ${index}:`, {
+          id: event.id,
+          baseEventId: event.baseEventId,
+          title: event.title,
+          date: event.date,
+          occurrenceDate: event.occurrenceDate,
+          registeredCount: event.registeredCount,
+          maxRegistrations: event.maxRegistrations,
+          availableSpots: event.availableSpots,
+        });
+      });
+    }
+  }, [data]);
+
+  // Fetch user registrations
+  const { data: registrationsData, loading: registrationsLoading, refetch: refetchRegistrations } = useQuery(GET_MY_REGISTRATIONS);
+  
+  // Log registrations data changes
+  useEffect(() => {
+    console.log('[REGISTRATIONS DATA] 📊 Registrations data changed:', registrationsData);
+    console.log('[REGISTRATIONS DATA] 📊 My registrations:', registrationsData?.myRegistrations);
+    if (registrationsData?.myRegistrations) {
+      console.log('[REGISTRATIONS DATA] 📊 Registrations count:', registrationsData.myRegistrations.length);
+      registrationsData.myRegistrations.forEach((registration, index) => {
+        console.log(`[REGISTRATIONS DATA] 📊 Registration ${index}:`, {
+          id: registration.id,
+          eventId: registration.eventId,
+          date: registration.date,
+          occurrenceDate: registration.occurrenceDate,
+          status: registration.status,
+          event: registration.event,
+        });
+      });
+    }
+  }, [registrationsData]);
+
+  // Registration mutation
+  const [registerForEvent, { loading: registering }] = useMutation(REGISTER_FOR_EVENT, {
+    refetchQueries: [
+      { query: GET_MY_REGISTRATIONS },
+      // Note: GET_EVENTS is refetched manually via refetchEvents() to clear our custom cache
+    ],
+    awaitRefetchQueries: true, // Wait for refetch queries to complete
+    onCompleted: async (mutationData) => {
+      console.log('[REGISTRATION] ✅ Registration mutation completed successfully');
+      console.log('[REGISTRATION] Response data:', mutationData);
+      try {
+        // Clear cache for the current week to force fresh data
+        console.log('[REGISTRATION] Clearing cache for date range...');
+        clearEventsCacheForRange(dateRange);
+        
+        // Refetch events and registrations to get updated data from DB
+        console.log('[REGISTRATION] Refetching events and registrations...');
+        const [eventsResult, registrationsResult] = await Promise.all([refetchEvents(), refetchRegistrations()]);
+        console.log('[REGISTRATION] ✅ Events and registrations refetched successfully');
+        console.log('[REGISTRATION] 📊 Events result:', eventsResult);
+        console.log('[REGISTRATION] 📊 Events data:', eventsResult?.data);
+        console.log('[REGISTRATION] 📊 Events list:', eventsResult?.data?.events);
+        console.log('[REGISTRATION] 📊 Registrations result:', registrationsResult);
+        console.log('[REGISTRATION] 📊 Registrations data:', registrationsResult?.data);
+        console.log('[REGISTRATION] 📊 My registrations:', registrationsResult?.data?.myRegistrations);
+        
+        // Show success message
+        showSuccessToast('נרשמת בהצלחה לשיעור!');
+        
+        // Close modal if open
+        if (modalVisible) {
+          setModalVisible(false);
+          setSelectedEvent(null);
+        }
+      } catch (refetchError) {
+        console.error('[REGISTRATION] ❌ Error refetching events after registration:', refetchError);
+        // Still show success since registration was successful
+        showSuccessToast('נרשמת בהצלחה לשיעור!');
+      }
     },
-    fetchPolicy: 'cache-and-network',
+    onError: (error) => {
+      console.error('[REGISTRATION] ❌ Registration mutation failed');
+      console.error('[REGISTRATION] Error object:', error);
+      console.error('[REGISTRATION] GraphQL errors:', error.graphQLErrors);
+      console.error('[REGISTRATION] Network error:', error.networkError);
+      if (error.networkError) {
+        console.error('[REGISTRATION] Network error details:', {
+          statusCode: error.networkError.statusCode,
+          result: error.networkError.result,
+          message: error.networkError.message
+        });
+      }
+      const friendlyMessage = getGraphQLErrorMessage(error);
+      console.error('[REGISTRATION] Friendly error message:', friendlyMessage);
+      showErrorToast(friendlyMessage);
+    },
+  });
+
+  // Cancel registration mutation
+  const [cancelRegistration, { loading: cancelling }] = useMutation(CANCEL_REGISTRATION, {
+    refetchQueries: [{ query: GET_MY_REGISTRATIONS }],
+    onCompleted: async () => {
+      try {
+        // Clear cache and refetch events
+        clearEventsCacheForRange(dateRange);
+        await refetchEvents();
+        await refetchRegistrations();
+        showSuccessToast('הרישום בוטל בהצלחה');
+      } catch (error) {
+        console.error('[CANCELLATION] Error refetching after cancellation:', error);
+        showSuccessToast('הרישום בוטל בהצלחה');
+      }
+    },
+    onError: (error) => {
+      const friendlyMessage = getGraphQLErrorMessage(error);
+      // Check if it's the 5-hour restriction error
+      if (error.message?.includes('5 שעות') || friendlyMessage.includes('5 שעות')) {
+        showErrorToast('לא ניתן לבטל רישום פחות מ-5 שעות לפני תחילת השיעור');
+      } else {
+        showErrorToast(friendlyMessage);
+      }
+    },
   });
 
   // Show error toast if query fails
@@ -65,10 +190,19 @@ const CalendarScreen = () => {
 
   // Filter and sort events for the selected date
   const eventsForSelectedDate = useMemo(() => {
-    if (!data?.events) return [];
+    console.log('[EVENTS FILTER] 🔄 Filtering events for selected date');
+    console.log('[EVENTS FILTER] 📊 data?.events:', data?.events);
+    console.log('[EVENTS FILTER] 📊 selectedDateObj:', selectedDateObj);
+    
+    if (!data?.events) {
+      console.log('[EVENTS FILTER] ⚠️ No events data, returning empty array');
+      return [];
+    }
 
     const selectedDateString = selectedDateObj.toISOString().split('T')[0];
     const selectedDayOfWeek = selectedDateObj.getDay();
+    console.log('[EVENTS FILTER] 📊 selectedDateString:', selectedDateString);
+    console.log('[EVENTS FILTER] 📊 selectedDayOfWeek:', selectedDayOfWeek);
 
     const filteredEvents = data.events.filter((event) => {
       // For event instances (generated from recurring events), check occurrenceDate
@@ -90,7 +224,7 @@ const CalendarScreen = () => {
     });
 
     // Sort by start time in ascending order (earliest first, top to bottom)
-    return filteredEvents.sort((a, b) => {
+    const sortedEvents = filteredEvents.sort((a, b) => {
       const timeA = a.startTime || '00:00';
       const timeB = b.startTime || '00:00';
       // Compare times (HH:mm format)
@@ -98,7 +232,126 @@ const CalendarScreen = () => {
       if (timeA > timeB) return 1;
       return 0;
     });
+    
+    console.log('[EVENTS FILTER] ✅ Filtered events count:', sortedEvents.length);
+    sortedEvents.forEach((event, index) => {
+      console.log(`[EVENTS FILTER] 📊 Filtered event ${index}:`, {
+        id: event.id,
+        baseEventId: event.baseEventId,
+        title: event.title,
+        registeredCount: event.registeredCount,
+        maxRegistrations: event.maxRegistrations,
+        availableSpots: event.availableSpots,
+      });
+    });
+    
+    return sortedEvents;
   }, [data, selectedDateObj]);
+
+  // Process user registrations for "הרישומים שלי" tab
+  const futureRegisteredEvents = useMemo(() => {
+    if (!registrationsData?.myRegistrations) return [];
+
+    const now = new Date();
+    const futureRegistrations = registrationsData.myRegistrations.filter((registration) => {
+      // Filter for confirmed status
+      if (registration.status !== 'confirmed') return false;
+      
+      // Filter for future events
+      const eventDate = new Date(registration.occurrenceDate || registration.event?.date);
+      return eventDate >= now;
+    });
+
+    // Merge registration data with event data to create full event objects
+    const events = futureRegistrations.map((registration) => {
+      const event = registration.event;
+      const occurrenceDate = new Date(registration.occurrenceDate || event.date);
+      
+      return {
+        id: event.id,
+        title: event.title,
+        date: occurrenceDate.toISOString(),
+        occurrenceDate: occurrenceDate.toISOString(),
+        startTime: event.startTime,
+        duration: event.duration || 90, // Default duration if not provided
+        description: '', // Description not in registration query
+        instructorName: event.instructorName, // Use from event data
+        maxRegistrations: event.maxRegistrations, // Use from event data
+        eventType: event.eventType,
+        isRecurring: false, // Treat as instance
+        isInstance: true,
+        baseEventId: event.id,
+        registeredCount: event.registeredCount || 0, // Use from event data (calculated by backend)
+        availableSpots: event.availableSpots || 0, // Use from event data (calculated by backend)
+        registrationId: registration.id, // Store registration ID for cancellation
+      };
+    });
+
+    // Sort by date (earliest first)
+    return events.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      if (dateA < dateB) return -1;
+      if (dateA > dateB) return 1;
+      // If same date, sort by time
+      const timeA = a.startTime || '00:00';
+      const timeB = b.startTime || '00:00';
+      if (timeA < timeB) return -1;
+      if (timeA > timeB) return 1;
+      return 0;
+    });
+  }, [registrationsData]);
+
+  // Create a map of user registrations by event ID + date for quick lookup
+  const userRegistrationsMap = useMemo(() => {
+    console.log('[REGISTRATIONS MAP] 🔄 Recalculating userRegistrationsMap');
+    console.log('[REGISTRATIONS MAP] 📊 registrationsData:', registrationsData);
+    console.log('[REGISTRATIONS MAP] 📊 myRegistrations:', registrationsData?.myRegistrations);
+    
+    if (!registrationsData?.myRegistrations) {
+      console.log('[REGISTRATIONS MAP] ⚠️ No registrations data, returning empty map');
+      return new Map();
+    }
+    
+    const map = new Map();
+    registrationsData.myRegistrations.forEach((registration) => {
+      if (registration.status === 'confirmed') {
+        const eventId = registration.eventId;
+        // Use date field first (stored in registration), then occurrenceDate, then event.date
+        const regDate = registration.date || registration.occurrenceDate || registration.event?.date;
+        if (!regDate) {
+          console.log('[REGISTRATIONS MAP] ⚠️ Skipping registration with no date:', registration);
+          return; // Skip if no date available
+        }
+        
+        const occurrenceDate = new Date(regDate);
+        // Normalize to YYYY-MM-DD format (UTC, no time component)
+        const dateKey = occurrenceDate.toISOString().split('T')[0];
+        const key = `${eventId}_${dateKey}`;
+        console.log('[REGISTRATIONS MAP] ✅ Adding registration:', { eventId, dateKey, key, registration });
+        map.set(key, registration);
+      } else {
+        console.log('[REGISTRATIONS MAP] ⚠️ Skipping non-confirmed registration:', registration.status);
+      }
+    });
+    console.log('[REGISTRATIONS MAP] ✅ Final map size:', map.size);
+    console.log('[REGISTRATIONS MAP] ✅ Map keys:', Array.from(map.keys()));
+    return map;
+  }, [registrationsData]);
+
+  // Calculate registration status for selected event in modal
+  const selectedEventRegistration = useMemo(() => {
+    if (!selectedEvent) return null;
+    
+    const eventId = selectedEvent.baseEventId || selectedEvent.id;
+    const eventDateValue = selectedEvent.occurrenceDate || selectedEvent.date;
+    if (!eventDateValue) return null;
+    
+    const eventDate = new Date(eventDateValue);
+    const dateKey = eventDate.toISOString().split('T')[0];
+    const registrationKey = `${eventId}_${dateKey}`;
+    return userRegistrationsMap.get(registrationKey) || null;
+  }, [selectedEvent, userRegistrationsMap]);
 
   const formatMonthYear = (date) => {
     const months = [
@@ -134,9 +387,43 @@ const CalendarScreen = () => {
     setSelectedDateObj(date);
   };
 
-  const handleRegister = (eventId) => {
-    // TODO: Implement registration logic
-    console.log('Register for event:', eventId);
+  const handleRegister = async (eventId) => {
+    console.log('[REGISTRATION] 🎫 Starting registration for event:', eventId);
+    try {
+      console.log('[REGISTRATION] Calling registerForEvent mutation...');
+      await registerForEvent({
+        variables: {
+          input: {
+            eventId,
+          },
+        },
+      });
+      console.log('[REGISTRATION] ✅ Registration mutation completed');
+    } catch (error) {
+      // Error is handled by mutation's onError callback
+      console.error('[REGISTRATION] ❌ Registration error:', error);
+      console.error('[REGISTRATION] Error details:', {
+        message: error.message,
+        graphQLErrors: error.graphQLErrors,
+        networkError: error.networkError,
+        stack: error.stack
+      });
+    }
+  };
+
+  const handleCancelRegistration = async (registrationId) => {
+    console.log('[CANCELLATION] 🎫 Starting cancellation for registration:', registrationId);
+    try {
+      await cancelRegistration({
+        variables: {
+          id: registrationId,
+        },
+      });
+      console.log('[CANCELLATION] ✅ Cancellation mutation completed');
+    } catch (error) {
+      // Error is handled by mutation's onError callback
+      console.error('[CANCELLATION] ❌ Cancellation error:', error);
+    }
   };
 
   const handleEventPress = (event) => {
@@ -202,48 +489,52 @@ const CalendarScreen = () => {
         </View>
 
         {/* Month Navigation - RTL: Right arrow = previous week, Left arrow = next week */}
-        <View style={styles.monthNavigation}>
-          <TouchableOpacity onPress={handleNextWeek} style={styles.arrowButton}>
-            <LeftArrow width={23} height={23} />
-          </TouchableOpacity>
-          <Text style={styles.monthText}>{displayMonth}</Text>
-          <TouchableOpacity onPress={handlePreviousWeek} style={styles.arrowButton}>
-            <RightArrow width={23} height={23} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Days of Week - RTL: Saturday to Sunday */}
-        <View style={styles.daysOfWeekContainer}>
-          {[...daysOfWeek].reverse().map((day, index) => (
-            <View key={index} style={styles.dayOfWeek}>
-              <Text style={styles.dayOfWeekText}>{day}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Date Selection - RTL: Saturday to Sunday */}
-        <View style={styles.datesContainer}>
-          {[...weekDates].reverse().map((date, index) => {
-            const isSelected = isDateSelected(date);
-            return (
-              <TouchableOpacity
-                key={`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`}
-                style={[
-                  styles.dateCircle,
-                  isSelected && styles.dateCircleSelected
-                ]}
-                onPress={() => handleDateSelect(date)}
-              >
-                <Text style={[
-                  styles.dateText,
-                  isSelected && styles.dateTextSelected
-                ]}>
-                  {date.getDate()}
-                </Text>
+        {selectedTab === 'יומן' && (
+          <>
+            <View style={styles.monthNavigation}>
+              <TouchableOpacity onPress={handleNextWeek} style={styles.arrowButton}>
+                <LeftArrow width={23} height={23} />
               </TouchableOpacity>
-            );
-          })}
-        </View>
+              <Text style={styles.monthText}>{displayMonth}</Text>
+              <TouchableOpacity onPress={handlePreviousWeek} style={styles.arrowButton}>
+                <RightArrow width={23} height={23} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Days of Week - RTL: Saturday to Sunday */}
+            <View style={styles.daysOfWeekContainer}>
+              {[...daysOfWeek].reverse().map((day, index) => (
+                <View key={index} style={styles.dayOfWeek}>
+                  <Text style={styles.dayOfWeekText}>{day}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Date Selection - RTL: Saturday to Sunday */}
+            <View style={styles.datesContainer}>
+              {[...weekDates].reverse().map((date, index) => {
+                const isSelected = isDateSelected(date);
+                return (
+                  <TouchableOpacity
+                    key={`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`}
+                    style={[
+                      styles.dateCircle,
+                      isSelected && styles.dateCircleSelected
+                    ]}
+                    onPress={() => handleDateSelect(date)}
+                  >
+                    <Text style={[
+                      styles.dateText,
+                      isSelected && styles.dateTextSelected
+                    ]}>
+                      {date.getDate()}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
+        )}
 
         {/* Events List - transparent background to show global purple + logo */}
         <ScrollView
@@ -251,41 +542,121 @@ const CalendarScreen = () => {
           contentContainerStyle={[styles.eventsContent, { backgroundColor: 'transparent' }]}
           showsVerticalScrollIndicator={false}
         >
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#AB5FBD" />
-              <Text style={styles.loadingText}>טוען אירועים...</Text>
-            </View>
-          ) : eventsForSelectedDate.length > 0 ? (
-            eventsForSelectedDate.map((event) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                onRegister={() => handleRegister(event.id)}
-                onPress={() => handleEventPress(event)}
-                isRegistered={false} // TODO: Check user's registrations
-              />
-            ))
+          {selectedTab === 'הרישומים שלי' ? (
+            // Show registered events
+            registrationsLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#AB5FBD" />
+                <Text style={styles.loadingText}>טוען רישומים...</Text>
+              </View>
+            ) : futureRegisteredEvents.length > 0 ? (
+              futureRegisteredEvents.map((event) => (
+                <EventCard
+                  key={`${event.id}-${event.occurrenceDate}`}
+                  event={event}
+                  onRegister={() => handleRegister(event.id)}
+                  onCancel={() => handleCancelRegistration(event.registrationId)}
+                  onPress={() => handleEventPress(event)}
+                  isRegistered={true}
+                  isFull={false}
+                  disabled={cancelling}
+                />
+              ))
+            ) : (
+              <View style={styles.emptyStateContainer}>
+                <Text style={styles.emptyStateText}>אין רישומים עתידיים</Text>
+              </View>
+            )
           ) : (
-            <View style={styles.emptyStateContainer}>
-              <Text style={styles.emptyStateText}>אין שיעורים מתוכננים ליום זה</Text>
-            </View>
+            // Show calendar events
+            loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#AB5FBD" />
+                <Text style={styles.loadingText}>טוען אירועים...</Text>
+              </View>
+            ) : eventsForSelectedDate.length > 0 ? (
+              eventsForSelectedDate
+                .filter((event) => {
+                  // Filter out events without dates
+                  return !!(event.occurrenceDate || event.date);
+                })
+                .map((event) => {
+                  // Check if user is registered for this event
+                  // For recurring events, use baseEventId; for one-time, use event.id
+                  const eventId = event.baseEventId || event.id;
+                  // Get the occurrence date (for virtual instances) or regular date
+                  const eventDateValue = event.occurrenceDate || event.date;
+                  const eventDate = new Date(eventDateValue);
+                  // Normalize to YYYY-MM-DD format (UTC, no time component)
+                  const dateKey = eventDate.toISOString().split('T')[0];
+                  const registrationKey = `${eventId}_${dateKey}`;
+                  
+                  console.log('[EVENT CARD] 🔍 Checking registration for event:', {
+                    eventId,
+                    baseEventId: event.baseEventId,
+                    eventDateValue,
+                    dateKey,
+                    registrationKey,
+                    eventTitle: event.title,
+                    registeredCount: event.registeredCount,
+                    maxRegistrations: event.maxRegistrations,
+                    availableSpots: event.availableSpots,
+                  });
+                  
+                  console.log('[EVENT CARD] 📊 userRegistrationsMap size:', userRegistrationsMap.size);
+                  console.log('[EVENT CARD] 📊 userRegistrationsMap keys:', Array.from(userRegistrationsMap.keys()));
+                  
+                  const registration = userRegistrationsMap.get(registrationKey);
+                  const isRegistered = !!registration;
+                  const isFull = event.availableSpots === 0;
+                  
+                  console.log('[EVENT CARD] ✅ Registration check result:', {
+                    registrationKey,
+                    foundRegistration: !!registration,
+                    registration,
+                    isRegistered,
+                    isFull,
+                  });
+                  
+                  return (
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      onRegister={() => handleRegister(event.id)}
+                      onCancel={registration ? () => handleCancelRegistration(registration.id) : undefined}
+                      onPress={() => handleEventPress(event)}
+                      isRegistered={isRegistered}
+                      isFull={isFull}
+                      disabled={registering || cancelling}
+                    />
+                  );
+                })
+            ) : (
+              <View style={styles.emptyStateContainer}>
+                <Text style={styles.emptyStateText}>אין שיעורים מתוכננים ליום זה</Text>
+              </View>
+            )
           )}
         </ScrollView>
 
         {/* Event Detail Modal */}
-        <EventDetailModal
-          event={selectedEvent}
-          visible={modalVisible}
-          onClose={handleCloseModal}
-          onRegister={() => {
-            if (selectedEvent) {
-              handleRegister(selectedEvent.id);
-            }
-            handleCloseModal();
-          }}
-          isRegistered={false} // TODO: Check user's registrations
-        />
+        {selectedEvent && (
+          <EventDetailModal
+            event={selectedEvent}
+            visible={modalVisible}
+            onClose={handleCloseModal}
+            onRegister={() => {
+              if (selectedEvent) {
+                handleRegister(selectedEvent.id);
+              }
+              // Don't close modal immediately - let the mutation callback handle it
+            }}
+            onCancel={selectedEventRegistration ? () => handleCancelRegistration(selectedEventRegistration.id) : undefined}
+            isRegistered={!!selectedEventRegistration}
+            isFull={selectedEvent.availableSpots === 0}
+            disabled={registering || cancelling}
+          />
+        )}
     </View>
   );
 };

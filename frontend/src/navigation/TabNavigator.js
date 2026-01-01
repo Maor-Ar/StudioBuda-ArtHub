@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import CalendarScreen from '../screens/main/CalendarScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
@@ -28,24 +29,25 @@ const TabNavigator = () => {
             backgroundColor: 'transparent',
           },
           tabBarStyle: {
-            backgroundColor: 'rgba(255, 226, 237, 0.4)', // Semi-transparent pink
-            borderTopWidth: 0,
+            backgroundColor: '#5D3587', // Solid dark purple background
+            borderTopWidth: 3,
+            borderTopColor: '#FFD1E3', // Pink top border for visual separation
             height: 90,
             paddingBottom: 20,
             paddingTop: 10,
             position: 'absolute',
-            // Remove shadow
-            shadowColor: 'transparent',
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0,
-            shadowRadius: 0,
-            elevation: 0,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 10,
           },
-          tabBarActiveTintColor: '#FFD1E3',
-          tabBarInactiveTintColor: '#FFD1E3',
+          tabBarActiveTintColor: '#FFD1E3', // Pink for active state
+          tabBarInactiveTintColor: '#B8A3D1', // Lighter purple for inactive (still visible)
           tabBarLabelStyle: {
             fontSize: 13,
-            fontWeight: '500',
+            fontWeight: '600', // Bolder for better readability
+            marginTop: 4,
           },
         }}
       >
@@ -56,14 +58,26 @@ const TabNavigator = () => {
             title: 'רכישות',
             tabBarLabel: 'רכישות',
             tabBarIcon: ({ color, size, focused }) => (
-              <PurchasesButton 
-                width={25} 
-                height={25}
-              />
+              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                {focused && (
+                  <View style={{
+                    position: 'absolute',
+                    width: 35,
+                    height: 35,
+                    borderRadius: 17.5,
+                    backgroundColor: 'rgba(93, 53, 135, 0.5)',
+                  }} />
+                )}
+                <PurchasesButton 
+                  width={25} 
+                  height={25}
+                />
+              </View>
             ),
           }}
         />
-        <Tab.Screen 
+        {/* Chat button hidden for now */}
+        {/* <Tab.Screen 
           name="Chat" 
           component={ProductsScreen}
           options={{ 
@@ -76,7 +90,7 @@ const TabNavigator = () => {
               />
             ),
           }}
-        />
+        /> */}
         <Tab.Screen 
           name="Calendar" 
           component={CalendarScreen}
@@ -84,10 +98,21 @@ const TabNavigator = () => {
             title: 'יומן',
             tabBarLabel: 'יומן',
             tabBarIcon: ({ color, size, focused }) => (
-              <CalendarButton 
-                width={25} 
-                height={25}
-              />
+              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                {focused && (
+                  <View style={{
+                    position: 'absolute',
+                    width: 35,
+                    height: 35,
+                    borderRadius: 17.5,
+                    backgroundColor: 'rgba(93, 53, 135, 0.5)',
+                  }} />
+                )}
+                <CalendarButton 
+                  width={25} 
+                  height={25}
+                />
+              </View>
             ),
           }}
         />
@@ -98,10 +123,21 @@ const TabNavigator = () => {
             title: 'פרופיל',
             tabBarLabel: 'פרופיל',
             tabBarIcon: ({ color, size, focused }) => (
-              <ProfileButton 
-                width={25} 
-                height={25}
-              />
+              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                {focused && (
+                  <View style={{
+                    position: 'absolute',
+                    width: 35,
+                    height: 35,
+                    borderRadius: 17.5,
+                    backgroundColor: 'rgba(93, 53, 135, 0.5)',
+                  }} />
+                )}
+                <ProfileButton 
+                  width={25} 
+                  height={25}
+                />
+              </View>
             ),
           }}
         />
@@ -112,8 +148,19 @@ const TabNavigator = () => {
             options={{ 
               title: 'ניהול',
               tabBarLabel: 'ניהול',
-              tabBarIcon: ({ color, size }) => (
-                <ProfileButton width={25} height={25} />
+              tabBarIcon: ({ color, size, focused }) => (
+                <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                  {focused && (
+                    <View style={{
+                      position: 'absolute',
+                      width: 35,
+                      height: 35,
+                      borderRadius: 17.5,
+                      backgroundColor: 'rgba(93, 53, 135, 0.5)',
+                    }} />
+                  )}
+                  <ProfileButton width={25} height={25} />
+                </View>
               ),
             }}
           />

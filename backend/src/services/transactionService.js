@@ -246,6 +246,30 @@ class TransactionService {
       entriesUsedThisMonth: newCount,
     });
   }
+
+  async usePunchCardEntry(transactionId) {
+    const transaction = await this.getTransactionById(transactionId);
+    
+    if (transaction.transactionType !== TRANSACTION_TYPES.PUNCH_CARD) {
+      throw new ValidationError('Transaction is not a punch card', 'transactionType');
+    }
+
+    if (!transaction.entriesRemaining || transaction.entriesRemaining <= 0) {
+      throw new ConflictError('Punch card has no remaining entries', 'transactionId');
+    }
+
+    const newRemaining = transaction.entriesRemaining - 1;
+    const updateData = {
+      entriesRemaining: newRemaining,
+    };
+
+    // If no entries remaining, deactivate the punch card
+    if (newRemaining === 0) {
+      updateData.isActive = false;
+    }
+
+    return await this.updateTransaction(transactionId, updateData);
+  }
 }
 
 export default new TransactionService();

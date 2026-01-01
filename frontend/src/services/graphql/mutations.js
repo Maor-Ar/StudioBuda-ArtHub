@@ -21,6 +21,7 @@ export const REGISTER = gql`
         monthlyEntries
         entriesUsedThisMonth
         entriesRemaining
+        totalEntries
         isActive
       }
       hasPurchasedTrial
@@ -48,6 +49,7 @@ export const LOGIN = gql`
         monthlyEntries
         entriesUsedThisMonth
         entriesRemaining
+        totalEntries
         isActive
       }
       hasPurchasedTrial
@@ -75,6 +77,7 @@ export const LOGIN_WITH_OAUTH = gql`
         monthlyEntries
         entriesUsedThisMonth
         entriesRemaining
+        totalEntries
         isActive
       }
       hasPurchasedTrial

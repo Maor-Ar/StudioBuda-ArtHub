@@ -16,8 +16,8 @@ const RegisterScreen = ({ navigation }) => {
   const [registerMutation, { loading }] = useMutation(REGISTER, {
     onCompleted: async (data) => {
       try {
-        // Store token and user data in AuthContext
-        await login(data.register.token, data.register.user);
+        // Store token, user data, and transactions in AuthContext
+        await login(data.register.token, data.register.user, data.register.activeTransactions || []);
         Alert.alert('Success', 'Registration successful! Welcome to StudioBuda ArtHub.');
       } catch (error) {
         Alert.alert('Error', 'Failed to save registration data');

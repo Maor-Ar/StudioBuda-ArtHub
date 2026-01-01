@@ -27,7 +27,7 @@ const LoginScreen = ({ navigation }) => {
   const [loginMutation, { loading }] = useMutation(LOGIN, {
     onCompleted: async (data) => {
       try {
-        await login(data.login.token, data.login.user);
+        await login(data.login.token, data.login.user, data.login.activeTransactions || []);
         showSuccessToast(SUCCESS_MESSAGES.LOGIN_SUCCESS);
       } catch (error) {
         showErrorToast('נכשל בשמירת נתוני הכניסה');
@@ -42,7 +42,7 @@ const LoginScreen = ({ navigation }) => {
   const [loginWithOAuthMutation] = useMutation(LOGIN_WITH_OAUTH, {
     onCompleted: async (data) => {
       try {
-        await login(data.loginWithOAuth.token, data.loginWithOAuth.user);
+        await login(data.loginWithOAuth.token, data.loginWithOAuth.user, data.loginWithOAuth.activeTransactions || []);
         setOauthLoading(false);
         showSuccessToast(SUCCESS_MESSAGES.OAUTH_SUCCESS);
       } catch (error) {

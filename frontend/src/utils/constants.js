@@ -34,6 +34,7 @@ export const GRAPHQL_ENDPOINT = getGraphQLEndpoint();
 export const STORAGE_KEYS = {
   AUTH_TOKEN: '@studiobuda:auth_token',
   USER_DATA: '@studiobuda:user_data',
+  USER_TRANSACTIONS: '@studiobuda:user_transactions',
 };
 
 // Event Types
@@ -67,25 +68,62 @@ export const OAUTH_PROVIDERS = {
 // Products (hardcoded for now - can be moved to config/API later)
 export const PRODUCTS = [
   {
-    id: 'subscription-monthly',
-    name: 'Monthly Subscription',
-    description: 'Unlimited monthly classes',
+    id: 'subscription-4-monthly',
+    name: 'מנוי 4 כניסות בחודש',
+    description: '4 כניסות לסטודיו, בתוקף לחודש אחד',
     type: TRANSACTION_TYPES.SUBSCRIPTION,
-    growUrl: 'https://grow.com/products/subscription-monthly', // Replace with actual Grow URL
+    price: 330,
+    monthlyEntries: 4,
+    terms: `* המנוי כולל 4 כניסות לסטודיו, בתוקף לחודש אחד מיום התשלום.
+	• הכניסות מיועדות לשימוש בתוך תקופת החודש בלבד ואינן נצברות או עוברות לחודש הבא.
+	• ניתן לבטל את המנוי בכל שלב, והביטול ייכנס לתוקף מהחיוב הבא שטרם בוצע.
+	• לאחר ביצוע תשלום חודשי, לא יתבצע החזר כספי עבור אותו חודש.
+	• המנוי הוא אישי ואינו ניתן להעברה.
+* ביטול הגעה יתאפשר עד 5 שעות לפני תחילת השיעור. ביטול מאוחר ייחשב ככניסה מנוצלת.
+* הסטודיו שומר לעצמו את הזכות לבצע שינויים בלו"ז או במדריכים/ות במקרה הצורך.`,
   },
   {
-    id: 'punch-card-10',
-    name: '10-Class Punch Card',
-    description: '10 classes to use anytime',
+    id: 'subscription-6-monthly',
+    name: 'מנוי 6 כניסות בחודש',
+    description: '6 כניסות לסטודיו, בתוקף לחודש אחד',
+    type: TRANSACTION_TYPES.SUBSCRIPTION,
+    price: 460,
+    monthlyEntries: 6,
+    terms: `* המנוי כולל 6 כניסות לסטודיו, בתוקף לחודש אחד מיום התשלום.
+	• הכניסות מיועדות לשימוש בתוך תקופת החודש בלבד ואינן נצברות או עוברות לחודש הבא.
+	• ניתן לבטל את המנוי בכל שלב, והביטול ייכנס לתוקף מהחיוב הבא שטרם בוצע.
+	• לאחר ביצוע תשלום חודשי, לא יתבצע החזר כספי עבור אותו חודש.
+	• המנוי הוא אישי ואינו ניתן להעברה.
+* ביטול הגעה יתאפשר עד 5 שעות לפני תחילת השיעור. ביטול מאוחר ייחשב ככניסה מנוצלת.
+* הסטודיו שומר לעצמו את הזכות לבצע שינויים בלו"ז או במדריכים/ות במקרה הצורך.`,
+  },
+  {
+    id: 'subscription-unlimited',
+    name: 'מנוי ללא הגבלה',
+    description: 'כניסות ללא הגבלה, בתוקף לחודש אחד',
+    type: TRANSACTION_TYPES.SUBSCRIPTION,
+    price: 520,
+    monthlyEntries: 99, // Placeholder for unlimited
+    terms: `* המנוי כולל כניסות ללא הגבלה לסטודיו, בתוקף לחודש אחד מיום התשלום.
+	• הכניסות מיועדות לשימוש בתוך תקופת החודש בלבד ואינן נצברות או עוברות לחודש הבא.
+	• ניתן לבטל את המנוי בכל שלב, והביטול ייכנס לתוקף מהחיוב הבא שטרם בוצע.
+	• לאחר ביצוע תשלום חודשי, לא יתבצע החזר כספי עבור אותו חודש.
+	• המנוי הוא אישי ואינו ניתן להעברה.
+* ביטול הגעה יתאפשר עד 5 שעות לפני תחילת השיעור. ביטול מאוחר ייחשב ככניסה מנוצלת.
+* הסטודיו שומר לעצמו את הזכות לבצע שינויים בלו"ז או במדריכים/ות במקרה הצורך.`,
+  },
+  {
+    id: 'punch-card-5',
+    name: 'כרטיסיה חד פעמית 5 כניסות',
+    description: '5 כניסות לסטודיו, בתוקף לחצי שנה',
     type: TRANSACTION_TYPES.PUNCH_CARD,
-    growUrl: 'https://grow.com/products/punch-card-10', // Replace with actual Grow URL
-  },
-  {
-    id: 'trial-lesson',
-    name: 'Trial Lesson',
-    description: 'Try your first class',
-    type: TRANSACTION_TYPES.TRIAL_LESSON,
-    growUrl: 'https://grow.com/products/trial-lesson', // Replace with actual Grow URL
+    price: 425,
+    totalEntries: 5,
+    validityMonths: 6,
+    terms: `* הכרטיסיה כוללת 5 כניסות לסטודיו, בתוקף לחצי שנה מיום התשלום.
+* הכרטיסיה הינה אישית ואינה ניתנת להעברה.
+* ביטול הגעה יתאפשר עד 5 שעות לפני תחילת השיעור. ביטול מאוחר יחשב ככניסה מנוצלת.
+* הסטודיו שומר לעצמו את הזכות לבצע שינויים בלו"ז או במדריכים/ות במקרה הצורך.`,
   },
 ];
 

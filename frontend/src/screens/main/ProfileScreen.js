@@ -7,7 +7,7 @@ import { GET_ME, GET_MY_REGISTRATIONS, GET_MY_TRANSACTIONS } from '../../service
 
 const ProfileScreen = () => {
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
+  const { user, transactions: contextTransactions, logout, updateTransactions } = useAuth();
 
   // Fetch fresh user data from the server
   const { data: userData, loading: userLoading } = useQuery(GET_ME);
@@ -15,14 +15,25 @@ const ProfileScreen = () => {
   // Fetch user's registrations
   const { data: registrationsData, loading: registrationsLoading } = useQuery(GET_MY_REGISTRATIONS);
 
-  // Fetch user's transactions
-  const { data: transactionsData, loading: transactionsLoading } = useQuery(GET_MY_TRANSACTIONS);
+  // Fetch user's transactions to refresh context (use context as primary source)
+  const { data: transactionsData, loading: transactionsLoading } = useQuery(GET_MY_TRANSACTIONS, {
+    onCompleted: (data) => {
+      // Update context with fresh transactions from server
+      if (data?.myTransactions) {
+        updateTransactions(data.myTransactions);
+      }
+    },
+  });
 
   const currentUser = userData?.me || user;
   const registrations = registrationsData?.myRegistrations || [];
-  const transactions = transactionsData?.myTransactions || [];
+  
+  // Use context transactions as primary source, fallback to query data
+  const transactions = contextTransactions.length > 0 
+    ? contextTransactions 
+    : (transactionsData?.myTransactions || []);
 
-  // Filter active transactions
+  // Filter active transactions (should already be filtered in context, but double-check)
   const activeTransactions = transactions.filter(t => t.isActive);
 
   // Filter future registrations
@@ -41,13 +52,18 @@ const ProfileScreen = () => {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <ScrollView 
+      {/* Header - Studio Buda */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>סטודיו בודה</Text>
+      </View>
+
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
+        {/* Profile Section Title */}
+        <View style={styles.profileTitleContainer}>
           <Text style={styles.title}>פרופיל</Text>
         </View>
 
@@ -73,17 +89,12 @@ const ProfileScreen = () => {
                     <Text style={styles.label}>:טלפון</Text>
                   </View>
                 )}
-
-                <View style={styles.infoRow}>
-                  <Text style={styles.value}>{currentUser.role}</Text>
-                  <Text style={styles.label}>:סוג משתמש</Text>
-                </View>
               </View>
             </View>
 
             {/* Active Transactions Section */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>מנויים ומכרות פעילים</Text>
+              <Text style={styles.sectionTitle}>מנויים וכרטיסיות פעילים</Text>
               {transactionsLoading ? (
                 <ActivityIndicator size="small" color="#FFD1E3" />
               ) : activeTransactions.length > 0 ? (
@@ -97,22 +108,25 @@ const ProfileScreen = () => {
                     {transaction.transactionType === 'subscription' && (
                       <>
                         <Text style={styles.cardText}>
-                          כניסות חודשיות: {transaction.monthlyEntries}
+                          כניסות חודשיות: {transaction.monthlyEntries || 0}
                         </Text>
                         <Text style={styles.cardText}>
-                          נוצלו החודש: {transaction.entriesUsedThisMonth}
+                          נוצלו החודש: {transaction.entriesUsedThisMonth || 0}
+                        </Text>
+                        <Text style={styles.cardText}>
+                          נותרו החודש: {(transaction.monthlyEntries || 0) - (transaction.entriesUsedThisMonth || 0)}
                         </Text>
                       </>
                     )}
                     {transaction.transactionType === 'punch_card' && (
                       <Text style={styles.cardText}>
-                        נותרו: {transaction.entriesRemaining} מתוך {transaction.totalEntries}
+                        נותרו: {transaction.entriesRemaining || 0} מתוך {transaction.totalEntries || 0}
                       </Text>
                     )}
                   </View>
                 ))
               ) : (
-                <Text style={styles.emptyText}>אין מנויים פעילים</Text>
+                <Text style={styles.emptyText}>אין מנויים או כרטיסיות פעילים</Text>
               )}
             </View>
 
@@ -171,17 +185,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    paddingTop: 20,
+    paddingTop: 10,
     paddingBottom: 10,
     paddingHorizontal: 20,
     backgroundColor: '#FFD1E3', // Pink header background
   },
-  title: {
-    fontSize: 28,
+  headerTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#4E0D66', // Dark purple
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.25)',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 4,
+  },
+  profileTitleContainer: {
+    paddingTop: 20,
+    paddingBottom: 10,
+    paddingHorizontal: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FFD1E3', // Pink text
+    textAlign: 'center',
+    textShadowColor: 'rgba(78, 13, 102, 0.3)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
@@ -220,7 +248,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
     padding: 15,
     borderRadius: 10,
     marginBottom: 10,

@@ -1,5 +1,5 @@
 import { db } from '../config/firebase.js';
-import { EVENT_TYPES } from '../config/constants.js';
+import { EVENT_TYPES, REGISTRATION_STATUS } from '../config/constants.js';
 import { NotFoundError, ValidationError } from '../utils/errors.js';
 import {
   validateEventType,
@@ -60,7 +60,7 @@ class EventService {
       eventType,
       price: eventType === EVENT_TYPES.PAID_WORKSHOP ? price : null,
       isActive: true,
-      registeredCount: 0,
+      // Note: registeredCount is calculated on-the-fly from registrations
       registeredUsers: [],
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -190,9 +190,31 @@ class EventService {
     return events;
   }
 
-  async checkEventCapacity(eventId) {
+  async checkEventCapacity(eventId, occurrenceDate = null) {
     const event = await this.getEvent(eventId);
-    return event.registeredCount < event.maxRegistrations;
+    
+    // Calculate registeredCount on-the-fly for the specific date
+    const eventDate = occurrenceDate || event.date;
+    const dateObj = eventDate?.toDate ? eventDate.toDate() : new Date(eventDate);
+    const dateKey = dateObj.toISOString().split('T')[0];
+    
+    // Count confirmed registrations for this event and date
+    const snapshot = await db.collection('event_registrations')
+      .where('eventId', '==', eventId)
+      .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+      .get();
+    
+    let count = 0;
+    snapshot.docs.forEach(doc => {
+      const reg = doc.data();
+      const regDate = reg.date?.toDate ? reg.date.toDate() : new Date(reg.date || reg.occurrenceDate);
+      const regDateKey = regDate.toISOString().split('T')[0];
+      if (regDateKey === dateKey) {
+        count++;
+      }
+    });
+    
+    return count < event.maxRegistrations;
   }
 }
 

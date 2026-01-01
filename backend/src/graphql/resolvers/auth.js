@@ -35,7 +35,8 @@ export const authResolvers = {
       // Hash password
       const passwordHash = await bcrypt.hash(password, 10);
 
-      // Create user in Firestore
+      // Create user in Firestore using Firebase UID as document ID
+      console.log(`[REGISTER] Creating Firestore user with Firebase UID: ${firebaseUser.uid}`);
       const user = await authService.createUser({
         firstName,
         lastName,
@@ -44,7 +45,9 @@ export const authResolvers = {
         passwordHash,
         userType: 'regular',
         role: 'user',
+        firebaseUid: firebaseUser.uid, // Use Firebase Auth UID as Firestore document ID
       });
+      console.log(`[REGISTER] Firestore user created successfully: ${user.id}`);
 
       // Get active transactions (will be empty for new user)
       const activeTransactions = await transactionService.getUserActiveTransactions(
@@ -124,10 +127,20 @@ export const authResolvers = {
       const decodedToken = await authService.verifyToken(token);
       
       // Get or create user
-      let user = await authService.getUserByEmail(decodedToken.email);
-      
-      if (!user) {
-        // Create new user from OAuth
+      let user;
+      try {
+        user = await authService.getUserById(decodedToken.uid);
+      } catch (error) {
+        // User doesn't exist, create new user from OAuth
+        // First, ensure Firebase Auth user exists (OAuth might have created it)
+        let firebaseUser;
+        try {
+          firebaseUser = await auth.getUser(decodedToken.uid);
+        } catch (error) {
+          // If Firebase user doesn't exist, we can't create Firestore user
+          throw new AuthenticationError('OAuth user not found in Firebase Auth');
+        }
+        
         user = await authService.createUser({
           firstName: decodedToken.name?.split(' ')[0] || '',
           lastName: decodedToken.name?.split(' ').slice(1).join(' ') || '',
@@ -136,6 +149,7 @@ export const authResolvers = {
           passwordHash: null,
           userType: provider.toLowerCase(),
           role: 'user',
+          firebaseUid: decodedToken.uid, // Use Firebase Auth UID as Firestore document ID
         });
       }
 

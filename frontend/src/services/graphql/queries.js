@@ -78,6 +78,7 @@ export const GET_MY_REGISTRATIONS = gql`
       transactionId
       eventId
       occurrenceDate
+      date
       registrationDate
       status
       createdAt
@@ -89,6 +90,9 @@ export const GET_MY_REGISTRATIONS = gql`
         duration
         eventType
         instructorName
+        maxRegistrations
+        registeredCount
+        availableSpots
       }
     }
   }
