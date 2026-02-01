@@ -6,8 +6,6 @@ const requiredEnvVars = [
   'FIREBASE_PROJECT_ID',
   'FIREBASE_PRIVATE_KEY',
   'FIREBASE_CLIENT_EMAIL',
-  'REDIS_HOST',
-  'REDIS_PORT',
 ];
 
 const optionalEnvVars = {
@@ -17,6 +15,13 @@ const optionalEnvVars = {
   CORS_ORIGIN: '*',
   PASSWORD_RESET_TOKEN_EXPIRY: 3600,
   EMAIL_SERVICE_PROVIDER: 'sendgrid',
+  // ZCredit (SmartBee) - Test credentials as defaults
+  ZCREDIT_TERMINAL_NUMBER: '0882016016',
+  ZCREDIT_PASSWORD: 'Z0882016016',
+  ZCREDIT_KEY: 'c0863aa14e77ec032effda671797c295d8a2ab154e49242871a197d158fa3f30',
+  ZCREDIT_API_URL: 'https://pci.zcredit.co.il',
+  BACKEND_URL: 'http://localhost:4000',
+  FRONTEND_URL: 'http://localhost:8081',
 };
 
 // Validate required environment variables
@@ -73,6 +78,16 @@ const config = {
   },
   cors: {
     origin: process.env.CORS_ORIGIN || optionalEnvVars.CORS_ORIGIN,
+  },
+  zcredit: {
+    terminalNumber: process.env.ZCREDIT_TERMINAL_NUMBER || optionalEnvVars.ZCREDIT_TERMINAL_NUMBER,
+    password: process.env.ZCREDIT_PASSWORD || optionalEnvVars.ZCREDIT_PASSWORD,
+    key: process.env.ZCREDIT_KEY || optionalEnvVars.ZCREDIT_KEY,
+    apiUrl: process.env.ZCREDIT_API_URL || optionalEnvVars.ZCREDIT_API_URL,
+  },
+  urls: {
+    backend: process.env.BACKEND_URL || optionalEnvVars.BACKEND_URL,
+    frontend: process.env.FRONTEND_URL || optionalEnvVars.FRONTEND_URL,
   },
 };
 

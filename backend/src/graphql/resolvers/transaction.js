@@ -1,5 +1,7 @@
 import transactionService from '../../services/transactionService.js';
 import { requireManager, requireAuthenticated } from '../middleware/permissions.js';
+import { AuthorizationError, NotFoundError } from '../../utils/errors.js';
+import logger from '../../utils/logger.js';
 
 export const transactionResolvers = {
   Query: {
@@ -40,8 +42,29 @@ export const transactionResolvers = {
     },
 
     cancelSubscription: async (_, { id }, context) => {
-      const manager = await requireManager(context);
-      return await transactionService.cancelSubscription(id, manager.id);
+      const user = await requireAuthenticated(context);
+      
+      // Get the transaction to check ownership
+      const transaction = await transactionService.getTransactionById(id);
+      
+      // Allow if user owns the transaction OR if user is manager/admin
+      const isOwner = transaction.userId === user.id;
+      const isManager = user.role === 'manager' || user.role === 'admin';
+      
+      if (!isOwner && !isManager) {
+        throw new AuthorizationError('אין לך הרשאה לבטל מנוי זה');
+      }
+
+      logger.info('Canceling subscription', {
+        transactionId: id,
+        userId: user.id,
+        isOwner,
+        isManager,
+      });
+
+      const updatedTransaction = await transactionService.cancelSubscription(id, user.id);
+      
+      return updatedTransaction;
     },
   },
 
@@ -58,6 +81,42 @@ export const transactionResolvers = {
         return transaction.lastRenewalDate.toDate().toISOString();
       }
       return new Date(transaction.lastRenewalDate).toISOString();
+    },
+    lastPaymentDate: (transaction) => {
+      if (!transaction.lastPaymentDate) return null;
+      if (transaction.lastPaymentDate?.toDate) {
+        return transaction.lastPaymentDate.toDate().toISOString();
+      }
+      return new Date(transaction.lastPaymentDate).toISOString();
+    },
+    accessEndsDate: (transaction) => {
+      // Only applicable to subscriptions
+      if (transaction.transactionType !== 'subscription') {
+        return null;
+      }
+
+      // Get the last payment date
+      let lastPaymentDate;
+      if (transaction.lastPaymentDate?.toDate) {
+        lastPaymentDate = transaction.lastPaymentDate.toDate();
+      } else if (transaction.lastPaymentDate) {
+        lastPaymentDate = new Date(transaction.lastPaymentDate);
+      } else {
+        // Fallback to purchase date
+        lastPaymentDate = transaction.purchaseDate?.toDate
+          ? transaction.purchaseDate.toDate()
+          : new Date(transaction.purchaseDate);
+      }
+
+      if (!lastPaymentDate || isNaN(lastPaymentDate.getTime())) {
+        return null;
+      }
+
+      // Add 30 days to last payment date
+      const accessEndsDate = new Date(lastPaymentDate);
+      accessEndsDate.setDate(accessEndsDate.getDate() + 30);
+
+      return accessEndsDate.toISOString();
     },
     createdAt: (transaction) => {
       if (transaction.createdAt?.toDate) {

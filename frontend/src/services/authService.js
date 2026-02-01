@@ -1,5 +1,4 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
-import * as Facebook from 'expo-facebook';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
@@ -10,12 +9,12 @@ import { oAuthConfig } from '../config/firebase';
 WebBrowser.maybeCompleteAuthSession();
 
 /**
- * AuthService - Handles OAuth authentication with Google, Facebook, and Apple
+ * AuthService - Handles OAuth authentication with Google and Apple
  *
  * This implementation uses Expo-compatible packages:
  * - expo-apple-authentication for Apple Sign In
  * - expo-auth-session for Google Sign In (Expo Go compatible)
- * - expo-facebook for Facebook Login
+ * Note: Facebook login is temporarily disabled
  */
 class AuthService {
   /**
@@ -201,7 +200,7 @@ class AuthService {
       case OAUTH_PROVIDERS.GOOGLE:
         return await this.signInWithGoogle();
       case OAUTH_PROVIDERS.FACEBOOK:
-        return await this.signInWithFacebook();
+        throw new Error('Facebook login is currently unavailable. Please use Google or Apple sign in.');
       case OAUTH_PROVIDERS.APPLE:
         return await this.signInWithApple();
       default:

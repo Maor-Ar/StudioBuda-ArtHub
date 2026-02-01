@@ -241,15 +241,15 @@ const LoginScreen = ({ navigation }) => {
           <Text style={styles.googleButtonText}>המשך עם גוגל</Text>
         </TouchableOpacity>
 
-        {/* Facebook Button */}
-        <TouchableOpacity
+        {/* Facebook Button - Temporarily disabled */}
+        {/* <TouchableOpacity
           style={styles.facebookButton}
           onPress={() => handleOAuth(OAUTH_PROVIDERS.FACEBOOK)}
           disabled={oauthLoading || loading}
         >
           <FacebookIcon width={20} height={20} style={styles.icon} />
           <Text style={styles.facebookButtonText}>המשך עם פייסבוק</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
         {/* Footer Link */}

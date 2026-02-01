@@ -116,6 +116,11 @@ export const GET_MY_TRANSACTIONS = gql`
       amount
       createdAt
       updatedAt
+      # Payment fields
+      lastPaymentDate
+      accessEndsDate
+      cardLast4
+      cardBrand
     }
   }
 `;

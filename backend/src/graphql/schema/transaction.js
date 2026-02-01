@@ -16,6 +16,14 @@ export const transactionTypeDefs = gql`
     amount: Float!
     createdAt: String!
     updatedAt: String!
+    # New payment-related fields
+    zcreditReferenceNumber: String
+    paymentToken: String
+    cardLast4: String
+    cardBrand: String
+    lastPaymentDate: String
+    # Computed field for subscription access end date
+    accessEndsDate: String
   }
 
   input CreateTransactionInput {

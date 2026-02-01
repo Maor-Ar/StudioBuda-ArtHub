@@ -223,13 +223,23 @@ export const CANCEL_SUBSCRIPTION = gql`
     cancelSubscription(id: $id) {
       id
       isActive
+      lastPaymentDate
+      accessEndsDate
     }
   }
 `;
 
-
-
-
+// Payment Mutations
+export const CREATE_PAYMENT_SESSION = gql`
+  mutation CreatePaymentSession($productId: String!, $product: ProductInput!) {
+    createPaymentSession(productId: $productId, product: $product) {
+      sessionId
+      sessionUrl
+      uniqueId
+      isRecurring
+    }
+  }
+`;
 
 
 

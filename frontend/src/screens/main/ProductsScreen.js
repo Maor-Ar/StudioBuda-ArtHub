@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMutation } from '@apollo/client';
+import { useMutation, useQuery } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
 import { PRODUCTS } from '../../utils/constants';
-import { CREATE_TRANSACTION } from '../../services/graphql/mutations';
+import { CREATE_PAYMENT_SESSION } from '../../services/graphql/mutations';
+import { GET_MY_TRANSACTIONS } from '../../services/graphql/queries';
 import ProductCard from '../../components/ProductCard';
+import PaymentModal from '../../components/PaymentModal';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { getGraphQLErrorMessage } from '../../utils/errorMessages';
 
@@ -13,54 +15,107 @@ const ProductsScreen = () => {
   const insets = useSafeAreaInsets();
   const { user, transactions, updateTransactions } = useAuth();
   const [purchasingProductId, setPurchasingProductId] = useState(null);
+  
+  // Payment modal state
+  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
+  const [paymentSessionUrl, setPaymentSessionUrl] = useState(null);
+  const [currentProduct, setCurrentProduct] = useState(null);
+  const [isRecurring, setIsRecurring] = useState(false);
 
-  const [createTransaction] = useMutation(CREATE_TRANSACTION, {
+  // Refetch transactions query
+  const { refetch: refetchTransactions } = useQuery(GET_MY_TRANSACTIONS, {
+    skip: true, // Don't fetch on mount
+  });
+
+  // Create payment session mutation
+  const [createPaymentSession] = useMutation(CREATE_PAYMENT_SESSION, {
     onCompleted: (data) => {
-      if (data?.createTransaction) {
-        // Update context with new transaction (merge with existing)
-        const updatedTransactions = [...(transactions || []), data.createTransaction];
-        updateTransactions(updatedTransactions);
-        showSuccessToast('הרכישה בוצעה בהצלחה!');
-        setPurchasingProductId(null);
+      if (data?.createPaymentSession) {
+        console.log('[Products] Payment session created:', data.createPaymentSession);
+        setPaymentSessionUrl(data.createPaymentSession.sessionUrl);
+        setIsRecurring(data.createPaymentSession.isRecurring);
+        setPaymentModalVisible(true);
       }
     },
     onError: (error) => {
-      console.error('Purchase error:', error);
+      console.error('[Products] Create payment session error:', error);
       showErrorToast(getGraphQLErrorMessage(error));
       setPurchasingProductId(null);
+      setCurrentProduct(null);
     },
   });
 
+  // Handle purchase - initiate payment flow
   const handlePurchase = async (product) => {
     if (!user) {
       showErrorToast('יש להתחבר כדי לבצע רכישה');
       return;
     }
 
+    console.log('[Products] Starting purchase for product:', product.id);
     setPurchasingProductId(product.id);
+    setCurrentProduct(product);
 
     try {
-      const input = {
-        transactionType: product.type,
-        amount: product.price,
-        invoiceId: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      };
-
-      // Add type-specific fields
-      if (product.type === 'subscription') {
-        input.monthlyEntries = product.monthlyEntries;
-      } else if (product.type === 'punch_card') {
-        input.totalEntries = product.totalEntries;
-      }
-
-      await createTransaction({
-        variables: { input },
+      await createPaymentSession({
+        variables: {
+          productId: product.id,
+          product: {
+            id: product.id,
+            name: product.name,
+            type: product.type,
+            price: product.price,
+            monthlyEntries: product.monthlyEntries || null,
+            totalEntries: product.totalEntries || null,
+          },
+        },
       });
     } catch (error) {
-      console.error('Purchase failed:', error);
+      console.error('[Products] Purchase failed:', error);
       setPurchasingProductId(null);
+      setCurrentProduct(null);
     }
   };
+
+  // Handle payment success
+  const handlePaymentSuccess = useCallback(async () => {
+    console.log('[Products] Payment success!');
+    setPaymentModalVisible(false);
+    setPaymentSessionUrl(null);
+    setPurchasingProductId(null);
+    
+    // Refetch transactions to get the new one
+    try {
+      const { data } = await refetchTransactions();
+      if (data?.myTransactions) {
+        updateTransactions(data.myTransactions);
+      }
+    } catch (error) {
+      console.warn('[Products] Failed to refetch transactions:', error);
+    }
+    
+    showSuccessToast('הרכישה בוצעה בהצלחה! 🎉');
+    setCurrentProduct(null);
+  }, [refetchTransactions, updateTransactions]);
+
+  // Handle payment cancel
+  const handlePaymentCancel = useCallback(() => {
+    console.log('[Products] Payment cancelled');
+    setPaymentModalVisible(false);
+    setPaymentSessionUrl(null);
+    setPurchasingProductId(null);
+    setCurrentProduct(null);
+    showErrorToast('התשלום בוטל');
+  }, []);
+
+  // Handle payment modal close
+  const handlePaymentClose = useCallback(() => {
+    console.log('[Products] Payment modal closed');
+    setPaymentModalVisible(false);
+    setPaymentSessionUrl(null);
+    setPurchasingProductId(null);
+    setCurrentProduct(null);
+  }, []);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -92,6 +147,16 @@ const ProductsScreen = () => {
           ))}
         </View>
       </ScrollView>
+
+      {/* Payment Modal */}
+      <PaymentModal
+        visible={paymentModalVisible}
+        sessionUrl={paymentSessionUrl}
+        onSuccess={handlePaymentSuccess}
+        onCancel={handlePaymentCancel}
+        onClose={handlePaymentClose}
+        isRecurring={isRecurring}
+      />
     </View>
   );
 };

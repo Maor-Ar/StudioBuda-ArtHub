@@ -19,12 +19,10 @@ export const getRedisClient = async () => {
 
   // Check if Redis config is available
   if (!config.redis.host) {
-    const isDevelopment = config.server.nodeEnv === 'development';
-    if (isDevelopment) {
-      logger.warn('⚠️  Redis not configured. Cache will be disabled.');
-      return null;
-    }
-    throw new Error('Redis host is required');
+    // Redis is an optional cache layer. If it's not configured, just disable cache.
+    // (Keeping this non-fatal in production allows small deployments to run without Redis.)
+    logger.warn('⚠️  Redis not configured. Cache will be disabled.');
+    return null;
   }
 
   // Prevent multiple simultaneous connection attempts
@@ -89,7 +87,9 @@ export const getRedisClient = async () => {
       logger.warn('⚠️  Redis connection failed. Continuing without cache.');
       return null;
     }
-    throw error;
+    // In production, treat Redis as optional: continue without cache instead of crashing.
+    logger.warn('⚠️  Redis connection failed in production. Continuing without cache.');
+    return null;
   }
 };
 

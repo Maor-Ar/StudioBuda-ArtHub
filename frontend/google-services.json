@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "102013040020",
+    "project_id": "studiobuda-arthub",
+    "storage_bucket": "studiobuda-arthub.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:102013040020:android:0c1223ab58150d3fb44b81",
+        "android_client_info": {
+          "package_name": "com.studiobuda.arthub"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "102013040020-on89le0901sibnbho24bdkjvenjt0q34.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAinJddQsQ8nhlL523efqkK3VoaJg6wWoI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "102013040020-on89le0901sibnbho24bdkjvenjt0q34.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

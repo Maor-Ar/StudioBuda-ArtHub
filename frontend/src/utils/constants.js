@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 // Helper function to get the correct API URL based on platform
 const getGraphQLEndpoint = () => {
   if (!__DEV__) {
-    return 'https://your-production-url.com/graphql';
+    return 'https://studiobuda-backend-873405578260.me-west1.run.app/graphql';
   }
 
   // For web, use localhost

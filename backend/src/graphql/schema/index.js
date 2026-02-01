@@ -3,12 +3,14 @@ import { userTypeDefs } from './user.js';
 import { eventTypeDefs } from './event.js';
 import { transactionTypeDefs } from './transaction.js';
 import { registrationTypeDefs } from './registration.js';
+import { paymentTypeDefs } from './payment.js';
 
 export const typeDefs = gql`
   ${userTypeDefs}
   ${eventTypeDefs}
   ${transactionTypeDefs}
   ${registrationTypeDefs}
+  ${paymentTypeDefs}
 
   type AuthPayload {
     token: String!

@@ -3,6 +3,7 @@ import { userResolvers } from './user.js';
 import { eventResolvers } from './event.js';
 import { transactionResolvers } from './transaction.js';
 import { registrationResolvers } from './registration.js';
+import { paymentResolvers } from './payment.js';
 import userService from '../../services/userService.js';
 
 export const resolvers = {
@@ -11,6 +12,7 @@ export const resolvers = {
     ...eventResolvers.Query,
     ...transactionResolvers.Query,
     ...registrationResolvers.Query,
+    ...paymentResolvers.Query,
     users: async (_, __, context) => {
       const { requireManager } = await import('../middleware/permissions.js');
       await requireManager(context);
@@ -28,6 +30,7 @@ export const resolvers = {
     ...eventResolvers.Mutation,
     ...transactionResolvers.Mutation,
     ...registrationResolvers.Mutation,
+    ...paymentResolvers.Mutation,
   },
 
   User: {

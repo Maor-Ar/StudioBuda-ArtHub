@@ -17,6 +17,17 @@ class TransactionService {
       monthlyEntries,
       totalEntries,
       invoiceId,
+      // New payment fields
+      zcreditReferenceNumber,
+      paymentToken,
+      cardLast4,
+      cardBrand,
+      lastPaymentDate,
+      purchaseDate,
+      isActive,
+      entriesUsedThisMonth,
+      lastRenewalDate,
+      entriesRemaining,
     } = transactionData;
 
     // Validate transaction type
@@ -46,8 +57,9 @@ class TransactionService {
       validatePositiveNumber(totalEntries, 'totalEntries');
     }
 
-    if (!invoiceId) {
-      throw new ValidationError('invoiceId is required', 'invoiceId');
+    // Require either invoiceId or zcreditReferenceNumber
+    if (!invoiceId && !zcreditReferenceNumber) {
+      throw new ValidationError('invoiceId or zcreditReferenceNumber is required', 'invoiceId');
     }
 
     const now = new Date();
@@ -55,23 +67,29 @@ class TransactionService {
       userId,
       transactionType,
       amount,
-      invoiceId,
-      isActive: true,
-      purchaseDate: now,
+      invoiceId: invoiceId || zcreditReferenceNumber, // Backwards compatibility
+      isActive: isActive !== undefined ? isActive : true,
+      purchaseDate: purchaseDate || now,
       createdAt: now,
       updatedAt: now,
+      // New payment fields
+      zcreditReferenceNumber: zcreditReferenceNumber || null,
+      paymentToken: paymentToken || null,
+      cardLast4: cardLast4 || null,
+      cardBrand: cardBrand || null,
+      lastPaymentDate: lastPaymentDate || now,
     };
 
     // Add type-specific fields
     if (transactionType === TRANSACTION_TYPES.SUBSCRIPTION) {
       transactionDoc.monthlyEntries = monthlyEntries;
-      transactionDoc.lastRenewalDate = now;
-      transactionDoc.entriesUsedThisMonth = 0;
+      transactionDoc.lastRenewalDate = lastRenewalDate || now;
+      transactionDoc.entriesUsedThisMonth = entriesUsedThisMonth || 0;
     }
 
     if (transactionType === TRANSACTION_TYPES.PUNCH_CARD) {
       transactionDoc.totalEntries = totalEntries;
-      transactionDoc.entriesRemaining = totalEntries;
+      transactionDoc.entriesRemaining = entriesRemaining !== undefined ? entriesRemaining : totalEntries;
     }
 
     const docRef = await db.collection('transactions').add(transactionDoc);
@@ -83,6 +101,14 @@ class TransactionService {
 
     // Invalidate cache
     await cacheService.invalidateUserCache(userId);
+
+    logger.info('Transaction created', {
+      transactionId: docRef.id,
+      userId,
+      transactionType,
+      amount,
+      hasToken: !!paymentToken,
+    });
 
     return { id: docRef.id, ...transactionDoc };
   }

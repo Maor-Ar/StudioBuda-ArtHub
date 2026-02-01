@@ -1,6 +1,7 @@
 import express from 'express';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
+import { ApolloServerPluginLandingPageDisabled } from '@apollo/server/plugin/disabled';
 import cors from 'cors';
 import helmet from 'helmet';
 import { typeDefs } from './graphql/schema/index.js';
@@ -13,6 +14,7 @@ import config from './config/environment.js';
 import logger from './utils/logger.js';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
+import paymentWebhooks from './routes/webhooks.js';
 
 const app = express();
 
@@ -70,29 +72,32 @@ if (isDevelopment) {
 
 // CORS
 // In development, allow requests from any origin (including mobile devices)
-const corsOrigin = isDevelopment 
-  ? (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, Postman, etc.)
-      if (!origin) {
-        console.log('[CORS] ✅ Allowing request with no origin (mobile app)');
-        return callback(null, true);
-      }
-      
-      // Allow localhost origins
-      const allowedOrigins = [
-        'http://localhost:3000',
-        'http://localhost:8081',
-        'http://localhost:19006', // Expo web
-        'http://127.0.0.1:3000',
-        'http://127.0.0.1:8081',
-        'http://127.0.0.1:19006',
-      ];
-      
-      // In development, allow all origins (including mobile device IPs)
-      console.log('[CORS] 📱 Allowing request from origin:', origin);
-      callback(null, true);
-    }
-  : config.cors.origin;
+const parseAllowedOrigins = (raw) => {
+  if (!raw) return [];
+  if (raw === '*') return ['*'];
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+};
+
+const allowedOrigins = isDevelopment
+  ? ['*'] // allow all in dev
+  : parseAllowedOrigins(config.cors.origin);
+
+const corsOrigin = (origin, callback) => {
+  // Allow requests with no Origin header (mobile apps, server-to-server webhooks, Postman)
+  if (!origin) return callback(null, true);
+
+  // Allow all
+  if (allowedOrigins.includes('*')) return callback(null, true);
+
+  // Allow exact-match list
+  if (allowedOrigins.includes(origin)) return callback(null, true);
+
+  logger.warn('[CORS] Blocked origin', { origin });
+  return callback(new Error('Not allowed by CORS'));
+};
 
 app.use(cors({
   origin: corsOrigin,
@@ -118,6 +123,9 @@ app.get('/health', (req, res) => {
 app.get('/favicon.ico', (req, res) => {
   res.status(204).end(); // No content, but successful
 });
+
+// Payment webhooks (ZCredit callbacks)
+app.use('/api/payment', paymentWebhooks);
 
 // Swagger configuration
 const swaggerOptions = {
@@ -145,7 +153,8 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 const apolloServer = new ApolloServer({
   typeDefs,
   resolvers,
-  introspection: true, // Enable introspection for GraphQL playground/sandbox
+  introspection: isDevelopment,
+  plugins: isDevelopment ? [] : [ApolloServerPluginLandingPageDisabled()],
   formatError: (error) => {
     logger.error('GraphQL Error:', error);
     return {
