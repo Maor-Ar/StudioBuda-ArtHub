@@ -1,0 +1,75 @@
+# Deploy Expo web app to GitHub Pages (subdomain)
+# Triggers on push to main. Configure your subdomain in the env below and in DNS.
+
+name: Deploy Web to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: github-pages
+    env:
+      # Change this to your subdomain (e.g. arthub.yourdomain.com)
+      CNAME_SUBDOMAIN: arthub.studiobuda.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Generate app icons
+        working-directory: frontend
+        run: npm run generate-icon
+        continue-on-error: true
+
+      - name: Build Expo web
+        working-directory: frontend
+        run: npx expo export --platform web
+        env:
+          CI: true
+
+      - name: Add CNAME for subdomain
+        working-directory: frontend/dist
+        run: echo "${{ env.CNAME_SUBDOMAIN }}" > CNAME
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+  deploy:
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
