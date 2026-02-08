@@ -19,12 +19,16 @@ export const firebaseConfig = {
  * OAuth Configuration
  * These values must be configured in the Firebase Console and respective provider dashboards
  */
+// Web client ID from google-services.json - use when env has placeholder
+const GOOGLE_WEB_FALLBACK = "102013040020-on89le0901sibnbho24bdkjvenjt0q34.apps.googleusercontent.com";
+const isPlaceholder = (id) => !id || id.startsWith("YOUR_");
+
 export const oAuthConfig = {
   google: {
     // Get these from Google Cloud Console
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || "YOUR_IOS_CLIENT_ID.apps.googleusercontent.com",
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || "YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com",
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com",
+    iosClientId: isPlaceholder(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID) ? GOOGLE_WEB_FALLBACK : process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    androidClientId: isPlaceholder(process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID) ? GOOGLE_WEB_FALLBACK : process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    webClientId: isPlaceholder(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) ? GOOGLE_WEB_FALLBACK : process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
   },
   facebook: {
     // Get this from Facebook Developers Console

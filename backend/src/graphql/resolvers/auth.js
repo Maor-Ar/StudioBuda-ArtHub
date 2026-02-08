@@ -4,6 +4,7 @@ import { auth } from '../../config/firebase.js';
 import { AuthenticationError, ValidationError } from '../../utils/errors.js';
 import { validateEmail, validatePassword } from '../../utils/validators.js';
 import bcrypt from 'bcrypt';
+import logger from '../../utils/logger.js';
 
 export const authResolvers = {
   Mutation: {
@@ -123,14 +124,19 @@ export const authResolvers = {
     },
 
     loginWithOAuth: async (_, { provider, token }, context) => {
-      // Verify OAuth token
+      logger.info('[AUTH_DEBUG] loginWithOAuth: provider=%s tokenLength=%s', provider, token?.length);
+
+      // Verify OAuth token (expects Firebase ID token, NOT Google access token)
       const decodedToken = await authService.verifyToken(token);
+      logger.info('[AUTH_DEBUG] loginWithOAuth: token verified, uid=%s', decodedToken?.uid);
       
       // Get or create user
       let user;
       try {
         user = await authService.getUserById(decodedToken.uid);
+        logger.info('[AUTH_DEBUG] loginWithOAuth: existing user found, id=%s', user?.id);
       } catch (error) {
+        logger.info('[AUTH_DEBUG] loginWithOAuth: user not found, creating new. error=%s', error?.message);
         // User doesn't exist, create new user from OAuth
         // First, ensure Firebase Auth user exists (OAuth might have created it)
         let firebaseUser;
@@ -151,6 +157,7 @@ export const authResolvers = {
           role: 'user',
           firebaseUid: decodedToken.uid, // Use Firebase Auth UID as Firestore document ID
         });
+        logger.info('[AUTH_DEBUG] loginWithOAuth: new user created, id=%s', user?.id);
       }
 
       // Get active transactions with renewal check
@@ -162,8 +169,11 @@ export const authResolvers = {
       // Get hasPurchasedTrial status
       const hasPurchasedTrial = user.hasPurchasedTrial || false;
 
+      // Return custom token (not ID token) - client needs it for signInWithCustomToken
+      const customToken = await auth.createCustomToken(decodedToken.uid);
+
       return {
-        token,
+        token: customToken,
         user,
         activeTransactions,
         hasPurchasedTrial,

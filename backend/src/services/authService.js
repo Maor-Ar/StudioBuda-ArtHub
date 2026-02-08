@@ -11,10 +11,16 @@ import logger from '../utils/logger.js';
 class AuthService {
   async verifyToken(token) {
     try {
+      logger.info('[AUTH_DEBUG] verifyToken: token length=%s preview=%s', token?.length, token ? token.substring(0, 30) + '...' : 'null');
       const decodedToken = await auth.verifyIdToken(token);
+      logger.info('[AUTH_DEBUG] verifyToken: success, uid=', decodedToken?.uid, 'email=', decodedToken?.email);
       return decodedToken;
     } catch (error) {
-      logger.error('Token verification error:', error);
+      logger.error('[AUTH_DEBUG] Token verification failed:', {
+        message: error.message,
+        code: error.code,
+        hint: 'Backend expects Firebase ID token. Google OAuth access token will fail here.',
+      });
       throw new AuthenticationError('Invalid or expired token');
     }
   }
@@ -25,6 +31,10 @@ class AuthService {
 
   async getUserByEmail(email) {
     return await userService.getUserByEmail(email);
+  }
+
+  async getUserById(userId) {
+    return await userService.getUserById(userId);
   }
 
   async updateUser(userId, data) {

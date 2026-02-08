@@ -60,9 +60,32 @@ export const getGraphQLErrorMessage = (error) => {
   const errorMessage = error.graphQLErrors?.[0]?.message || error.message || '';
   const lowerMessage = errorMessage.toLowerCase();
 
+  // If backend already returned a Hebrew message, show it as-is.
+  // (Many of our backend validation errors are user-facing.)
+  if (/[\u0590-\u05FF]/.test(errorMessage)) {
+    return errorMessage;
+  }
+
   // Network errors
   if (error.networkError || lowerMessage.includes('network')) {
     return AUTH_ERRORS.NETWORK_ERROR;
+  }
+
+  // Domain-specific registration / purchase errors
+  if (lowerMessage.includes('active subscription') || lowerMessage.includes('punch card')) {
+    return 'כדי להירשם לשיעור צריך מנוי פעיל או כרטיסייה עם כניסות שנותרו.';
+  }
+  if (lowerMessage.includes('trial lesson transaction required') || lowerMessage.includes('trial transaction required')) {
+    return 'כדי להירשם לשיעור ניסיון צריך קודם לרכוש שיעור ניסיון.';
+  }
+  if (lowerMessage.includes('transaction data required for paid workshop')) {
+    return 'לסדנה בתשלום צריך לבצע תשלום לפני הרשמה.';
+  }
+  if (lowerMessage.includes('already registered')) {
+    return 'כבר נרשמת לשיעור הזה.';
+  }
+  if (lowerMessage.includes('full capacity') || lowerMessage.includes('event is at full capacity')) {
+    return 'השיעור מלא, אין מקומות פנויים.';
   }
 
   // Authentication errors

@@ -34,7 +34,7 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     position: 'absolute',
-    bottom: 90, // Above bottom navigation (90px height)
+    bottom: 165, // Above SelectionBar (154px from Figma)
     left: 0,
     width: SCREEN_WIDTH * 0.7,
     height: SCREEN_HEIGHT * 0.4,

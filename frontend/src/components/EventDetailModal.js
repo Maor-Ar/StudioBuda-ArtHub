@@ -144,7 +144,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#5D3587', // Dark purple background
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    maxHeight: '90%',
+    // Give the modal a concrete height so the ScrollView gets layout space.
+    // With only maxHeight (and no explicit height/flex), the ScrollView can
+    // collapse to 0 height on some devices, leaving only the header visible.
+    height: '90%',
     paddingBottom: 40,
   },
   header: {

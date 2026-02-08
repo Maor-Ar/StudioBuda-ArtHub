@@ -18,6 +18,12 @@ import paymentWebhooks from './routes/webhooks.js';
 
 const app = express();
 
+// Cloud Run / reverse-proxy setup
+// Cloud Run forwards requests with X-Forwarded-* headers. express-rate-limit will
+// throw if X-Forwarded-For is present but "trust proxy" is not enabled.
+// Trust the first proxy hop (recommended for most managed reverse proxies).
+app.set('trust proxy', 1);
+
 // Security middleware
 // Configure Helmet with CSP that allows Apollo Sandbox in development
 const isDevelopment = config.server.nodeEnv === 'development' || !config.server.nodeEnv || config.server.nodeEnv === '';

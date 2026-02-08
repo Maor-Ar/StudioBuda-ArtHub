@@ -6,12 +6,11 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "studiobuda-arthub",
+    "icon": "./assets/images/icon.png",
     "splash": {
       "backgroundColor": "#5D3587"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.studiobuda.arthub",
@@ -19,26 +18,23 @@
       "infoPlist": {
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": [
-              "com.googleusercontent.apps.YOUR_GOOGLE_CLIENT_ID"
-            ]
+            "CFBundleURLSchemes": ["com.googleusercontent.apps.YOUR_GOOGLE_CLIENT_ID"]
           }
         ]
       }
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#5D3587"
       },
       "package": "com.studiobuda.arthub",
       "googleServicesFile": "./google-services.json"
     },
     "web": {
+      "favicon": "./assets/images/favicon.png"
     },
-    "plugins": [
-      "expo-apple-authentication",
-      "expo-web-browser"
-    ],
+    "plugins": ["expo-apple-authentication", "expo-web-browser"],
     "extra": {
       "eas": {
         "projectId": "7446fbd0-f3ee-4957-8257-191a5c737112"

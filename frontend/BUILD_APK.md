@@ -1,5 +1,15 @@
 # How to Build APK for Testing
 
+## App icon (first-time setup)
+
+Before building, generate the app icon and favicon from `icon_sticker_purple_and_pink.svg`:
+
+```bash
+npm run generate-icon
+```
+
+This creates `assets/images/icon.png` (Android/iOS), `adaptive-icon.png` (Android), and `favicon.png` (web).
+
 ## Option 1: EAS Build (Recommended - Easiest)
 
 1. Install EAS CLI:

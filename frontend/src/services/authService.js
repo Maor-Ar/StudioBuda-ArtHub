@@ -3,10 +3,19 @@ import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import { OAUTH_PROVIDERS } from '../utils/constants';
-import { oAuthConfig } from '../config/firebase';
+import { oAuthConfig, firebaseConfig } from '../config/firebase';
 
 // Enable warm-up for web browser on Android
 WebBrowser.maybeCompleteAuthSession();
+
+// Lazy-load Firebase Auth for Google credential exchange
+const getFirebaseAuth = async () => {
+  const { getApps, initializeApp } = await import('firebase/app');
+  const { getAuth, signInWithCredential, GoogleAuthProvider } = await import('firebase/auth');
+  const apps = getApps();
+  const app = apps.length ? apps[0] : initializeApp(firebaseConfig);
+  return { auth: getAuth(app), signInWithCredential, GoogleAuthProvider };
+};
 
 /**
  * AuthService - Handles OAuth authentication with Google and Apple
@@ -40,43 +49,58 @@ class AuthService {
         default: oAuthConfig.google.webClientId,
       });
 
+      console.log('[AUTH_DEBUG] Google Sign-In: Platform=', Platform.OS, 'clientId=', clientId?.substring(0, 30) + '...', 'redirectUri=', redirectUri);
+
+      // Use IdToken to get Google's id_token for Firebase sign-in (backend expects Firebase ID token)
       const request = new AuthSession.AuthRequest({
         clientId: clientId,
         scopes: ['openid', 'profile', 'email'],
         redirectUri,
-        responseType: AuthSession.ResponseType.Token,
+        responseType: AuthSession.ResponseType.IdToken,
         usePKCE: false,
       });
 
       const result = await request.promptAsync(discovery, { useProxy: true });
 
+      console.log('[AUTH_DEBUG] Google OAuth result type=', result.type);
+
       if (result.type === 'success') {
         const { authentication } = result;
-        const { accessToken } = authentication;
+        const idToken = authentication.idToken || authentication.id_token || authentication.accessToken;
 
-        // Fetch user info from Google
-        const userInfoResponse = await fetch(
-          'https://www.googleapis.com/oauth2/v2/userinfo',
-          {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }
-        );
+        if (!idToken) {
+          console.error('[AUTH_DEBUG] No idToken or accessToken in response:', Object.keys(authentication));
+          throw new Error('No token received from Google');
+        }
 
-        const userInfo = await userInfoResponse.json();
+        console.log('[AUTH_DEBUG] Google returned idToken, length=', idToken?.length);
 
-        return {
-          token: accessToken,
-          email: userInfo.email,
-          name: userInfo.name || '',
-          provider: OAUTH_PROVIDERS.GOOGLE,
-        };
+        // Exchange Google credential for Firebase ID token (required by backend)
+        try {
+          const { auth, signInWithCredential, GoogleAuthProvider } = await getFirebaseAuth();
+          const credential = GoogleAuthProvider.credential(idToken);
+          const userCredential = await signInWithCredential(auth, credential);
+          const firebaseIdToken = await userCredential.user.getIdToken();
+
+          console.log('[AUTH_DEBUG] Firebase ID token obtained, length=', firebaseIdToken?.length);
+
+          return {
+            token: firebaseIdToken,
+            email: userCredential.user.email || '',
+            name: userCredential.user.displayName || '',
+            provider: OAUTH_PROVIDERS.GOOGLE,
+          };
+        } catch (firebaseError) {
+          console.error('[AUTH_DEBUG] Firebase credential exchange failed:', firebaseError);
+          throw new Error('Failed to sign in with Google. Please try again.');
+        }
       } else if (result.type === 'cancel') {
         throw new Error('Google sign-in was cancelled');
       } else {
         throw new Error('Failed to sign in with Google');
       }
     } catch (error) {
-      console.error('Google sign in error:', error);
+      console.error('[AUTH_DEBUG] Google sign in error:', error?.message || error, error);
 
       if (error.message.includes('cancelled')) {
         throw new Error('Google sign-in was cancelled');

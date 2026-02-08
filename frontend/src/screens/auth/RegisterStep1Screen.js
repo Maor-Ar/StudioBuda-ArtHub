@@ -72,9 +72,11 @@ const RegisterStep1Screen = ({ navigation }) => {
   const handleOAuth = async (provider) => {
     try {
       setOauthLoading(true);
+      console.log('[AUTH_DEBUG] Register OAuth: Starting for provider=', provider);
 
       // Get OAuth token from the authentication service
       const oauthResult = await authService.getOAuthToken(provider);
+      console.log('[AUTH_DEBUG] Register OAuth: Got token, provider=', oauthResult?.provider, 'tokenLength=', oauthResult?.token?.length);
 
       // Call the backend with the OAuth token
       await loginWithOAuthMutation({
@@ -85,7 +87,7 @@ const RegisterStep1Screen = ({ navigation }) => {
       });
     } catch (error) {
       setOauthLoading(false);
-      console.error('OAuth error:', error);
+      console.error('[AUTH_DEBUG] Register OAuth error:', error?.message || error, error);
 
       // Get friendly error message
       const friendlyError = getOAuthErrorMessage(error, provider);
