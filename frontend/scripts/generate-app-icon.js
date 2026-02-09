@@ -28,6 +28,7 @@ async function generateIcons() {
   fs.mkdirSync(imagesDir, { recursive: true });
 
   const SIZE = 1024;
+  const SAFE_ZONE = 0.66; // Android adaptive icon safe zone ~66%
 
   // 1024x1024 PNG for Android/iOS - fit icon in square with transparent background
   const iconPath = path.join(imagesDir, 'icon.png');
@@ -37,10 +38,23 @@ async function generateIcons() {
     .toFile(iconPath);
   console.log('Created:', iconPath);
 
-  // Adaptive icon foreground (same - Android uses this for masking)
+  // Adaptive icon - scale to 66% so full logo fits in Android safe zone (avoids zoom/crop)
+  const adaptiveSize = Math.round(SIZE * SAFE_ZONE);
   const adaptivePath = path.join(imagesDir, 'adaptive-icon.png');
-  await sharp(srcSvg)
-    .resize(SIZE, SIZE, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+  const resized = await sharp(srcSvg)
+    .resize(adaptiveSize, adaptiveSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toBuffer();
+  const offset = Math.round((SIZE - adaptiveSize) / 2);
+  await sharp({
+    create: {
+      width: SIZE,
+      height: SIZE,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([{ input: resized, left: offset, top: offset }])
     .png()
     .toFile(adaptivePath);
   console.log('Created:', adaptivePath);

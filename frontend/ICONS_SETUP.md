@@ -2,6 +2,8 @@
 
 Generate app icons once from `icon_sticker_purple_and_pink.svg`, then commit the files.
 
+**Note:** The adaptive icon is generated at 66% scale so the full logo fits in Android's safe zone (avoids zoom/crop on home screen).
+
 ## Quick run (PowerShell)
 
 From the `frontend` folder:
@@ -9,6 +11,8 @@ From the `frontend` folder:
 ```powershell
 .\scripts\setup-icons.ps1
 ```
+
+Or: `npm run build:icons`
 
 ## Manual steps
 

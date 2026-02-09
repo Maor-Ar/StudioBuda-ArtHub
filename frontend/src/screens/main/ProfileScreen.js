@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, Alert, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
@@ -8,6 +8,85 @@ import { CANCEL_SUBSCRIPTION } from '../../services/graphql/mutations';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { getGraphQLErrorMessage } from '../../utils/errorMessages';
 import { PRODUCTS } from '../../utils/constants';
+import TextModal from '../../components/TextModal';
+
+// Terms of Service and Cancellation Policy content
+const TERMS_CONTENT = `1. מבוא
+ברוכים הבאים לאתר סטודיו בודה ("האתר", "אנו", "שלנו"), המציע קורסים, שיעורים וסדנאות ציור. כל שימוש באתר ובשירותים הניתנים בו כפוף לתנאים המפורטים במסמך זה. כל אדם המשתמש באתר מאשר כי הוא קרא, הבין ומסכים להיכנס להסכם זה.
+
+2. זכויות יוצרים
+כל התוכן המוצג באתר, לרבות אך לא מוגבל לתמונות, טקסטים, גרפיקה, לוגו, וידאו, שיטות לימוד וכולי, מוגן בזכויות יוצרים והינו רכושו של האתר או של צדדים שלישיים, ואין להעתיק, לשכפל או להפיץ את התוכן ללא הסכמתנו המפורשת בכתב.
+
+3. גישה לשירותים
+3.1 השימוש בשירותי האתר מותנה בהרשמה מראש ו/או יצירת חשבון אישי.
+
+3.2 המשתמש מתחייב כי כל המידע שסיפק במסגרת ההרשמה נכון, מדויק ומעודכן.
+
+3.3 אנו שומרים על הזכות לשלול את גישת המשתמש לאתר במקרה של הפרת תנאי השימוש או כל פעילות שמפרה את החוק.
+
+4. מדיניות תשלום והחזרות
+4.1 כל המחירים המופיעים באתר הם בשקלים חדשים וכוללים מע"מ, אלא אם כן צוין אחרת.
+
+4.2 תשלום עבור קורסים וסדנאות יתבצע מראש באמצעות אמצעי התשלום הזמינים באתר.
+
+4.3 בקשה להחזר כספי תתבצע בהתאם לתנאי הביטול של כל קורס או סדנא כפי שמופיעים בעת הרכישה.
+
+5. תנאי ביטול
+5.1 ביטול הרשמה לקורס או סדנה יכול להתבצע בתוך 7 ימים ממועד ההרשמה, בכפוף לתנאים המפורטים בדף הקורס.
+
+5.2 במקרה של ביטול לאחר הזמן הנדרש, ייתכן ולא יינתן החזר כספי, או שההחזר יהיה חלקי בלבד.
+
+6. אחריות
+6.1 השימוש באתר ובשירותיו הינו על אחריות המשתמש בלבד.
+
+6.2 האתר עושה כל מאמץ לספק שירותים ברמה הגבוהה ביותר, אך איננו אחראים לכל נזק ישיר או עקיף שייגרם למשתמש בעקבות השימוש בשירותים המוצעים באתר.
+
+7. שינויי תנאי השימוש
+אנו שומרים על הזכות לשנות את תנאי השימוש בכל עת, וללא הודעה מוקדמת. כל שינוי בתנאים יפורסם באתר ויתחייב מרגע פרסומו.
+
+8. סיום השימוש
+המשתמש רשאי להפסיק את השימוש באתר בכל עת, ואנו שומרים על הזכות להפסיק את השימוש מצדנו במקרה של הפרת תנאי השימוש.
+
+9. כללי
+9.1 תנאי שימוש אלו כפופים לחוקי מדינת ישראל, והם יפות לכל הליך משפטי שיתקיים במדינה זו.
+
+9.2 כל מחלוקת הנוגעת לשימוש באתר תועבר להכרעה בלעדית לבית המשפט המוסמך בתל אביב.`;
+
+// Privacy Policy content
+const PRIVACY_CONTENT = `1. מבוא
+מדיניות פרטיות זו מפרטת כיצד אנו אוספים, משתמשים ומגייסים את המידע האישי של המשתמשים באתר סטודיו בודה ("האתר", "אנו", "שלנו"). מדיניות זו חלה על כל המידע הנמסר לנו, בין אם במהלך השימוש באתר ובין אם במהלך הרשמה לשירותים השונים.
+
+2. איסוף מידע אישי
+2.1 בעת השימוש באתר, אנו עשויים לאסוף מידע אישי, כגון: שם, כתובת דוא"ל, פרטי יצירת קשר, פרטי תשלום, ומידע נוסף הנדרש לצורך מתן השירותים.
+
+2.2 המידע הנאסף ישמש לשם מתן שירותים, יצירת קשר עם המשתמש, ושיפור חוויית השימוש באתר.
+
+3. שימוש במידע אישי
+3.1 המידע שנאסף ישמש אך ורק לצורך מטרותיו של האתר, כולל אך לא מוגבל לתקשורת עם המשתמש, חיוב בגין קורסים, משלוח חומר לימוד או מידע נוסף, וכן לצורך התאמת השירותים להעדפות המשתמש.
+
+3.2 ייתכן ונשתף מידע אישי עם צדדים שלישיים במקרים הבאים:
+
+במקרה של בקשות משפטיות או דרישה לפי החוק.
+במקרים של שיתוף פעולה עם ספקי שירותים חיצוניים, אשר מסייעים לנו במתן השירותים (כגון חברות סליקת תשלומים).
+
+4. שמירה על המידע
+4.1 אנו ננקוט באמצעי אבטחה סבירים כדי להגן על המידע האישי שהוזן באתר.
+
+4.2 למרות המאמצים שלנו, לא ניתן להבטיח הגנה מלאה על המידע, ואנו לא נהיה אחראים לכל נזק שיגרם כתוצאה משימוש לרעה במידע.
+
+5. שימוש בעוגיות (Cookies)
+האתר משתמש בקובצי עוגיות ("Cookies") כדי לשפר את חוויית השימוש של המשתמש. הקובצים עשויים לכלול מידע אודות הממשק, הגדרות המשתמש, ומידע נוסף שיסייע לנו לשפר את השירותים שלנו.
+
+6. זכויות המשתמש
+6.1 למשתמש יש את הזכות לבקש לעדכן, לתקן או למחוק את המידע האישי שנמצא ברשותנו.
+
+6.2 המשתמש יכול לבחור שלא לקבל דיוורים שיווקיים על ידי עדכון ההגדרות בחשבון האישי או על ידי פנייה ישירה אלינו.
+
+7. שינויים במדיניות פרטיות
+אנו שומרים על הזכות לשנות את מדיניות הפרטיות בכל עת, וללא הודעה מראש. כל שינוי ייכנס לתוקף מרגע פרסומו באתר.
+
+8. פניות
+באם יש לך שאלות אודות מדיניות הפרטיות שלנו, אתה מוזמן לפנות אלינו בכתובת דוא"ל: yaarabuda1@gmail.com.`;
 
 const ProfileScreen = () => {
   const insets = useSafeAreaInsets();
@@ -17,6 +96,10 @@ const ProfileScreen = () => {
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
+  
+  // Terms and Privacy modals state
+  const [termsModalVisible, setTermsModalVisible] = useState(false);
+  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
 
   // Fetch fresh user data from the server
   const { data: userData, loading: userLoading } = useQuery(GET_ME);
@@ -287,6 +370,39 @@ const ProfileScreen = () => {
           </>
         )}
 
+        {/* Legal Links Section */}
+        <View style={styles.legalSection}>
+          <TouchableOpacity 
+            style={styles.legalLink}
+            onPress={() => setTermsModalVisible(true)}
+          >
+            <Text style={styles.legalLinkText}>תנאי שימוש ומדיניות ביטולים</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.legalLink}
+            onPress={() => setPrivacyModalVisible(true)}
+          >
+            <Text style={styles.legalLinkText}>מדיניות פרטיות</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Contact Information - RTL: field name on right, details on left */}
+        <View style={styles.contactSection}>
+          <Text style={styles.contactTitle}>פרטי קשר</Text>
+          <TouchableOpacity 
+            style={styles.contactItem}
+            onPress={() => Linking.openURL('tel:0556646033')}
+          >
+            <Text style={styles.contactValue}>055-664-6033 </Text>
+            <Text style={styles.contactLabel}>טלפון לבירורים:</Text>
+          </TouchableOpacity>
+          <View style={styles.contactItem}>
+            <Text style={styles.contactValue}>תל חי 39 כפר סבא, קומה 1  </Text>
+            <Text style={styles.contactLabel}>כתובת הסטודיו: </Text>
+          </View>
+        </View>
+
         {/* Logout Button */}
         <TouchableOpacity style={styles.button} onPress={logout}>
           <Text style={styles.buttonText}>התנתק</Text>
@@ -343,6 +459,22 @@ const ProfileScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Terms of Service Modal */}
+      <TextModal
+        visible={termsModalVisible}
+        title="תנאי שימוש ומדיניות ביטולים"
+        content={TERMS_CONTENT}
+        onClose={() => setTermsModalVisible(false)}
+      />
+
+      {/* Privacy Policy Modal */}
+      <TextModal
+        visible={privacyModalVisible}
+        title="מדיניות פרטיות"
+        content={PRIVACY_CONTENT}
+        onClose={() => setPrivacyModalVisible(false)}
+      />
     </View>
   );
 };
@@ -577,6 +709,62 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  legalSection: {
+    backgroundColor: 'rgba(255, 209, 227, 0.9)',
+    padding: 20,
+    marginHorizontal: 20,
+    marginTop: 15,
+    borderRadius: 15,
+  },
+  legalLink: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: 10,
+  },
+  legalLinkText: {
+    fontSize: 15,
+    color: '#4E0D66',
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  contactSection: {
+    backgroundColor: 'rgba(255, 209, 227, 0.9)',
+    padding: 20,
+    marginHorizontal: 20,
+    marginTop: 15,
+    borderRadius: 15,
+  },
+  contactTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#4E0D66',
+    textAlign: 'right',
+    marginBottom: 15,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    direction: 'rtl',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(78, 13, 102, 0.1)',
+  },
+  contactLabel: {
+    fontSize: 14,
+    color: '#5D3587',
+    fontWeight: '500',
+    marginEnd: 10,
+    textAlign: 'right',
+  },
+  contactValue: {
+    fontSize: 15,
+    color: '#4E0D66',
+    fontWeight: '600',
+    textAlign: 'right',
   },
 });
 

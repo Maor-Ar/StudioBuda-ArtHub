@@ -7,13 +7,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const AuthenticatedLayout = ({ children }) => {
   return (
     <View style={styles.container}>
-      {/* Page Content - Layer 1 (rendered first, at the bottom) */}
-      <View style={styles.content}>
-        {children}
-      </View>
-
-      {/* Background Logo - Layer 2 - Bottom Left with 0.5 opacity */}
-      {/* Rendered AFTER content so it appears ON TOP, but with pointerEvents="none" */}
+      {/* Background Logo - above purple bg, behind UI; needs elevation for Android stacking */}
       <View style={styles.logoContainer} pointerEvents="none">
         <View style={styles.logoWrapper}>
           <LogoLightPink
@@ -23,6 +17,11 @@ const AuthenticatedLayout = ({ children }) => {
           />
         </View>
       </View>
+
+      {/* Page Content - on top of logo */}
+      <View style={styles.content}>
+        {children}
+      </View>
     </View>
   );
 };
@@ -30,33 +29,35 @@ const AuthenticatedLayout = ({ children }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#5D3587', // Main background color on the container itself
+    backgroundColor: '#5D3587',
+    overflow: 'visible',
   },
   logoContainer: {
     position: 'absolute',
-    bottom: 165, // Above SelectionBar (154px from Figma)
+    bottom: 165,
     left: 0,
     width: SCREEN_WIDTH * 0.7,
     height: SCREEN_HEIGHT * 0.4,
     justifyContent: 'flex-end',
     alignItems: 'flex-start',
-    zIndex: 10,
+    zIndex: 0,
+    elevation: 0,
   },
   logoWrapper: {
-    marginLeft: -50, // Partially off-screen on the left
+    marginLeft: -30,
   },
   logo: {
     opacity: 0.5,
-    // Ensure SVG renders on web
     ...(Platform.OS === 'web' && {
       display: 'block',
       position: 'relative',
-      zIndex: 10,
     }),
   },
   content: {
     flex: 1,
     zIndex: 1,
+    elevation: 1,
+    backgroundColor: 'transparent',
   },
 });
 

@@ -44,7 +44,7 @@ const AnimatedLabelWithStroke = ({ label, visible }) => {
       Animated.timing(opacityAnim, {
         toValue: visible ? 1 : 0,
         duration: 220,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
   }, [visible, widthAnim, opacityAnim]);
@@ -76,14 +76,14 @@ const SelectionBar = ({ state, descriptors, navigation }) => {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.wrapper, { paddingBottom: insets.bottom }]}>
-      {/* Gradient background - Figma: linear-gradient(180deg, transparent 0%, rgba(255,226,237,0.7) 100%) */}
+    <View style={[styles.wrapper, { paddingBottom: Math.max(4, insets.bottom * 0.3) }]}>
+      {/* Gradient background - linear-gradient(180deg, transparent 0%, rgba(255,226,237,0.7) 100%) */}
       <LinearGradient
         colors={['rgba(217, 217, 217, 0)', 'rgba(255, 226, 237, 0.7)']}
         locations={[0, 1]}
         style={styles.gradientBg}
       >
-        {/* Pill-shaped bar - Figma: 320x48, borderRadius 35px, fill #5D3587 */}
+        {/* Pill-shaped bar - wider for expanded labels */}
         <View style={styles.pillContainer}>
           <View style={styles.pill}>
             {state.routes.map((route) => {
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   },
   pillContainer: {
     width: '100%',
-    maxWidth: 320,
+    maxWidth: 360,
     height: 48,
     alignItems: 'center',
   },
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     height: 48,
     backgroundColor: '#5D3587',
     borderRadius: 35,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'space-around',
   },
