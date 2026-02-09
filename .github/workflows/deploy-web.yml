@@ -40,11 +40,6 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Generate app icons
-        working-directory: frontend
-        run: npm run generate-icon
-        continue-on-error: true
-
       - name: Build Expo web
         working-directory: frontend
         run: npx expo export --platform web

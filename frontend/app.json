@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "studiobuda-arthub",
-    "icon": "./assets/images/icon.png",
     "splash": {
       "backgroundColor": "#5D3587"
     },
@@ -25,15 +24,12 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#5D3587"
       },
       "package": "com.studiobuda.arthub",
       "googleServicesFile": "./google-services.json"
     },
-    "web": {
-      "favicon": "./assets/images/favicon.png"
-    },
+    "web": {},
     "plugins": ["expo-apple-authentication", "expo-web-browser"],
     "extra": {
       "eas": {
