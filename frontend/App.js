@@ -19,7 +19,7 @@ const AppTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    background: '#5D3587', // Dark purple - global background color
+    background: 'transparent', 
   },
 };
 

@@ -7,20 +7,20 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const AuthenticatedLayout = ({ children }) => {
   return (
     <View style={styles.container}>
-      {/* Background Logo - above purple bg, behind UI; needs elevation for Android stacking */}
-      <View style={styles.logoContainer} pointerEvents="none">
-        <View style={styles.logoWrapper}>
+      {/* Content area - logo behind, tab content on top */}
+      <View style={styles.content}>
+        {/* Background Logo - behind content (between purple bg and screens) */}
+        <View style={styles.logoContainer} pointerEvents="none">
           <LogoLightPink
             width={SCREEN_WIDTH * 0.7}
             height={SCREEN_HEIGHT * 0.4}
             style={styles.logo}
           />
         </View>
-      </View>
-
-      {/* Page Content - on top of logo */}
-      <View style={styles.content}>
-        {children}
+        {/* Tab content - rendered above logo */}
+        <View style={styles.tabContent}>
+          {children}
+        </View>
       </View>
     </View>
   );
@@ -29,22 +29,25 @@ const AuthenticatedLayout = ({ children }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#5D3587',
+    backgroundColor: 'transparent',
     overflow: 'visible',
+  },
+  content: {
+    flex: 1,
+    position: 'relative',
+    backgroundColor: 'transparent',
   },
   logoContainer: {
     position: 'absolute',
-    bottom: 165,
-    left: 0,
+    // distance from the bottom – tweak this so it sits nicely above the SelectionBar
+    bottom: 160,            // e.g. same as TabNavigator scene paddingBottom
+    left: -70,
     width: SCREEN_WIDTH * 0.7,
     height: SCREEN_HEIGHT * 0.4,
-    justifyContent: 'flex-end',
-    alignItems: 'flex-start',
+    justifyContent: 'flex-end',  // logo at bottom of this box
+    alignItems: 'flex-start',    // and aligned to the left
     zIndex: 0,
     elevation: 0,
-  },
-  logoWrapper: {
-    marginLeft: -30,
   },
   logo: {
     opacity: 0.5,
@@ -53,7 +56,7 @@ const styles = StyleSheet.create({
       position: 'relative',
     }),
   },
-  content: {
+  tabContent: {
     flex: 1,
     zIndex: 1,
     elevation: 1,

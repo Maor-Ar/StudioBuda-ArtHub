@@ -744,7 +744,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 25,
     paddingVertical: 10,
-    backgroundColor: '#5D3587', // Dark purple background
+    backgroundColor: 'transparent', // Dark purple background
   },
   arrowButton: {
     padding: 5,
@@ -761,7 +761,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingHorizontal: 25,
     paddingVertical: 8,
-    backgroundColor: '#5D3587', // Dark purple background
+    backgroundColor: 'transparent', // Dark purple background
   },
   dayOfWeek: {
     flex: 1,
@@ -777,7 +777,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingHorizontal: 25,
     paddingVertical: 10,
-    backgroundColor: '#5D3587', // Dark purple background
+    backgroundColor: 'transparent', // Dark purple background
   },
   dateCircle: {
     width: 40,
