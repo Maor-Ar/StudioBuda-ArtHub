@@ -159,8 +159,14 @@ export const authResolvers = {
 
         const nameFromToken = decodedToken.name || decodedToken.displayName || '';
         const nameParts = (nameFromToken || '').trim().split(/\s+/).filter(Boolean);
-        const firstName = nameParts[0] || (decodedToken.email ? decodedToken.email.split('@')[0] : 'User');
-        const lastName = nameParts.slice(1).join(' ') || '';
+        const rawFirst = nameParts[0] || (decodedToken.email ? decodedToken.email.split('@')[0] : 'User');
+        const rawLast = nameParts.slice(1).join(' ') || '';
+        const sanitize = (v, fallback) => {
+          const s = String(v || '').replace(/[\x00-\x1F\x7F]/g, '').trim().slice(0, 100);
+          return s.length >= 1 ? s : fallback;
+        };
+        const firstName = sanitize(rawFirst, 'User');
+        const lastName = sanitize(rawLast, '');
 
         logger.info('[AUTH_DEBUG] loginWithOAuth: creating user', { firstName, lastName, email: decodedToken.email, provider: provider?.toLowerCase() });
 

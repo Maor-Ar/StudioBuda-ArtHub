@@ -18,8 +18,16 @@ class UserService {
       validatePhone(phone);
     } else {
       validateName(finalFirstName, 'firstName');
-      if (finalLastName) validateName(finalLastName, 'lastName');
-      if (phone && phone.trim()) validatePhone(phone.trim());
+      if (finalLastName) {
+        try {
+          validateName(finalLastName, 'lastName');
+        } catch {
+          // OAuth names (e.g. from Google) may contain chars that fail validation
+          finalLastName = '';
+        }
+      }
+      // OAuth users have no phone - only validate if one was provided
+      if (phone && String(phone).trim()) validatePhone(String(phone).trim());
     }
     validateEmail(email);
 

@@ -3,6 +3,15 @@ import { AuthenticationError, NotFoundError } from '../../utils/errors.js';
 import logger from '../../utils/logger.js';
 
 /**
+ * Sanitize name for OAuth: max 100 chars, strip control chars.
+ * Returns empty string if invalid (for lastName).
+ */
+function sanitizeOAuthName(value, fallback = '') {
+  const s = String(value || '').replace(/[\x00-\x1F\x7F]/g, '').trim().slice(0, 100);
+  return s.length >= 1 ? s : fallback;
+}
+
+/**
  * Create OAuth user in Firestore from decoded Firebase token.
  * Used when user exists in Firebase Auth (valid token) but not in Firestore -
  * e.g. race with loginWithOAuth or prior registration failure.
@@ -13,8 +22,10 @@ async function ensureOAuthUserInFirestore(decodedToken) {
   }
   const nameFromToken = decodedToken.name || decodedToken.displayName || '';
   const nameParts = (nameFromToken || '').trim().split(/\s+/).filter(Boolean);
-  const firstName = nameParts[0] || (decodedToken.email ? decodedToken.email.split('@')[0] : 'User');
-  const lastName = nameParts.slice(1).join(' ') || '';
+  const rawFirst = nameParts[0] || (decodedToken.email ? decodedToken.email.split('@')[0] : 'User');
+  const rawLast = nameParts.slice(1).join(' ') || '';
+  const firstName = sanitizeOAuthName(rawFirst, 'User');
+  const lastName = sanitizeOAuthName(rawLast, '');
 
   const user = await authService.createUser({
     firstName,
