@@ -114,6 +114,14 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Early request logging (catches all requests including OPTIONS preflight)
+app.use((req, res, next) => {
+  if (req.path === '/graphql' || req.method === 'OPTIONS') {
+    console.log('[REQUEST] Incoming:', req.method, req.path, 'Origin:', req.get('origin') || 'none');
+  }
+  next();
+});
+
 // Request logging
 app.use(requestLogger);
 

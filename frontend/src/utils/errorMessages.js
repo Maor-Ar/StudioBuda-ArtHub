@@ -142,6 +142,11 @@ export const getOAuthErrorMessage = (error, provider) => {
     return null; // No message for user cancellation
   }
 
+  // Pass through Hebrew messages (e.g. popup blocker hint)
+  if (errorMessage && /[\u0590-\u05FF]/.test(errorMessage)) {
+    return errorMessage;
+  }
+
   // Network errors
   if (lowerMessage.includes('network')) {
     return AUTH_ERRORS.NETWORK_ERROR;

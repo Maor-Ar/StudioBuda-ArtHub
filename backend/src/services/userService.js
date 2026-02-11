@@ -9,9 +9,18 @@ class UserService {
     const { firstName, lastName, phone, email, passwordHash, userType, role, firebaseUid } = userData;
 
     // Validate inputs
-    validateName(firstName, 'firstName');
-    validateName(lastName, 'lastName');
-    validatePhone(phone);
+    const isOAuthUser = userType && userType !== USER_TYPES.REGULAR;
+    const finalFirstName = (firstName?.trim() || '').trim() || (isOAuthUser ? 'User' : '');
+    const finalLastName = (lastName?.trim() || '').trim() || (isOAuthUser ? '' : '');
+    if (!isOAuthUser) {
+      validateName(finalFirstName, 'firstName');
+      validateName(finalLastName, 'lastName');
+      validatePhone(phone);
+    } else {
+      validateName(finalFirstName, 'firstName');
+      if (finalLastName) validateName(finalLastName, 'lastName');
+      if (phone && phone.trim()) validatePhone(phone.trim());
+    }
     validateEmail(email);
 
     if (!firebaseUid) {
@@ -19,9 +28,9 @@ class UserService {
     }
 
     const userDoc = {
-      firstName,
-      lastName,
-      phone,
+      firstName: finalFirstName,
+      lastName: finalLastName,
+      phone: phone ?? '',
       email,
       passwordHash: passwordHash || null,
       userType: userType || USER_TYPES.REGULAR,

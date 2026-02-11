@@ -126,9 +126,14 @@ export const authResolvers = {
     loginWithOAuth: async (_, { provider, token }, context) => {
       logger.info('[AUTH_DEBUG] loginWithOAuth: provider=%s tokenLength=%s', provider, token?.length);
 
-      // Verify OAuth token (expects Firebase ID token, NOT Google access token)
-      const decodedToken = await authService.verifyToken(token);
-      logger.info('[AUTH_DEBUG] loginWithOAuth: token verified, uid=%s', decodedToken?.uid);
+      let decodedToken;
+      try {
+        decodedToken = await authService.verifyToken(token);
+        logger.info('[AUTH_DEBUG] loginWithOAuth: token verified, uid=%s email=%s', decodedToken?.uid, decodedToken?.email);
+      } catch (verifyError) {
+        logger.error('[AUTH_DEBUG] loginWithOAuth: token verification failed', { error: verifyError?.message, stack: verifyError?.stack });
+        throw verifyError;
+      }
       
       // Get or create user
       let user;
@@ -142,22 +147,39 @@ export const authResolvers = {
         let firebaseUser;
         try {
           firebaseUser = await auth.getUser(decodedToken.uid);
-        } catch (error) {
-          // If Firebase user doesn't exist, we can't create Firestore user
+        } catch (authError) {
+          logger.error('[AUTH_DEBUG] loginWithOAuth: Firebase user not found', { uid: decodedToken.uid, error: authError?.message });
           throw new AuthenticationError('OAuth user not found in Firebase Auth');
         }
         
-        user = await authService.createUser({
-          firstName: decodedToken.name?.split(' ')[0] || '',
-          lastName: decodedToken.name?.split(' ').slice(1).join(' ') || '',
-          phone: '', // OAuth doesn't provide phone
-          email: decodedToken.email,
-          passwordHash: null,
-          userType: provider.toLowerCase(),
-          role: 'user',
-          firebaseUid: decodedToken.uid, // Use Firebase Auth UID as Firestore document ID
-        });
-        logger.info('[AUTH_DEBUG] loginWithOAuth: new user created, id=%s', user?.id);
+        if (!decodedToken.email) {
+          logger.error('[AUTH_DEBUG] loginWithOAuth: Firebase token missing email', { uid: decodedToken.uid, keys: Object.keys(decodedToken) });
+          throw new AuthenticationError('OAuth token missing email. Please ensure the Google account has an email address.');
+        }
+
+        const nameFromToken = decodedToken.name || decodedToken.displayName || '';
+        const nameParts = (nameFromToken || '').trim().split(/\s+/).filter(Boolean);
+        const firstName = nameParts[0] || (decodedToken.email ? decodedToken.email.split('@')[0] : 'User');
+        const lastName = nameParts.slice(1).join(' ') || '';
+
+        logger.info('[AUTH_DEBUG] loginWithOAuth: creating user', { firstName, lastName, email: decodedToken.email, provider: provider?.toLowerCase() });
+
+        try {
+          user = await authService.createUser({
+            firstName,
+            lastName,
+            phone: '', // OAuth doesn't provide phone
+            email: decodedToken.email,
+            passwordHash: null,
+            userType: provider.toLowerCase(),
+            role: 'user',
+            firebaseUid: decodedToken.uid, // Use Firebase Auth UID as Firestore document ID
+          });
+          logger.info('[AUTH_DEBUG] loginWithOAuth: new user created, id=%s', user?.id);
+        } catch (createError) {
+          logger.error('[AUTH_DEBUG] loginWithOAuth: createUser failed', { error: createError?.message, stack: createError?.stack, name: createError?.name });
+          throw createError;
+        }
       }
 
       // Get active transactions with renewal check

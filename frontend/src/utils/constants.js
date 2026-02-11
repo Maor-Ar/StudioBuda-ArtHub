@@ -3,6 +3,13 @@ import Constants from 'expo-constants';
 
 // Helper function to get the correct API URL based on platform
 const getGraphQLEndpoint = () => {
+  // Explicit override from .env (use for local dev: EXPO_PUBLIC_GRAPHQL_URL=http://localhost:4000/graphql)
+  if (process.env.EXPO_PUBLIC_GRAPHQL_URL) {
+    const endpoint = process.env.EXPO_PUBLIC_GRAPHQL_URL;
+    console.log('[CONSTANTS] 🔧 Using EXPO_PUBLIC_GRAPHQL_URL override:', endpoint);
+    return endpoint;
+  }
+
   if (!__DEV__) {
     return 'https://studiobuda-backend-873405578260.me-west1.run.app/graphql';
   }

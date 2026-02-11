@@ -18,7 +18,7 @@
       "infoPlist": {
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["com.googleusercontent.apps.YOUR_GOOGLE_CLIENT_ID"]
+            "CFBundleURLSchemes": ["studiobuda-arthub"]
           }
         ]
       }

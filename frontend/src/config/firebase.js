@@ -16,18 +16,27 @@ export const firebaseConfig = {
 };
 
 /**
- * OAuth Configuration
- * These values must be configured in the Firebase Console and respective provider dashboards
+ * OAuth Configuration - Same for dev and prod (no env-based variation)
+ * Set EXPO_PUBLIC_GOOGLE_* in .env for all environments
  */
-// Web client ID from google-services.json - use when env has placeholder
+// Web client ID from google-services.json - fallback when env not set
 const GOOGLE_WEB_FALLBACK = "102013040020-on89le0901sibnbho24bdkjvenjt0q34.apps.googleusercontent.com";
 const isPlaceholder = (id) => !id || id.startsWith("YOUR_");
 
+// Android: use debug client in dev, production client in prod builds
+const androidProd = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+const androidDebug = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_DEBUG_CLIENT_ID;
+const getAndroidClientId = () => {
+  if (typeof __DEV__ !== 'undefined' && __DEV__ && androidDebug && !isPlaceholder(androidDebug)) {
+    return androidDebug;
+  }
+  return isPlaceholder(androidProd) ? GOOGLE_WEB_FALLBACK : androidProd;
+};
+
 export const oAuthConfig = {
   google: {
-    // Get these from Google Cloud Console
     iosClientId: isPlaceholder(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID) ? GOOGLE_WEB_FALLBACK : process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    androidClientId: isPlaceholder(process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID) ? GOOGLE_WEB_FALLBACK : process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    androidClientId: getAndroidClientId(),
     webClientId: isPlaceholder(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) ? GOOGLE_WEB_FALLBACK : process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
   },
   facebook: {

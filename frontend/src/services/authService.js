@@ -1,12 +1,29 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as AuthSession from 'expo-auth-session';
+import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import { OAUTH_PROVIDERS } from '../utils/constants';
 import { oAuthConfig, firebaseConfig } from '../config/firebase';
 
+// Firebase project 102013040020 (studiobuda-arthub) - OAuth client must match for id_token to be accepted
+const FIREBASE_WEB_CLIENT_ID = '102013040020-on89le0901sibnbho24bdkjvenjt0q34.apps.googleusercontent.com';
+
 // Enable warm-up for web browser on Android
 WebBrowser.maybeCompleteAuthSession();
+
+const GOOGLE_DISCOVERY = {
+  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+  tokenEndpoint: 'https://oauth2.googleapis.com/token',
+  revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
+};
+
+/** Generate a hex nonce for id_token flow (required by Google) */
+async function generateNonce() {
+  const bytes = new Uint8Array(16);
+  Crypto.getRandomValues(bytes);
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 // Lazy-load Firebase Auth for Google credential exchange
 const getFirebaseAuth = async () => {
@@ -32,44 +49,51 @@ class AuthService {
    */
   async signInWithGoogle() {
     try {
+      // useProxy: false for consistent behavior across dev and prod (auth.expo.io proxy is deprecated)
       const redirectUri = AuthSession.makeRedirectUri({
         scheme: 'studiobuda-arthub',
-        useProxy: true,
+        useProxy: false,
       });
 
-      const discovery = {
-        authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-        tokenEndpoint: 'https://oauth2.googleapis.com/token',
-        revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
-      };
+      // Use Firebase-authorized client ID for web (must match Firebase project 102013040020)
+      const clientId = Platform.OS === 'web'
+        ? FIREBASE_WEB_CLIENT_ID
+        : Platform.select({
+            ios: oAuthConfig.google.iosClientId,
+            android: oAuthConfig.google.androidClientId,
+            default: oAuthConfig.google.webClientId,
+          });
 
-      const clientId = Platform.select({
-        ios: oAuthConfig.google.iosClientId,
-        android: oAuthConfig.google.androidClientId,
-        default: oAuthConfig.google.webClientId,
-      });
+      console.log('[AUTH_DEBUG] Google Sign-In: Platform=', Platform.OS, 'clientId=', clientId?.substring(0, 35) + '...', 'redirectUri=', redirectUri);
 
-      console.log('[AUTH_DEBUG] Google Sign-In: Platform=', Platform.OS, 'clientId=', clientId?.substring(0, 30) + '...', 'redirectUri=', redirectUri);
+      // Google requires nonce when requesting id_token (OpenID Connect)
+      const nonce = await generateNonce();
 
-      // Use IdToken to get Google's id_token for Firebase sign-in (backend expects Firebase ID token)
       const request = new AuthSession.AuthRequest({
-        clientId: clientId,
+        clientId,
         scopes: ['openid', 'profile', 'email'],
         redirectUri,
         responseType: AuthSession.ResponseType.IdToken,
         usePKCE: false,
+        extraParams: { nonce },
       });
 
-      const result = await request.promptAsync(discovery, { useProxy: true });
+      console.log('[AUTH_DEBUG] Opening auth popup...');
+      const result = await request.promptAsync(GOOGLE_DISCOVERY, { useProxy: false });
 
       console.log('[AUTH_DEBUG] Google OAuth result type=', result.type);
 
       if (result.type === 'success') {
-        const { authentication } = result;
-        const idToken = authentication.idToken || authentication.id_token || authentication.accessToken;
+        // On web, expo-auth-session may put id_token in params (not authentication) for id_token flow
+        const { authentication, params } = result;
+        const idToken =
+          authentication?.idToken ||
+          authentication?.id_token ||
+          authentication?.accessToken ||
+          params?.id_token;
 
         if (!idToken) {
-          console.error('[AUTH_DEBUG] No idToken or accessToken in response:', Object.keys(authentication));
+          console.error('[AUTH_DEBUG] No idToken in response. authentication:', !!authentication, 'params keys:', params ? Object.keys(params) : 'none');
           throw new Error('No token received from Google');
         }
 
@@ -100,10 +124,16 @@ class AuthService {
         throw new Error('Failed to sign in with Google');
       }
     } catch (error) {
-      console.error('[AUTH_DEBUG] Google sign in error:', error?.message || error, error);
+      const msg = error?.message || String(error);
+      console.error('[AUTH_DEBUG] Google sign in error:', msg, error);
 
-      if (error.message.includes('cancelled')) {
+      if (msg.includes('cancelled') || msg.includes('canceled')) {
         throw new Error('Google sign-in was cancelled');
+      }
+
+      // On web, popup blockers can prevent the auth window from opening
+      if (Platform.OS === 'web' && (msg.includes('popup') || msg.includes('blocked') || msg.includes('window'))) {
+        throw new Error('אנא אפשר חלונות קופצים (popups) עבור אתר זה ונסה שוב');
       }
 
       throw new Error('Failed to sign in with Google. Please try again.');

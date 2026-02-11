@@ -22,8 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: github-pages
     env:
-      # Change this to your subdomain (e.g. arthub.yourdomain.com)
-      CNAME_SUBDOMAIN: arthub.studiobuda.com
+      CNAME_SUBDOMAIN: arthub.studiobuda.co.il
 
     steps:
       - name: Checkout

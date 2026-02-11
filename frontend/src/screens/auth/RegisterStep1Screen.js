@@ -79,6 +79,7 @@ const RegisterStep1Screen = ({ navigation }) => {
       console.log('[AUTH_DEBUG] Register OAuth: Got token, provider=', oauthResult?.provider, 'tokenLength=', oauthResult?.token?.length);
 
       // Call the backend with the OAuth token
+      console.log('[AUTH_DEBUG] Register OAuth: Calling loginWithOAuth mutation...');
       await loginWithOAuthMutation({
         variables: {
           provider: oauthResult.provider,
