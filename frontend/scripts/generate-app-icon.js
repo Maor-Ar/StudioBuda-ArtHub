@@ -28,7 +28,7 @@ async function generateIcons() {
   fs.mkdirSync(imagesDir, { recursive: true });
 
   const SIZE = 1024;
-  const SAFE_ZONE = 0.66; // Android adaptive icon safe zone ~66%
+  const SAFE_ZONE = 0.60; // Android adaptive icon - slightly smaller for margin so icon is not cut off
 
   // 1024x1024 PNG for Android/iOS - fit icon in square with transparent background
   const iconPath = path.join(imagesDir, 'icon.png');

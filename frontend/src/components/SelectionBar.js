@@ -76,14 +76,16 @@ const SelectionBar = ({ state, descriptors, navigation }) => {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.wrapper, { paddingBottom: Math.max(4, insets.bottom * 0.3) }]}>
-      {/* Gradient background - linear-gradient(180deg, transparent 0%, rgba(255,226,237,0.7) 100%) */}
+    <View style={styles.wrapper} pointerEvents="box-none">
+      {/* Gradient: purely visual layer, never blocks clicks (התנתק etc.) */}
       <LinearGradient
         colors={['rgba(217, 217, 217, 0)', 'rgba(255, 226, 237, 0.7)']}
         locations={[0, 1]}
-        style={styles.gradientBg}
-      >
-        {/* Pill-shaped bar - wider for expanded labels */}
+        style={[styles.gradientBg, { minHeight: 154 + insets.bottom }]}
+        pointerEvents="none"
+      />
+      {/* Pill: interactive layer on top */}
+      <View style={[styles.pillWrapper, { bottom: 24 + insets.bottom }]}>
         <View style={styles.pillContainer}>
           <View style={styles.pill}>
             {state.routes.map((route) => {
@@ -126,7 +128,7 @@ const SelectionBar = ({ state, descriptors, navigation }) => {
             })}
           </View>
         </View>
-      </LinearGradient>
+      </View>
     </View>
   );
 };
@@ -142,12 +144,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
   },
   gradientBg: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     width: '100%',
     minHeight: 154,
     paddingTop: 65,
-    paddingBottom: 24,
     paddingHorizontal: 24,
     alignItems: 'center',
+  },
+  pillWrapper: {
+    position: 'absolute',
+    bottom: 24,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingHorizontal: 24,
   },
   pillContainer: {
     width: '100%',
