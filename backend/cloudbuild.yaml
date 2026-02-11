@@ -33,7 +33,7 @@ steps:
       - '--max-instances'
       - '10'
       - '--set-env-vars'
-      - 'PORT=4000,NODE_ENV=production'
+      - 'NODE_ENV=production'
 
 images:
   - 'gcr.io/$PROJECT_ID/studiobuda-backend'
