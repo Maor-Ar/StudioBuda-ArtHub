@@ -5,31 +5,24 @@ import { closeRedisConnection } from './config/redis.js';
 
 const PORT = config.server.port;
 
-// Start server
+// Start server - listen FIRST so Cloud Run sees the port quickly, then setup GraphQL
 const startServer = async () => {
   console.log('=== Starting Server ===');
   console.log(`Environment: ${config.server.nodeEnv || 'undefined'}`);
   console.log(`Port: ${PORT}`);
   console.log(`CORS Origin: ${config.cors.origin}`);
   logger.info('=== Starting Server ===');
-  logger.info(`Environment: ${config.server.nodeEnv || 'undefined'}`);
   logger.info(`Port: ${PORT}`);
-  logger.info(`CORS Origin: ${config.cors.origin}`);
-  
-  // Setup GraphQL
-  await setupGraphQL();
 
-  // Listen on all network interfaces (0.0.0.0) to allow mobile device connections
+  // Listen immediately so Cloud Run health check passes (port must be open within timeout)
   const server = app.listen(PORT, '0.0.0.0', () => {
-    logger.info('=== Server Started Successfully ===');
-    logger.info(`Server running on port ${PORT}`);
-    logger.info(`Server listening on all network interfaces (0.0.0.0:${PORT})`);
-    logger.info(`GraphQL endpoint: http://localhost:${PORT}/graphql`);
-    logger.info(`API docs: http://localhost:${PORT}/api-docs`);
-    logger.info(`Health check: http://localhost:${PORT}/health`);
-    console.log(`\n📱 Mobile devices can connect using your computer's IP address on port ${PORT}`);
-    console.log(`   Example: http://192.168.1.100:${PORT}/graphql\n`);
+    logger.info(`Server listening on 0.0.0.0:${PORT}`);
+    console.log(`Server listening on port ${PORT}`);
   });
+
+  // Setup GraphQL after server is listening (health check works, GraphQL added for subsequent requests)
+  await setupGraphQL();
+  logger.info('GraphQL endpoint ready at /graphql');
 
   return server;
 };
