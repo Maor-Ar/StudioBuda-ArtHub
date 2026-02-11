@@ -1,12 +1,13 @@
 steps:
-  # Build Docker image
+  # Build Docker image (dir: backend so Dockerfile is found)
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/studiobuda-backend', '.']
-  
+    dir: 'backend'
+
   # Push to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/studiobuda-backend']
-  
+
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
