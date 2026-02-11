@@ -11,25 +11,17 @@ class UserService {
     // Validate inputs
     const isOAuthUser = userType && userType !== USER_TYPES.REGULAR;
     const finalFirstName = (firstName?.trim() || '').trim() || (isOAuthUser ? 'User' : '');
-    let finalLastName = (lastName?.trim() || '').trim() || (isOAuthUser ? '' : '');
-    if (!isOAuthUser) {
+    const finalLastName = (lastName?.trim() || '').trim() || (isOAuthUser ? '' : '');
+    if (isOAuthUser) {
+      // OAuth users: only validate email. Names come from Google, phone is empty.
+      validateEmail(email);
+    } else {
+      // Regular users: validate everything
       validateName(finalFirstName, 'firstName');
       validateName(finalLastName, 'lastName');
       validatePhone(phone);
-    } else {
-      validateName(finalFirstName, 'firstName');
-      if (finalLastName) {
-        try {
-          validateName(finalLastName, 'lastName');
-        } catch {
-          // OAuth names (e.g. from Google) may contain chars that fail validation
-          finalLastName = '';
-        }
-      }
-      // OAuth users have no phone - only validate if one was provided
-      if (phone && String(phone).trim()) validatePhone(String(phone).trim());
+      validateEmail(email);
     }
-    validateEmail(email);
 
     if (!firebaseUid) {
       throw new ValidationError('Firebase UID is required to create user');
