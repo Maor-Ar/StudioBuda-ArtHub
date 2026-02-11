@@ -32,6 +32,6 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD node -e "const p=process.env.PORT||8080; require('http').get('http://localhost:'+p+'/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# Start server
-CMD ["node", "src/index.js"]
+# Start server (run startup check first for debugging Cloud Run failures)
+CMD ["sh", "-c", "node scripts/startup-check.js && exec node src/index.js"]
 

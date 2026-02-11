@@ -15,7 +15,7 @@ Edit `.github/workflows/deploy-web.yml` and change the subdomain:
 
 ```yaml
 env:
-  CNAME_SUBDOMAIN: arthub.yourdomain.com  # ← Change to your subdomain
+  CNAME_SUBDOMAIN: arthub.studiobuda.co.il
 ```
 
 ### 3. Configure DNS
@@ -31,7 +31,7 @@ Replace `arthub` with your subdomain and `yourusername` with your GitHub usernam
 ### 4. Add Custom Domain in GitHub (Optional)
 
 1. In **Settings** → **Pages**, under **Custom domain**
-2. Enter your subdomain (e.g. `arthub.yourdomain.com`)
+2. Enter your subdomain (e.g. `arthub.studiobuda.co.il`)
 3. Click **Save**
 4. Enable **Enforce HTTPS** once the DNS record has propagated
 

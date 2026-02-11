@@ -434,14 +434,14 @@ REDIS_HOST: your-redis-host
 REDIS_PORT: "6379"
 REDIS_PASSWORD: your-redis-password
 NODE_ENV: production
-CORS_ORIGIN: https://yourdomain.com
+CORS_ORIGIN: https://arthub.studiobuda.co.il
 GROW_API_URL: https://api.grow.com
 GROW_API_KEY: your-grow-key
 EMAIL_SERVICE_PROVIDER: sendgrid
 EMAIL_API_KEY: your-email-key
 EMAIL_FROM_ADDRESS: noreply@studiobuda.com
 EMAIL_FROM_NAME: StudioBuda
-PASSWORD_RESET_URL: https://yourdomain.com/reset-password
+PASSWORD_RESET_URL: https://arthub.studiobuda.co.il/reset-password
 PASSWORD_RESET_TOKEN_EXPIRY: "3600"
 ```
 
@@ -507,7 +507,7 @@ Update your Cloud Run environment variables:
 
 ```bash
 gcloud run services update studiobuda-backend \
-  --update-env-vars CORS_ORIGIN=https://yourdomain.com,https://api.yourdomain.com \
+  --update-env-vars CORS_ORIGIN=https://arthub.studiobuda.co.il,https://api.studiobuda.co.il \
   --region us-central1
 ```
 
