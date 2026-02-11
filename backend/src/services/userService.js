@@ -11,7 +11,7 @@ class UserService {
     // Validate inputs
     const isOAuthUser = userType && userType !== USER_TYPES.REGULAR;
     const finalFirstName = (firstName?.trim() || '').trim() || (isOAuthUser ? 'User' : '');
-    const finalLastName = (lastName?.trim() || '').trim() || (isOAuthUser ? '' : '');
+    let finalLastName = (lastName?.trim() || '').trim() || (isOAuthUser ? '' : '');
     if (!isOAuthUser) {
       validateName(finalFirstName, 'firstName');
       validateName(finalLastName, 'lastName');
