@@ -32,8 +32,6 @@ steps:
       - '0'
       - '--max-instances'
       - '10'
-      - '--set-env-vars'
-      - 'NODE_ENV=production'
 
 images:
   - 'gcr.io/$PROJECT_ID/studiobuda-backend'
