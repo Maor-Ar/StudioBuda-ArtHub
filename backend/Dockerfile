@@ -25,12 +25,12 @@ COPY . .
 # Create logs directory
 RUN mkdir -p logs
 
-# Expose port
-EXPOSE 4000
+# Expose port (Cloud Run sets PORT env var, default 8080)
+EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:4000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+# Health check uses PORT from env (Cloud Run sets it)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD node -e "const p=process.env.PORT||8080; require('http').get('http://localhost:'+p+'/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Start server
 CMD ["node", "src/index.js"]
