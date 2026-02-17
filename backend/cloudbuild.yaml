@@ -1,7 +1,8 @@
 steps:
   # Build Docker image (dir: backend so Dockerfile is found)
+  # Using --no-cache to ensure latest code changes are included
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/studiobuda-backend', '.']
+    args: ['build', '--no-cache', '-t', 'gcr.io/$PROJECT_ID/studiobuda-backend', '.']
     dir: 'backend'
 
   # Push to Container Registry
