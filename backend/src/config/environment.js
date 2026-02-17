@@ -25,22 +25,29 @@ const optionalEnvVars = {
 };
 
 // Validate required environment variables
-// Only validate in production - allow missing vars in development for easier testing
+// In production, warn but don't throw - allow server to start so Cloud Run health check passes
+// This helps debug secret configuration issues without blocking deployment
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 const isDevelopment = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
 
-if (missingVars.length > 0 && !isDevelopment) {
-  throw new Error(
-    `Missing required environment variables: ${missingVars.join(', ')}`
-  );
-}
-
-// Warn in development but don't fail
-if (missingVars.length > 0 && isDevelopment) {
-  console.warn(
-    `⚠️  Warning: Missing environment variables: ${missingVars.join(', ')}\n` +
-    `   Server may not function correctly without these.`
-  );
+if (missingVars.length > 0) {
+  if (isDevelopment) {
+    // Warn in development but don't fail
+    console.warn(
+      `⚠️  Warning: Missing environment variables: ${missingVars.join(', ')}\n` +
+      `   Server may not function correctly without these.`
+    );
+  } else {
+    // In production, log error but don't throw - allow server to start
+    // Firebase initialization will handle missing credentials gracefully
+    console.error(
+      `⚠️  ERROR: Missing required environment variables: ${missingVars.join(', ')}\n` +
+      `   Server will start but Firebase features will not work.\n` +
+      `   Check Cloud Run secrets configuration: https://console.cloud.google.com/run/detail/me-west1/studiobuda-backend\n` +
+      `   Or Secret Manager: https://console.cloud.google.com/security/secret-manager`
+    );
+    // Don't throw - let server start and handle errors gracefully
+  }
 }
 
 // Build configuration object

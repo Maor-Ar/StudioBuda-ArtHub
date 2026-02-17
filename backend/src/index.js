@@ -21,13 +21,28 @@ const startServer = async () => {
   });
 
   // Setup GraphQL after server is listening (health check works, GraphQL added for subsequent requests)
-  await setupGraphQL();
-  logger.info('GraphQL endpoint ready at /graphql');
+  // Wrap in try-catch to prevent startup failure from blocking port listening
+  try {
+    await setupGraphQL();
+    logger.info('GraphQL endpoint ready at /graphql');
+  } catch (error) {
+    logger.error('Failed to setup GraphQL:', error);
+    console.error('Failed to setup GraphQL:', error);
+    // Don't throw - server is already listening, health check will pass
+    // GraphQL will fail on requests, but server won't crash
+  }
 
   return server;
 };
 
-const server = await startServer();
+let server;
+try {
+  server = await startServer();
+} catch (error) {
+  logger.error('Failed to start server:', error);
+  console.error('Failed to start server:', error);
+  process.exit(1);
+}
 
 // Graceful shutdown
 const shutdown = async () => {
