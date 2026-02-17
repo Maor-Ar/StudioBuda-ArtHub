@@ -24,10 +24,79 @@ const app = express();
 // Trust the first proxy hop (recommended for most managed reverse proxies).
 app.set('trust proxy', 1);
 
-// Security middleware
-// Configure Helmet with CSP that allows Apollo Sandbox in development
+// Determine environment
 const isDevelopment = config.server.nodeEnv === 'development' || !config.server.nodeEnv || config.server.nodeEnv === '';
 
+// CORS - MUST be applied BEFORE other middleware (especially Helmet)
+// In development, allow requests from any origin (including mobile devices)
+const parseAllowedOrigins = (raw) => {
+  if (!raw) return [];
+  if (raw === '*') return ['*'];
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+};
+
+const allowedOrigins = isDevelopment
+  ? ['*'] // allow all in dev
+  : parseAllowedOrigins(config.cors.origin);
+
+console.log('[CORS] Initialization:', {
+  isDevelopment,
+  allowedOrigins,
+  corsOriginEnv: process.env.CORS_ORIGIN,
+  corsOriginConfig: config.cors.origin,
+  nodeEnv: config.server.nodeEnv,
+});
+
+const corsOrigin = (origin, callback) => {
+  // Allow requests with no Origin header (mobile apps, server-to-server webhooks, Postman)
+  if (!origin) {
+    console.log('[CORS] No origin header, allowing request');
+    return callback(null, true);
+  }
+
+  console.log('[CORS] Checking origin:', origin, 'against allowed:', allowedOrigins);
+
+  // Allow all
+  if (allowedOrigins.includes('*')) {
+    console.log('[CORS] Allowing all origins (*)');
+    return callback(null, true);
+  }
+
+  // Allow exact-match list
+  if (allowedOrigins.includes(origin)) {
+    console.log('[CORS] Origin allowed:', origin);
+    return callback(null, true);
+  }
+
+  console.warn('[CORS] ❌ Blocked origin:', origin, 'Allowed origins:', allowedOrigins);
+  logger.warn('[CORS] Blocked origin', { origin, allowedOrigins });
+  return callback(new Error('Not allowed by CORS'));
+};
+
+// CORS middleware - MUST be before Helmet and other middleware
+app.use(cors({
+  origin: corsOrigin,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Content-Type'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+}));
+
+// Explicit OPTIONS handler for preflight requests
+app.options('*', cors({
+  origin: corsOrigin,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+}));
+
+// Security middleware
+// Configure Helmet with CSP that allows Apollo Sandbox in development
 // Log security configuration (using both console and logger)
 console.log('=== Security Configuration ===');
 console.log(`NODE_ENV: ${config.server.nodeEnv || 'undefined'}`);
@@ -75,50 +144,6 @@ if (isDevelopment) {
   console.log('CSP enabled in production mode with strict rules');
   logger.info('CSP enabled in production mode with strict rules');
 }
-
-// CORS
-// In development, allow requests from any origin (including mobile devices)
-const parseAllowedOrigins = (raw) => {
-  if (!raw) return [];
-  if (raw === '*') return ['*'];
-  return raw
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-};
-
-const allowedOrigins = isDevelopment
-  ? ['*'] // allow all in dev
-  : parseAllowedOrigins(config.cors.origin);
-
-const corsOrigin = (origin, callback) => {
-  // Allow requests with no Origin header (mobile apps, server-to-server webhooks, Postman)
-  if (!origin) return callback(null, true);
-
-  // Allow all
-  if (allowedOrigins.includes('*')) return callback(null, true);
-
-  // Allow exact-match list
-  if (allowedOrigins.includes(origin)) return callback(null, true);
-
-  logger.warn('[CORS] Blocked origin', { origin });
-  return callback(new Error('Not allowed by CORS'));
-};
-
-app.use(cors({
-  origin: corsOrigin,
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-}));
-
-// Log CORS configuration for debugging
-console.log('[CORS] Configuration:', {
-  isDevelopment,
-  allowedOrigins,
-  corsOrigin: config.cors.origin,
-});
-logger.info('[CORS] Configuration', { isDevelopment, allowedOrigins, corsOrigin: config.cors.origin });
 
 // Body parsing
 app.use(express.json());
