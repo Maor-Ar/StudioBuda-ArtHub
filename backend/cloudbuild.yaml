@@ -19,7 +19,7 @@ steps:
       - '--image'
       - 'gcr.io/$PROJECT_ID/studiobuda-backend'
       - '--region'
-      - 'us-central1'
+      - 'me-west1'
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
