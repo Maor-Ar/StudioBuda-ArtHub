@@ -124,8 +124,10 @@ if (isDevelopment) {
   console.log('CSP disabled in development mode - Apollo Sandbox should work');
   logger.info('CSP disabled in development mode - Apollo Sandbox should work');
 } else {
-  // In production, use strict CSP
+  // In production, use strict CSP but allow cross-origin API access
   app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginOpenerPolicy: { policy: 'unsafe-none' },
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
