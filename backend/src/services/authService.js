@@ -74,9 +74,9 @@ class AuthService {
   }
 
   async resetPassword(token, newPassword) {
-    // Validate password
-    if (!newPassword || newPassword.length < 8) {
-      throw new ValidationError('Password must be at least 8 characters', 'password');
+    // Validate password - only requires minimum 6 characters
+    if (!newPassword || newPassword.length < 6) {
+      throw new ValidationError('Password must be at least 6 characters', 'password');
     }
 
     // Get reset token

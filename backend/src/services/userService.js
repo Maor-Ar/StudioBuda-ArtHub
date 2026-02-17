@@ -11,7 +11,8 @@ class UserService {
     // Validate inputs
     const isOAuthUser = userType && userType !== USER_TYPES.REGULAR;
     const finalFirstName = (firstName?.trim() || '').trim() || (isOAuthUser ? 'User' : '');
-    const finalLastName = (lastName?.trim() || '').trim() || (isOAuthUser ? '' : '');
+    // For OAuth users, if lastName is empty, use firstName as fallback to ensure it's never empty
+    const finalLastName = (lastName?.trim() || '').trim() || (isOAuthUser ? finalFirstName || 'User' : '');
     if (isOAuthUser) {
       // OAuth users: only validate email. Names come from Google, phone is empty.
       validateEmail(email);

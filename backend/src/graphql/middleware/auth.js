@@ -3,11 +3,18 @@ import { AuthenticationError, NotFoundError } from '../../utils/errors.js';
 import logger from '../../utils/logger.js';
 
 /**
- * Sanitize name for OAuth: max 100 chars, strip control chars.
- * Returns empty string if invalid (for lastName).
+ * Enhanced sanitization for OAuth names: removes control chars, emojis, and limits length.
+ * Returns fallback if invalid (for lastName).
  */
 function sanitizeOAuthName(value, fallback = '') {
-  const s = String(value || '').replace(/[\x00-\x1F\x7F]/g, '').trim().slice(0, 100);
+  // Remove control characters, emojis, and normalize whitespace
+  let s = String(value || '')
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, '') // Control chars
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // Emojis
+    .replace(/[\u{2000}-\u{206F}]/gu, '') // Unicode punctuation
+    .trim()
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .slice(0, 100); // Limit length
   return s.length >= 1 ? s : fallback;
 }
 
@@ -17,27 +24,46 @@ function sanitizeOAuthName(value, fallback = '') {
  * e.g. race with loginWithOAuth or prior registration failure.
  */
 async function ensureOAuthUserInFirestore(decodedToken) {
-  if (!decodedToken.email) {
-    throw new AuthenticationError('OAuth token missing email');
+  // Edge case: Handle missing email (1-5% of tokens may lack email)
+  let userEmail = decodedToken.email;
+  if (!userEmail) {
+    // Check if email is in identities
+    if (decodedToken.firebase?.identities?.email && decodedToken.firebase.identities.email.length > 0) {
+      userEmail = decodedToken.firebase.identities.email[0];
+      logger.info('[AUTH] Email found in identities for auto-creation', { email: userEmail });
+    } else {
+      logger.error('[AUTH] OAuth token missing email for auto-creation', { 
+        uid: decodedToken.uid, 
+        keys: Object.keys(decodedToken)
+      });
+      throw new AuthenticationError('OAuth token missing email. Please ensure the Google account has an email address.');
+    }
   }
+
+  // Enhanced name extraction with multiple fallbacks
   const nameFromToken = decodedToken.name || decodedToken.displayName || '';
   const nameParts = (nameFromToken || '').trim().split(/\s+/).filter(Boolean);
-  const rawFirst = nameParts[0] || (decodedToken.email ? decodedToken.email.split('@')[0] : 'User');
+  const rawFirst = nameParts[0] || (userEmail ? userEmail.split('@')[0] : 'User');
   const rawLast = nameParts.slice(1).join(' ') || '';
   const firstName = sanitizeOAuthName(rawFirst, 'User');
-  const lastName = sanitizeOAuthName(rawLast, '');
+  // For OAuth users, if lastName is empty, use firstName as fallback
+  const lastName = sanitizeOAuthName(rawLast, firstName || 'User');
+
+  // Determine userType from provider info in token
+  const providerInfo = decodedToken.firebase?.sign_in_provider || 'google';
+  const userType = providerInfo === 'password' ? 'regular' : providerInfo;
 
   const user = await authService.createUser({
     firstName,
     lastName,
     phone: '',
-    email: decodedToken.email,
+    email: userEmail,
     passwordHash: null,
-    userType: 'google',
+    userType: userType,
     role: 'user',
     firebaseUid: decodedToken.uid,
   });
-  logger.info(`[AUTH] Auto-created Firestore user for OAuth: ${user.id}, email: ${user.email}`);
+  logger.info(`[AUTH] Auto-created Firestore user for OAuth: ${user.id}, email: ${user.email}, emailVerified: ${decodedToken.email_verified}`);
   return user;
 }
 

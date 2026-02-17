@@ -103,19 +103,57 @@ class AuthService {
         try {
           const { auth, signInWithCredential, GoogleAuthProvider } = await getFirebaseAuth();
           const credential = GoogleAuthProvider.credential(idToken);
+          
+          if (!credential) {
+            console.error('[AUTH_DEBUG] Failed to create Google credential from idToken');
+            throw new Error('Failed to create authentication credential');
+          }
+          
           const userCredential = await signInWithCredential(auth, credential);
+          
+          // Edge case: Verify user credential was created successfully
+          if (!userCredential || !userCredential.user) {
+            console.error('[AUTH_DEBUG] Invalid user credential returned from Firebase');
+            throw new Error('Failed to authenticate with Google');
+          }
+          
           const firebaseIdToken = await userCredential.user.getIdToken();
+
+          // Edge case: Verify token was obtained
+          if (!firebaseIdToken || firebaseIdToken.length < 100) {
+            console.error('[AUTH_DEBUG] Invalid Firebase ID token received', { tokenLength: firebaseIdToken?.length });
+            throw new Error('Failed to obtain authentication token');
+          }
 
           console.log('[AUTH_DEBUG] Firebase ID token obtained, length=', firebaseIdToken?.length);
 
+          // Edge case: Handle missing email/name (rare but possible)
+          const userEmail = userCredential.user.email || '';
+          const userName = userCredential.user.displayName || '';
+          
+          if (!userEmail) {
+            console.warn('[AUTH_DEBUG] Firebase user missing email - backend will handle fallback');
+          }
+
           return {
             token: firebaseIdToken,
-            email: userCredential.user.email || '',
-            name: userCredential.user.displayName || '',
+            email: userEmail,
+            name: userName,
             provider: OAUTH_PROVIDERS.GOOGLE,
           };
         } catch (firebaseError) {
           console.error('[AUTH_DEBUG] Firebase credential exchange failed:', firebaseError);
+          
+          // Provide more specific error messages
+          const errorMessage = firebaseError?.message || String(firebaseError);
+          if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+            throw new Error('Network error. Please check your internet connection and try again.');
+          } else if (errorMessage.includes('auth/network-request-failed')) {
+            throw new Error('Network error. Please check your internet connection and try again.');
+          } else if (errorMessage.includes('auth/invalid-credential')) {
+            throw new Error('Invalid authentication credentials. Please try signing in again.');
+          }
+          
           throw new Error('Failed to sign in with Google. Please try again.');
         }
       } else if (result.type === 'cancel') {

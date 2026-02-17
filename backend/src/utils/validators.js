@@ -24,15 +24,13 @@ export const validatePhone = (phone) => {
   return true;
 };
 
-// Password validation
+// Password validation - only requires minimum 6 characters
 export const validatePassword = (password) => {
   const schema = Joi.string()
-    .min(8)
-    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .min(6)
     .required()
     .messages({
-      'string.min': 'Password must be at least 8 characters',
-      'string.pattern.base': 'Password must contain at least one uppercase letter, one lowercase letter, and one number',
+      'string.min': 'Password must be at least 6 characters',
     });
   const { error } = schema.validate(password);
   if (error) {

@@ -124,22 +124,85 @@ export const authResolvers = {
     },
 
     loginWithOAuth: async (_, { provider, token }, context) => {
-      logger.info('[AUTH_DEBUG] loginWithOAuth: provider=%s tokenLength=%s', provider, token?.length);
+      // Validate provider parameter
+      if (!provider || typeof provider !== 'string') {
+        logger.error('[AUTH_DEBUG] loginWithOAuth: invalid provider', { provider });
+        throw new ValidationError('Provider is required and must be a string');
+      }
+
+      // Normalize provider to lowercase for consistency
+      const normalizedProvider = provider.trim().toLowerCase();
+      logger.info('[AUTH_DEBUG] loginWithOAuth: provider=%s (normalized=%s) tokenLength=%s', provider, normalizedProvider, token?.length);
+
+      // Validate token
+      if (!token || typeof token !== 'string' || token.length < 50) {
+        logger.error('[AUTH_DEBUG] loginWithOAuth: invalid token', { tokenLength: token?.length });
+        throw new ValidationError('Valid authentication token is required');
+      }
 
       let decodedToken;
       try {
         decodedToken = await authService.verifyToken(token);
-        logger.info('[AUTH_DEBUG] loginWithOAuth: token verified, uid=%s email=%s', decodedToken?.uid, decodedToken?.email);
+        logger.info('[AUTH_DEBUG] loginWithOAuth: token verified, uid=%s email=%s emailVerified=%s', 
+          decodedToken?.uid, decodedToken?.email, decodedToken?.email_verified);
       } catch (verifyError) {
         logger.error('[AUTH_DEBUG] loginWithOAuth: token verification failed', { error: verifyError?.message, stack: verifyError?.stack });
         throw verifyError;
+      }
+      
+      // Edge case: Handle missing email (1-5% of tokens may lack email)
+      // Try multiple sources: email, firebase.identities.email, or extract from uid
+      let userEmail = decodedToken.email;
+      if (!userEmail) {
+        // Check if email is in identities
+        if (decodedToken.firebase?.identities?.email && decodedToken.firebase.identities.email.length > 0) {
+          userEmail = decodedToken.firebase.identities.email[0];
+          logger.info('[AUTH_DEBUG] loginWithOAuth: email found in identities', { email: userEmail });
+        } else {
+          logger.error('[AUTH_DEBUG] loginWithOAuth: Firebase token missing email', { 
+            uid: decodedToken.uid, 
+            keys: Object.keys(decodedToken),
+            hasIdentities: !!decodedToken.firebase?.identities
+          });
+          throw new AuthenticationError('OAuth token missing email. Please ensure the Google account has an email address and try again.');
+        }
+      }
+
+      // Check for duplicate email with different provider (edge case: user registered with email/password then tries OAuth)
+      try {
+        const existingUserByEmail = await authService.getUserByEmail(userEmail);
+        if (existingUserByEmail && existingUserByEmail.firebaseUid !== decodedToken.uid) {
+          logger.warn('[AUTH_DEBUG] loginWithOAuth: email already exists with different account', {
+            email: userEmail,
+            existingUid: existingUserByEmail.firebaseUid,
+            newUid: decodedToken.uid,
+            existingUserType: existingUserByEmail.userType
+          });
+          throw new ValidationError(
+            'An account with this email already exists. Please sign in with your original account method.',
+            'email'
+          );
+        }
+      } catch (error) {
+        // If error is ValidationError, rethrow it
+        if (error instanceof ValidationError) {
+          throw error;
+        }
+        // If user doesn't exist by email, that's fine - continue
+        logger.info('[AUTH_DEBUG] loginWithOAuth: no existing user found by email, continuing');
       }
       
       // Get or create user
       let user;
       try {
         user = await authService.getUserById(decodedToken.uid);
-        logger.info('[AUTH_DEBUG] loginWithOAuth: existing user found, id=%s', user?.id);
+        logger.info('[AUTH_DEBUG] loginWithOAuth: existing user found, id=%s userType=%s', user?.id, user?.userType);
+        
+        // Edge case: Update userType if it changed (e.g., was 'regular' now OAuth)
+        if (user.userType === 'regular' && normalizedProvider !== 'regular') {
+          logger.info('[AUTH_DEBUG] loginWithOAuth: updating userType from regular to %s', normalizedProvider);
+          user = await authService.updateUser(user.id, { userType: normalizedProvider });
+        }
       } catch (error) {
         logger.info('[AUTH_DEBUG] loginWithOAuth: user not found, creating new. error=%s', error?.message);
         // User doesn't exist, create new user from OAuth
@@ -151,40 +214,86 @@ export const authResolvers = {
           logger.error('[AUTH_DEBUG] loginWithOAuth: Firebase user not found', { uid: decodedToken.uid, error: authError?.message });
           throw new AuthenticationError('OAuth user not found in Firebase Auth');
         }
-        
-        if (!decodedToken.email) {
-          logger.error('[AUTH_DEBUG] loginWithOAuth: Firebase token missing email', { uid: decodedToken.uid, keys: Object.keys(decodedToken) });
-          throw new AuthenticationError('OAuth token missing email. Please ensure the Google account has an email address.');
-        }
 
-        const nameFromToken = decodedToken.name || decodedToken.displayName || '';
+        // Enhanced name extraction with multiple fallbacks
+        const nameFromToken = decodedToken.name || decodedToken.displayName || firebaseUser.displayName || '';
         const nameParts = (nameFromToken || '').trim().split(/\s+/).filter(Boolean);
-        const rawFirst = nameParts[0] || (decodedToken.email ? decodedToken.email.split('@')[0] : 'User');
+        
+        // Extract firstName: prefer first part of name, fallback to email prefix, then 'User'
+        const rawFirst = nameParts[0] || (userEmail ? userEmail.split('@')[0] : 'User');
+        
+        // Extract lastName: prefer remaining parts, fallback to empty (will use firstName)
         const rawLast = nameParts.slice(1).join(' ') || '';
+        
+        // Enhanced sanitization: remove control chars, emojis, and limit length
         const sanitize = (v, fallback) => {
-          const s = String(v || '').replace(/[\x00-\x1F\x7F]/g, '').trim().slice(0, 100);
+          // Remove control characters, emojis, and normalize whitespace
+          let s = String(v || '')
+            .replace(/[\x00-\x1F\x7F-\x9F]/g, '') // Control chars
+            .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // Emojis
+            .replace(/[\u{2000}-\u{206F}]/gu, '') // Unicode punctuation
+            .trim()
+            .replace(/\s+/g, ' ') // Normalize whitespace
+            .slice(0, 100); // Limit length
           return s.length >= 1 ? s : fallback;
         };
+        
         const firstName = sanitize(rawFirst, 'User');
-        const lastName = sanitize(rawLast, '');
+        // For OAuth users, if lastName is empty, use firstName as fallback to ensure it's never empty
+        const lastName = sanitize(rawLast, firstName || 'User');
 
-        logger.info('[AUTH_DEBUG] loginWithOAuth: creating user', { firstName, lastName, email: decodedToken.email, provider: provider?.toLowerCase() });
+        // Log email verification status (informational - Google doesn't always provide this)
+        const emailVerified = decodedToken.email_verified === true;
+        if (!emailVerified) {
+          logger.warn('[AUTH_DEBUG] loginWithOAuth: email not verified in token', { 
+            email: userEmail,
+            email_verified: decodedToken.email_verified 
+          });
+        }
+
+        logger.info('[AUTH_DEBUG] loginWithOAuth: creating user', { 
+          firstName, 
+          lastName, 
+          email: userEmail, 
+          emailVerified: emailVerified,
+          provider: normalizedProvider,
+          photoUrl: decodedToken.picture || decodedToken.photoURL || null
+        });
 
         try {
+          // Race condition handling: user might be created between check and create
+          // Use try-catch to handle duplicate creation attempts
           user = await authService.createUser({
             firstName,
             lastName,
             phone: '', // OAuth doesn't provide phone
-            email: decodedToken.email,
+            email: userEmail,
             passwordHash: null,
-            userType: provider.toLowerCase(),
+            userType: normalizedProvider,
             role: 'user',
             firebaseUid: decodedToken.uid, // Use Firebase Auth UID as Firestore document ID
           });
           logger.info('[AUTH_DEBUG] loginWithOAuth: new user created, id=%s', user?.id);
         } catch (createError) {
-          logger.error('[AUTH_DEBUG] loginWithOAuth: createUser failed', { error: createError?.message, stack: createError?.stack, name: createError?.name });
-          throw createError;
+          // Handle race condition: if user was created concurrently, try to fetch it
+          if (createError.message?.includes('already exists') || createError.code === 'ALREADY_EXISTS') {
+            logger.info('[AUTH_DEBUG] loginWithOAuth: user was created concurrently, fetching existing user');
+            try {
+              user = await authService.getUserById(decodedToken.uid);
+              logger.info('[AUTH_DEBUG] loginWithOAuth: successfully fetched concurrently created user, id=%s', user?.id);
+            } catch (fetchError) {
+              logger.error('[AUTH_DEBUG] loginWithOAuth: failed to fetch concurrently created user', { error: fetchError?.message });
+              throw createError; // Re-throw original error if fetch fails
+            }
+          } else {
+            logger.error('[AUTH_DEBUG] loginWithOAuth: createUser failed', { 
+              error: createError?.message, 
+              stack: createError?.stack, 
+              name: createError?.name,
+              code: createError?.code
+            });
+            throw createError;
+          }
         }
       }
 

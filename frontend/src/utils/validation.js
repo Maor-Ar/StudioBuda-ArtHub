@@ -28,7 +28,7 @@ export const validateEmail = (email) => {
 };
 
 /**
- * Validates password strength
+ * Validates password - only requires minimum 6 characters
  * @param {string} password - Password to validate
  * @returns {{isValid: boolean, error: string|null}}
  */
@@ -40,31 +40,10 @@ export const validatePassword = (password) => {
     };
   }
 
-  if (password.length < 8) {
+  if (password.length < 6) {
     return {
       isValid: false,
-      error: 'הסיסמה חייבת להכיל לפחות 8 תווים',
-    };
-  }
-
-  if (!/[A-Z]/.test(password)) {
-    return {
-      isValid: false,
-      error: 'הסיסמה חייבת להכיל לפחות אות גדולה אחת באנגלית',
-    };
-  }
-
-  if (!/[a-z]/.test(password)) {
-    return {
-      isValid: false,
-      error: 'הסיסמה חייבת להכיל לפחות אות קטנה אחת באנגלית',
-    };
-  }
-
-  if (!/[0-9]/.test(password)) {
-    return {
-      isValid: false,
-      error: 'הסיסמה חייבת להכיל לפחות ספרה אחת',
+      error: 'הסיסמה חייבת להכיל לפחות 6 תווים',
     };
   }
 
