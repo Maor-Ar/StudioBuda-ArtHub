@@ -317,6 +317,7 @@ export const authResolvers = {
           }
         }
       }
+      }
 
       // Get active transactions with renewal check
       const activeTransactions = await transactionService.getUserActiveTransactions(

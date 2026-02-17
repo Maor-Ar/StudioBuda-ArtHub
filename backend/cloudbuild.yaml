@@ -23,6 +23,8 @@ steps:
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
+      - '--ingress'
+      - 'all'
       - '--port'
       - '8080'
       - '--memory'
