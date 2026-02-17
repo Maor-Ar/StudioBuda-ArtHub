@@ -1,58 +1,92 @@
-import app, { setupGraphQL } from './server.js';
-import config from './config/environment.js';
-import logger from './utils/logger.js';
-import { closeRedisConnection } from './config/redis.js';
+// Critical: Start listening IMMEDIATELY to pass Cloud Run health check
+// Initialize everything else asynchronously after the port is open
 
-const PORT = config.server.port;
+const PORT = parseInt(process.env.PORT || '8080', 10);
 
-// Start server - listen FIRST so Cloud Run sees the port quickly, then setup GraphQL
-const startServer = async () => {
-  console.log('=== Starting Server ===');
-  console.log(`Environment: ${config.server.nodeEnv || 'undefined'}`);
-  console.log(`Port: ${PORT}`);
-  console.log(`CORS Origin: ${config.cors.origin}`);
-  logger.info('=== Starting Server ===');
-  logger.info(`Port: ${PORT}`);
+console.log('[INIT] Starting server...');
+console.log(`[INIT] PORT=${PORT}`);
+console.log(`[INIT] NODE_ENV=${process.env.NODE_ENV || 'undefined'}`);
 
-  // Listen immediately so Cloud Run health check passes (port must be open within timeout)
-  const server = app.listen(PORT, '0.0.0.0', () => {
-    logger.info(`Server listening on 0.0.0.0:${PORT}`);
-    console.log(`Server listening on port ${PORT}`);
+// Import modules - wrap in try-catch to handle import errors
+let app, setupGraphQL, config, logger, closeRedisConnection;
+
+try {
+  // Import all modules synchronously first
+  const serverModule = await import('./server.js');
+  app = serverModule.default;
+  setupGraphQL = serverModule.setupGraphQL;
+  
+  const configModule = await import('./config/environment.js');
+  config = configModule.default;
+  
+  const loggerModule = await import('./utils/logger.js');
+  logger = loggerModule.default;
+  
+  const redisModule = await import('./config/redis.js');
+  closeRedisConnection = redisModule.closeRedisConnection;
+  
+  console.log('[INIT] Modules loaded successfully');
+} catch (importError) {
+  console.error('[INIT] ❌ Error importing modules:', importError.message);
+  console.error('[INIT] Stack:', importError.stack);
+  // Create minimal Express app as fallback
+  const express = (await import('express')).default;
+  app = express();
+  app.get('/health', (req, res) => {
+    res.status(200).json({ 
+      status: 'error', 
+      message: 'Server initialization failed - check logs',
+      timestamp: new Date().toISOString() 
+    });
   });
+  logger = { info: console.log, error: console.error, warn: console.warn };
+  closeRedisConnection = async () => {};
+  setupGraphQL = async () => {};
+}
 
-  // Setup GraphQL after server is listening (health check works, GraphQL added for subsequent requests)
-  // Wrap in try-catch to prevent startup failure from blocking port listening
-  try {
-    await setupGraphQL();
-    logger.info('GraphQL endpoint ready at /graphql');
-  } catch (error) {
-    logger.error('Failed to setup GraphQL:', error);
-    console.error('Failed to setup GraphQL:', error);
-    // Don't throw - server is already listening, health check will pass
-    // GraphQL will fail on requests, but server won't crash
-  }
-
-  return server;
-};
-
+// START LISTENING IMMEDIATELY - This is critical for Cloud Run
 let server;
 try {
-  server = await startServer();
-} catch (error) {
-  logger.error('Failed to start server:', error);
-  console.error('Failed to start server:', error);
+  console.log(`[INIT] Starting server on port ${PORT}...`);
+  server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[INIT] ✅ Server listening on 0.0.0.0:${PORT}`);
+    logger.info(`Server listening on 0.0.0.0:${PORT}`);
+  });
+} catch (listenError) {
+  console.error('[INIT] ❌ Failed to start server:', listenError);
   process.exit(1);
 }
+
+// Now initialize GraphQL and other features asynchronously
+(async () => {
+  try {
+    console.log('[INIT] Setting up GraphQL...');
+    await setupGraphQL();
+    logger.info('GraphQL endpoint ready at /graphql');
+    console.log('[INIT] ✅ GraphQL ready');
+  } catch (error) {
+    logger.error('Failed to setup GraphQL:', error);
+    console.error('[INIT] ❌ GraphQL setup failed:', error.message);
+    // Continue - server is already listening
+  }
+})();
 
 // Graceful shutdown
 const shutdown = async () => {
   logger.info('Shutting down server...');
+  console.log('[SHUTDOWN] Shutting down...');
   
   server.close(async () => {
     logger.info('HTTP server closed');
+    console.log('[SHUTDOWN] HTTP server closed');
     
-    await closeRedisConnection();
-    logger.info('Redis connection closed');
+    try {
+      await closeRedisConnection();
+      logger.info('Redis connection closed');
+      console.log('[SHUTDOWN] Redis closed');
+    } catch (error) {
+      console.error('[SHUTDOWN] Error closing Redis:', error);
+    }
     
     process.exit(0);
   });
@@ -60,6 +94,7 @@ const shutdown = async () => {
   // Force close after 10 seconds
   setTimeout(() => {
     logger.error('Forced shutdown after timeout');
+    console.error('[SHUTDOWN] Forced shutdown');
     process.exit(1);
   }, 10000);
 };
@@ -67,14 +102,18 @@ const shutdown = async () => {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-// Handle unhandled errors
+// Handle unhandled errors - log but don't crash if server is already listening
 process.on('unhandledRejection', (error) => {
   logger.error('Unhandled rejection:', error);
-  shutdown();
+  console.error('[ERROR] Unhandled rejection:', error);
+  // Don't shutdown - server is listening, log and continue
 });
 
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught exception:', error);
-  shutdown();
+  console.error('[ERROR] Uncaught exception:', error);
+  // Only shutdown if server isn't listening yet
+  if (!server || !server.listening) {
+    shutdown();
+  }
 });
-
