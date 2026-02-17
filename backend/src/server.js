@@ -108,7 +108,17 @@ const corsOrigin = (origin, callback) => {
 app.use(cors({
   origin: corsOrigin,
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
+
+// Log CORS configuration for debugging
+console.log('[CORS] Configuration:', {
+  isDevelopment,
+  allowedOrigins,
+  corsOrigin: config.cors.origin,
+});
+logger.info('[CORS] Configuration', { isDevelopment, allowedOrigins, corsOrigin: config.cors.origin });
 
 // Body parsing
 app.use(express.json());

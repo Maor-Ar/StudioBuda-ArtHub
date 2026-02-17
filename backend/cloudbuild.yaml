@@ -38,7 +38,7 @@ steps:
       - '--set-secrets'
       - 'FIREBASE_PROJECT_ID=FIREBASE_PROJECT_ID:latest,FIREBASE_CLIENT_EMAIL=FIREBASE_CLIENT_EMAIL:latest,FIREBASE_PRIVATE_KEY=FIREBASE_PRIVATE_KEY:latest'
       - '--set-env-vars'
-      - 'NODE_ENV=production'
+      - 'NODE_ENV=production,CORS_ORIGIN=https://arthub.studiobuda.co.il,http://localhost:3000,http://localhost:8081'
 
 images:
   - 'gcr.io/$PROJECT_ID/studiobuda-backend'
