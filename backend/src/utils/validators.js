@@ -24,7 +24,7 @@ export const validatePhone = (phone) => {
   return true;
 };
 
-// Password validation - only requires minimum 6 characters
+// Password validation - only requires minimum 6 characters (no complexity requirements)
 export const validatePassword = (password) => {
   const schema = Joi.string()
     .min(6)
