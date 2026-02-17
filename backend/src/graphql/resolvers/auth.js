@@ -168,42 +168,63 @@ export const authResolvers = {
         }
       }
 
-      // Check for duplicate email with different provider (edge case: user registered with email/password then tries OAuth)
+      // Check for existing user by email (to handle account linking across environments/dev)
+      // If user exists with different Firebase UID, link the OAuth account to existing user
+      let existingUserByEmail = null;
       try {
-        const existingUserByEmail = await authService.getUserByEmail(userEmail);
+        existingUserByEmail = await authService.getUserByEmail(userEmail);
         if (existingUserByEmail && existingUserByEmail.firebaseUid !== decodedToken.uid) {
-          logger.warn('[AUTH_DEBUG] loginWithOAuth: email already exists with different account', {
+          logger.info('[AUTH_DEBUG] loginWithOAuth: email exists with different Firebase UID - linking OAuth account', {
             email: userEmail,
             existingUid: existingUserByEmail.firebaseUid,
-            newUid: decodedToken.uid,
+            newOAuthUid: decodedToken.uid,
             existingUserType: existingUserByEmail.userType
           });
-          throw new ValidationError(
-            'An account with this email already exists. Please sign in with your original account method.',
-            'email'
-          );
+          
+          // Link accounts: Update existing user's firebaseUid to the OAuth UID
+          // This allows users to login with either email/password or OAuth
+          // Also update userType to OAuth if it was regular
+          const updateData = {
+            firebaseUid: decodedToken.uid,
+          };
+          if (existingUserByEmail.userType === 'regular') {
+            updateData.userType = normalizedProvider;
+          }
+          
+          // Update the existing user document
+          existingUserByEmail = await authService.updateUser(existingUserByEmail.id, updateData);
+          
+          logger.info('[AUTH_DEBUG] loginWithOAuth: account linked successfully, user can now login with OAuth');
         }
       } catch (error) {
-        // If error is ValidationError, rethrow it
-        if (error instanceof ValidationError) {
-          throw error;
+        // If error is NotFoundError (user doesn't exist), that's fine - continue
+        if (error.name !== 'NotFoundError' && !(error.message && error.message.includes('not found'))) {
+          logger.error('[AUTH_DEBUG] loginWithOAuth: error checking existing user by email', { error: error?.message });
+          // Don't throw - continue with normal flow
         }
-        // If user doesn't exist by email, that's fine - continue
         logger.info('[AUTH_DEBUG] loginWithOAuth: no existing user found by email, continuing');
       }
       
       // Get or create user
       let user;
-      try {
-        user = await authService.getUserById(decodedToken.uid);
-        logger.info('[AUTH_DEBUG] loginWithOAuth: existing user found, id=%s userType=%s', user?.id, user?.userType);
-        
-        // Edge case: Update userType if it changed (e.g., was 'regular' now OAuth)
-        if (user.userType === 'regular' && normalizedProvider !== 'regular') {
-          logger.info('[AUTH_DEBUG] loginWithOAuth: updating userType from regular to %s', normalizedProvider);
-          user = await authService.updateUser(user.id, { userType: normalizedProvider });
-        }
-      } catch (error) {
+      
+      // If we found an existing user by email and linked accounts, use that user directly
+      // (We can't use getUserById with new UID because document ID is still old UID)
+      if (existingUserByEmail && existingUserByEmail.firebaseUid === decodedToken.uid) {
+        user = existingUserByEmail;
+        logger.info('[AUTH_DEBUG] loginWithOAuth: using linked user account, id=%s userType=%s', user?.id, user?.userType);
+      } else {
+        // Try to get user by Firebase UID (document ID)
+        try {
+          user = await authService.getUserById(decodedToken.uid);
+          logger.info('[AUTH_DEBUG] loginWithOAuth: existing user found by UID, id=%s userType=%s', user?.id, user?.userType);
+          
+          // Edge case: Update userType if it changed (e.g., was 'regular' now OAuth)
+          if (user.userType === 'regular' && normalizedProvider !== 'regular') {
+            logger.info('[AUTH_DEBUG] loginWithOAuth: updating userType from regular to %s', normalizedProvider);
+            user = await authService.updateUser(user.id, { userType: normalizedProvider });
+          }
+        } catch (error) {
         logger.info('[AUTH_DEBUG] loginWithOAuth: user not found, creating new. error=%s', error?.message);
         // User doesn't exist, create new user from OAuth
         // First, ensure Firebase Auth user exists (OAuth might have created it)
