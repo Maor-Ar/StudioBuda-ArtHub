@@ -108,24 +108,31 @@ export const paymentResolvers = {
 
 /**
  * Transaction field resolver for accessEndsDate
- * Calculates when access will end (lastPaymentDate + 30 days)
+ * Calculates when access will end (lastRenewalDate + 1 month, i.e. end of current billing period)
  */
 export const transactionAccessEndsDateResolver = (transaction) => {
   if (transaction.transactionType !== 'subscription') {
     return null;
   }
 
-  const lastPaymentDate = transaction.lastPaymentDate?.toDate
-    ? transaction.lastPaymentDate.toDate()
-    : new Date(transaction.lastPaymentDate);
+  let periodStart;
+  if (transaction.lastRenewalDate?.toDate) {
+    periodStart = transaction.lastRenewalDate.toDate();
+  } else if (transaction.lastRenewalDate) {
+    periodStart = new Date(transaction.lastRenewalDate);
+  } else if (transaction.lastPaymentDate?.toDate) {
+    periodStart = transaction.lastPaymentDate.toDate();
+  } else {
+    periodStart = new Date(transaction.lastPaymentDate);
+  }
 
-  if (!lastPaymentDate || isNaN(lastPaymentDate.getTime())) {
+  if (!periodStart || isNaN(periodStart.getTime())) {
     return null;
   }
 
-  // Add 30 days to last payment date
-  const accessEndsDate = new Date(lastPaymentDate);
-  accessEndsDate.setDate(accessEndsDate.getDate() + 30);
+  // Access ends one month after the start of the current period
+  const accessEndsDate = new Date(periodStart);
+  accessEndsDate.setMonth(accessEndsDate.getMonth() + 1);
 
   return accessEndsDate.toISOString();
 };

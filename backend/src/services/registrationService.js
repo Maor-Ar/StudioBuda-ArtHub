@@ -110,33 +110,44 @@ class RegistrationService {
       }
       transactionId = trialTransaction.id;
     } else if (event.eventType === EVENT_TYPES.SUBSCRIPTION_ONLY) {
-      // Subscription only: try subscription first, then punch card
-      const transactions = await transactionService.getUserActiveTransactions(userId);
-      
-      // Try subscription first
-      const subscription = transactions.find(
+      // Subscription only: try any subscription with capacity, then punch card
+      let transactions = await transactionService.getUserActiveTransactions(userId);
+
+      if (transactions.length === 0) {
+        // Cache may be stale; refetch without cache
+        transactions = await transactionService.getUserActiveTransactions(userId, true);
+      }
+
+      const subscriptions = transactions.filter(
         t => t.transactionType === TRANSACTION_TYPES.SUBSCRIPTION && t.isActive
       );
-
-      if (subscription) {
-        const hasCapacity = await transactionService.checkSubscriptionLimit(subscription.id);
-        if (hasCapacity) {
-          transactionId = subscription.id;
+      let subscriptionWithCapacity = null;
+      for (const sub of subscriptions) {
+        if (await transactionService.checkSubscriptionLimit(sub.id)) {
+          subscriptionWithCapacity = sub;
+          break;
         }
       }
 
-      // If no subscription or subscription is at limit, try punch card
+      if (subscriptionWithCapacity) {
+        transactionId = subscriptionWithCapacity.id;
+      }
+
       if (!transactionId) {
         const punchCard = transactions.find(
-          t => t.transactionType === TRANSACTION_TYPES.PUNCH_CARD && 
-               t.isActive && 
-               t.entriesRemaining > 0
+          t => t.transactionType === TRANSACTION_TYPES.PUNCH_CARD &&
+               t.isActive &&
+               (t.entriesRemaining ?? 0) > 0
         );
 
         if (punchCard) {
           transactionId = punchCard.id;
+        } else if (subscriptions.length > 0) {
+          throw new ConflictError(
+            'Subscription monthly entry limit reached',
+            'transactionId'
+          );
         } else {
-          // Neither subscription nor punch card available
           throw new ValidationError(
             'Active subscription or punch card with remaining entries required',
             'transactionId'
@@ -283,11 +294,13 @@ class RegistrationService {
 
     if (futureOnly) {
       const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       registrations = registrations.filter(reg => {
-        const regDate = reg.occurrenceDate?.toDate 
-          ? reg.occurrenceDate.toDate() 
+        const regDate = reg.occurrenceDate?.toDate
+          ? reg.occurrenceDate.toDate()
           : new Date(reg.occurrenceDate || reg.registrationDate);
-        return regDate >= now;
+        const regDay = new Date(regDate.getFullYear(), regDate.getMonth(), regDate.getDate());
+        return regDay >= todayStart;
       });
     }
 

@@ -95,26 +95,29 @@ export const transactionResolvers = {
         return null;
       }
 
-      // Get the last payment date
-      let lastPaymentDate;
-      if (transaction.lastPaymentDate?.toDate) {
-        lastPaymentDate = transaction.lastPaymentDate.toDate();
+      // Use lastRenewalDate (start of current billing period); fallback to lastPaymentDate or purchaseDate
+      let periodStart;
+      if (transaction.lastRenewalDate?.toDate) {
+        periodStart = transaction.lastRenewalDate.toDate();
+      } else if (transaction.lastRenewalDate) {
+        periodStart = new Date(transaction.lastRenewalDate);
+      } else if (transaction.lastPaymentDate?.toDate) {
+        periodStart = transaction.lastPaymentDate.toDate();
       } else if (transaction.lastPaymentDate) {
-        lastPaymentDate = new Date(transaction.lastPaymentDate);
+        periodStart = new Date(transaction.lastPaymentDate);
       } else {
-        // Fallback to purchase date
-        lastPaymentDate = transaction.purchaseDate?.toDate
+        periodStart = transaction.purchaseDate?.toDate
           ? transaction.purchaseDate.toDate()
           : new Date(transaction.purchaseDate);
       }
 
-      if (!lastPaymentDate || isNaN(lastPaymentDate.getTime())) {
+      if (!periodStart || isNaN(periodStart.getTime())) {
         return null;
       }
 
-      // Add 30 days to last payment date
-      const accessEndsDate = new Date(lastPaymentDate);
-      accessEndsDate.setDate(accessEndsDate.getDate() + 30);
+      // Access ends one month after the start of the current period
+      const accessEndsDate = new Date(periodStart);
+      accessEndsDate.setMonth(accessEndsDate.getMonth() + 1);
 
       return accessEndsDate.toISOString();
     },

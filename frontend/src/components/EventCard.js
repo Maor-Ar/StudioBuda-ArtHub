@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import UserHeadIcon from '../assets/icons/user-head.svg';
 import UsersFourIcon from '../assets/icons/users-four.svg';
 
-const EventCard = ({ event, onRegister, onCancel, isRegistered, isFull = false, onPress, disabled = false, showDate = false }) => {
+const EventCard = ({ event, onRegister, onCancel, isRegistered, isFull = false, onPress, disabled = false, showDate = false, isPast = false }) => {
   const formatTime = (time) => {
     if (!time) return '';
     return time.substring(0, 5); // HH:mm format
@@ -66,8 +66,12 @@ const EventCard = ({ event, onRegister, onCancel, isRegistered, isFull = false, 
         </View>
       </View>
 
-      {/* Button States: Cancel, Full, or Register */}
-      {isRegistered ? (
+      {/* Button States: Past, Cancel, Full, or Register */}
+      {isPast ? (
+        <View style={styles.pastButton}>
+          <Text style={styles.pastButtonText}>הרשמה סגורה</Text>
+        </View>
+      ) : isRegistered ? (
         <TouchableOpacity 
           style={[styles.cancelButton, disabled && styles.cancelButtonDisabled]} 
           onPress={onCancel}
@@ -216,6 +220,22 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   fullButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  pastButton: {
+    position: 'absolute',
+    bottom: 15,
+    left: 15,
+    right: 15,
+    height: 31,
+    backgroundColor: '#B0A0B8',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pastButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',

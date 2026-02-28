@@ -27,6 +27,7 @@ export const typeDefs = gql`
     myTransactions: [Transaction!]!
     transactions: [Transaction!]!
     users: [User!]!
+    allEvents: [Event!]!
   }
 
   type Mutation {

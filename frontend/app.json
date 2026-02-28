@@ -32,7 +32,8 @@
       "googleServicesFile": "./google-services.json"
     },
     "web": {
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "backgroundColor": "#5D3587"
     },
     "plugins": ["expo-apple-authentication", "expo-web-browser"],
     "extra": {

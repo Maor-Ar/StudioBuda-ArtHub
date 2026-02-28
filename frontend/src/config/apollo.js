@@ -42,9 +42,9 @@ const httpLink = createHttpLink({
       console.error('[APOLLO] ❌ Error details:', error);
       console.error('[APOLLO] ❌ Failed to connect to:', uri);
       console.error('[APOLLO] ❌ Make sure:');
-      console.error('[APOLLO]    1. Backend is running on port 4000');
+      console.error('[APOLLO]    1. Backend is running (default port 8080)');
       console.error('[APOLLO]    2. Your phone and computer are on the same Wi-Fi network');
-      console.error('[APOLLO]    3. Firewall allows connections on port 4000');
+      console.error('[APOLLO]    3. Firewall allows the backend port');
       throw error;
     }
   },

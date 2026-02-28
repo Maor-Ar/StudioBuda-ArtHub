@@ -126,6 +126,28 @@ export const GET_MY_TRANSACTIONS = gql`
 `;
 
 // Admin Queries
+export const GET_ALL_EVENTS = gql`
+  query GetAllEvents {
+    allEvents {
+      id
+      date
+      startTime
+      duration
+      title
+      description
+      isRecurring
+      recurringIntervalDays
+      instructorName
+      maxRegistrations
+      eventType
+      price
+      isActive
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
 export const GET_ALL_TRANSACTIONS = gql`
   query GetAllTransactions {
     transactions {

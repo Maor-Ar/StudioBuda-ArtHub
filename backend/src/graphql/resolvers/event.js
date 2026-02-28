@@ -1,9 +1,16 @@
+import { db } from '../../config/firebase.js';
 import eventService from '../../services/eventService.js';
 import registrationService from '../../services/registrationService.js';
 import { requireManager, requireAuthenticated } from '../middleware/permissions.js';
 
 export const eventResolvers = {
   Query: {
+    allEvents: async (_, __, context) => {
+      await requireManager(context);
+      const snapshot = await db.collection('events').get();
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    },
+
     events: async (_, { dateRange, filters }, context) => {
       const events = await eventService.getEvents(filters || {}, dateRange);
 

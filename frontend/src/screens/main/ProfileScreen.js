@@ -149,12 +149,25 @@ const ProfileScreen = () => {
     : (transactionsData?.myTransactions || []);
 
   // Filter active transactions (should already be filtered in context, but double-check)
-  const activeTransactions = transactions.filter(t => t.isActive);
+  // For subscriptions, also hide ones whose accessEndsDate has already passed
+  const now = new Date();
+  const activeTransactions = transactions.filter(t => {
+    if (!t.isActive) return false;
+    if (t.transactionType === 'subscription' && t.accessEndsDate) {
+      const end = new Date(t.accessEndsDate);
+      return !isNaN(end.getTime()) && end >= now;
+    }
+    return true;
+  });
 
-  // Filter future registrations
+  // Filter future registrations only (today+)
   const futureRegistrations = registrations.filter(r => {
-    const eventDate = new Date(r.occurrenceDate || r.event.date);
-    return eventDate >= new Date() && r.status === 'confirmed';
+    if (r.status !== 'confirmed') return false;
+    const eventDate = new Date(r.occurrenceDate || r.event?.date);
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+    return eventDay >= todayStart;
   });
 
   // Get product name from transaction

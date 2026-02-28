@@ -245,7 +245,9 @@ class TransactionService {
       throw new ValidationError('Transaction is not a subscription', 'transactionType');
     }
 
-    return transaction.entriesUsedThisMonth < transaction.monthlyEntries;
+    const used = transaction.entriesUsedThisMonth ?? 0;
+    const limit = transaction.monthlyEntries ?? 0;
+    return used < limit;
   }
 
   async checkTrialEligibility(userId) {

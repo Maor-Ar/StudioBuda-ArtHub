@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { ApolloProvider } from '@apollo/client';
 import { StatusBar } from 'expo-status-bar';
@@ -25,6 +25,17 @@ const AppTheme = {
 
 export default function App() {
   const [fontsLoaded] = useFonts({ MiriamLibre_400Regular });
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.documentElement.style.backgroundColor = '#5D3587';
+      document.body.style.backgroundColor = '#5D3587';
+      const meta = document.createElement('meta');
+      meta.name = 'theme-color';
+      meta.content = '#5D3587';
+      document.head.appendChild(meta);
+    }
+  }, []);
 
   if (!fontsLoaded) {
     return (

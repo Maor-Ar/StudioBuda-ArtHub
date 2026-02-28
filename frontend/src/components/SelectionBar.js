@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import PurchasesButton from '../assets/icons/PurchasesButton.svg';
 import CalendarButton from '../assets/icons/calendarButton.svg';
 import ProfileButton from '../assets/icons/ProfileButton.svg';
-import UsersFour from '../assets/icons/users-four.svg';
+import UsersFour from '../assets/icons/users-four-light.svg';
 
 const TAB_CONFIG = [
   { name: 'Products', label: 'רכישות', Icon: PurchasesButton },

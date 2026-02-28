@@ -261,18 +261,17 @@ const CalendarScreen = () => {
     return sortedEvents;
   }, [data, selectedDateObj]);
 
-  // Process user registrations for "הרישומים שלי" tab
+  // Process user registrations for "הרישומים שלי" tab - future only (today+)
   const futureRegisteredEvents = useMemo(() => {
     if (!registrationsData?.myRegistrations) return [];
 
     const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const futureRegistrations = registrationsData.myRegistrations.filter((registration) => {
-      // Filter for confirmed status
       if (registration.status !== 'confirmed') return false;
-      
-      // Filter for future events
       const eventDate = new Date(registration.occurrenceDate || registration.event?.date);
-      return eventDate >= now;
+      const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+      return eventDay >= todayStart;
     });
 
     // Merge registration data with event data to create full event objects
@@ -623,14 +622,10 @@ const CalendarScreen = () => {
                   const registration = userRegistrationsMap.get(registrationKey);
                   const isRegistered = !!registration;
                   const isFull = event.availableSpots === 0;
-                  
-                  console.log('[EVENT CARD] ✅ Registration check result:', {
-                    registrationKey,
-                    foundRegistration: !!registration,
-                    registration,
-                    isRegistered,
-                    isFull,
-                  });
+                  const eventDateObj = new Date(eventDateValue);
+                  const todayStart = new Date();
+                  todayStart.setHours(0, 0, 0, 0);
+                  const isPastEvent = eventDateObj < todayStart;
                   
                   return (
                     <EventCard
@@ -642,6 +637,7 @@ const CalendarScreen = () => {
                       isRegistered={isRegistered}
                       isFull={isFull}
                       disabled={registering || cancelling}
+                      isPast={isPastEvent}
                     />
                   );
                 })
@@ -654,23 +650,30 @@ const CalendarScreen = () => {
         </ScrollView>
 
         {/* Event Detail Modal */}
-        {selectedEvent && (
-          <EventDetailModal
-            event={selectedEvent}
-            visible={modalVisible}
-            onClose={handleCloseModal}
-            onRegister={() => {
-              if (selectedEvent) {
-                handleRegister(selectedEvent.id);
-              }
-              // Don't close modal immediately - let the mutation callback handle it
-            }}
-            onCancel={selectedEventRegistration ? () => handleCancelRegistration(selectedEventRegistration.id) : undefined}
-            isRegistered={!!selectedEventRegistration}
-            isFull={selectedEvent.availableSpots === 0}
-            disabled={registering || cancelling}
-          />
-        )}
+        {selectedEvent && (() => {
+          const evtDateVal = selectedEvent.occurrenceDate || selectedEvent.date;
+          const evtDateObj = new Date(evtDateVal);
+          const todayStartModal = new Date();
+          todayStartModal.setHours(0, 0, 0, 0);
+          const isPastModal = evtDateObj < todayStartModal;
+          return (
+            <EventDetailModal
+              event={selectedEvent}
+              visible={modalVisible}
+              onClose={handleCloseModal}
+              onRegister={() => {
+                if (selectedEvent) {
+                  handleRegister(selectedEvent.id);
+                }
+              }}
+              onCancel={selectedEventRegistration ? () => handleCancelRegistration(selectedEventRegistration.id) : undefined}
+              isRegistered={!!selectedEventRegistration}
+              isFull={selectedEvent.availableSpots === 0}
+              disabled={registering || cancelling}
+              isPast={isPastModal}
+            />
+          );
+        })()}
     </View>
   );
 };

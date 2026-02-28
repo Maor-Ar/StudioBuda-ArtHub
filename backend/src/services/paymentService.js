@@ -4,6 +4,12 @@ import { ExternalServiceError, ValidationError } from '../utils/errors.js';
 import logger from '../utils/logger.js';
 import { db } from '../config/firebase.js';
 
+/**
+ * Temporary session metadata for checkout flow (see docs/database.md).
+ * Not the same as transactions: we write here when creating the checkout session (before payment).
+ * ZCredit callback sends only UniqueID + gateway fields, so we look up userId/productId/productType/amount here to create the transaction.
+ * Docs are deleted after callback; TTL 1h. Required — cannot use only transactions (no transaction exists until after payment).
+ */
 const PAYMENT_SESSION_COLLECTION = 'payment_sessions';
 
 /**

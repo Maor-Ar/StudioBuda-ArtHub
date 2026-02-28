@@ -4,7 +4,7 @@ import UserHeadIcon from '../assets/icons/user-head.svg';
 import UsersFourIcon from '../assets/icons/users-four.svg';
 import LeftArrow from '../assets/icons/LeftArrow.svg';
 
-const EventDetailModal = ({ event, visible, onClose, onRegister, onCancel, isRegistered, isFull = false, disabled = false }) => {
+const EventDetailModal = ({ event, visible, onClose, onRegister, onCancel, isRegistered, isFull = false, disabled = false, isPast = false }) => {
   if (!event) return null;
 
   const formatTime = (time) => {
@@ -101,8 +101,12 @@ const EventDetailModal = ({ event, visible, onClose, onRegister, onCancel, isReg
               </View>
             )}
 
-            {/* Button States: Cancel, Full, or Register */}
-            {isRegistered ? (
+            {/* Button States: Past, Cancel, Full, or Register */}
+            {isPast ? (
+              <View style={styles.pastButton}>
+                <Text style={styles.pastButtonText}>הרשמה סגורה</Text>
+              </View>
+            ) : isRegistered ? (
               <TouchableOpacity 
                 style={[styles.cancelButton, disabled && styles.cancelButtonDisabled]} 
                 onPress={onCancel}
@@ -296,6 +300,22 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   fullButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  pastButton: {
+    width: '100%',
+    height: 50,
+    backgroundColor: '#B0A0B8',
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  pastButtonText: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
