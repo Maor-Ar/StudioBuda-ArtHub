@@ -4,7 +4,21 @@ import UserHeadIcon from '../assets/icons/user-head.svg';
 import UsersFourIcon from '../assets/icons/users-four.svg';
 import LeftArrow from '../assets/icons/LeftArrow.svg';
 
-const EventDetailModal = ({ event, visible, onClose, onRegister, onCancel, isRegistered, isFull = false, disabled = false, isPast = false }) => {
+const EventDetailModal = ({
+  event,
+  visible,
+  onClose,
+  onRegister,
+  onCancel,
+  isRegistered,
+  isFull = false,
+  disabled = false,
+  isPast = false,
+  isAdmin = false,
+  onReserveSpot,
+  onRemoveReservedSpot,
+  adminActionLoading = false,
+}) => {
   if (!event) return null;
 
   const formatTime = (time) => {
@@ -130,6 +144,29 @@ const EventDetailModal = ({ event, visible, onClose, onRegister, onCancel, isReg
                   {disabled ? 'מרשם...' : 'תרשמו אותי'}
                 </Text>
               </TouchableOpacity>
+            )}
+
+            {isAdmin && (
+              <View style={styles.adminActionsContainer}>
+                <TouchableOpacity
+                  style={[styles.reserveSpotButton, adminActionLoading && styles.adminButtonDisabled]}
+                  onPress={onReserveSpot}
+                  disabled={adminActionLoading}
+                >
+                  <Text style={styles.reserveSpotButtonText}>
+                    {adminActionLoading ? 'שומר...' : 'שריון מקום'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.removeReservedSpotButton, adminActionLoading && styles.adminButtonDisabled]}
+                  onPress={onRemoveReservedSpot}
+                  disabled={adminActionLoading}
+                >
+                  <Text style={styles.removeReservedSpotButtonText}>
+                    {adminActionLoading ? 'מסיר...' : 'הסרת מקום שמור'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             )}
           </ScrollView>
         </View>
@@ -321,6 +358,43 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     writingDirection: 'rtl',
+  },
+  adminActionsContainer: {
+    marginTop: 14,
+    gap: 10,
+  },
+  reserveSpotButton: {
+    width: '100%',
+    height: 46,
+    backgroundColor: '#8E44AD',
+    borderRadius: 23,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeReservedSpotButton: {
+    width: '100%',
+    height: 46,
+    backgroundColor: '#6B2A85',
+    borderRadius: 23,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reserveSpotButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  removeReservedSpotButtonText: {
+    color: '#FFE2ED',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  adminButtonDisabled: {
+    opacity: 0.6,
   },
 });
 

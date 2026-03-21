@@ -1,7 +1,7 @@
 import registrationService from '../../services/registrationService.js';
 import eventService from '../../services/eventService.js';
 import userService from '../../services/userService.js';
-import { requireAuthenticated } from '../middleware/permissions.js';
+import { requireAdmin, requireAuthenticated } from '../middleware/permissions.js';
 import logger from '../../utils/logger.js';
 
 export const registrationResolvers = {
@@ -25,6 +25,16 @@ export const registrationResolvers = {
     cancelRegistration: async (_, { id }, context) => {
       const user = await requireAuthenticated(context);
       return await registrationService.cancelRegistration(id, user.id);
+    },
+
+    adminReserveSpot: async (_, { input }, context) => {
+      await requireAdmin(context);
+      return await registrationService.reserveSpotForDummyUser(input.eventId);
+    },
+
+    adminRemoveReservedSpot: async (_, { input }, context) => {
+      await requireAdmin(context);
+      return await registrationService.removeReservedSpotForDummyUser(input.eventId);
     },
   },
 

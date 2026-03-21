@@ -176,6 +176,32 @@ export const CANCEL_REGISTRATION = gql`
   }
 `;
 
+export const ADMIN_RESERVE_SPOT = gql`
+  mutation AdminReserveSpot($input: AdminReserveSpotInput!) {
+    adminReserveSpot(input: $input) {
+      id
+      userId
+      eventId
+      occurrenceDate
+      registrationDate
+      status
+    }
+  }
+`;
+
+export const ADMIN_REMOVE_RESERVED_SPOT = gql`
+  mutation AdminRemoveReservedSpot($input: AdminReserveSpotInput!) {
+    adminRemoveReservedSpot(input: $input) {
+      id
+      userId
+      eventId
+      occurrenceDate
+      registrationDate
+      status
+    }
+  }
+`;
+
 // Transaction Mutations
 export const CREATE_TRANSACTION = gql`
   mutation CreateTransaction($input: CreateTransactionInput!) {

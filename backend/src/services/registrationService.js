@@ -5,38 +5,45 @@ import eventService from './eventService.js';
 import transactionService from './transactionService.js';
 import cacheService from './cacheService.js';
 
+const DUMMY_USER_ID = 'DummyUser';
+const DUMMY_TRANSACTION_ID = 'DUMMY_RESERVATION';
+
 class RegistrationService {
-  async registerForEvent(userId, eventId, transactionData = null) {
-    // Check if eventId is a virtual instance ID (format: baseEventId_YYYY-MM-DD)
-    // Virtual instances are generated on-the-fly for recurring events
+  resolveEventOccurrence(eventId) {
     let actualEventId = eventId;
     let occurrenceDate = null;
-    
+
     if (eventId.includes('_')) {
-      // This is a virtual instance ID - extract baseEventId and date
       const parts = eventId.split('_');
       if (parts.length >= 2) {
-        // Last part should be the date (YYYY-MM-DD)
         const datePart = parts[parts.length - 1];
-        // Everything before the last underscore is the baseEventId
         actualEventId = parts.slice(0, -1).join('_');
-        
-        // Parse the date - use UTC to avoid timezone issues
+
         try {
-          // Create date in UTC midnight to avoid timezone shifts
-          occurrenceDate = new Date(datePart + 'T00:00:00.000Z');
+          occurrenceDate = new Date(`${datePart}T00:00:00.000Z`);
           if (isNaN(occurrenceDate.getTime())) {
-            // If date parsing fails, treat as regular eventId
             actualEventId = eventId;
             occurrenceDate = null;
           }
         } catch (error) {
-          // If date parsing fails, treat as regular eventId
           actualEventId = eventId;
           occurrenceDate = null;
         }
       }
     }
+
+    return { actualEventId, occurrenceDate };
+  }
+
+  getDateKey(dateValue) {
+    const dateObj = dateValue?.toDate ? dateValue.toDate() : new Date(dateValue);
+    return dateObj.toISOString().split('T')[0];
+  }
+
+  async registerForEvent(userId, eventId, transactionData = null) {
+    // Check if eventId is a virtual instance ID (format: baseEventId_YYYY-MM-DD)
+    // Virtual instances are generated on-the-fly for recurring events
+    const { actualEventId, occurrenceDate } = this.resolveEventOccurrence(eventId);
     
     // Get event (using actualEventId which is the base event ID for recurring events)
     const event = await eventService.getEvent(actualEventId);
@@ -210,6 +217,119 @@ class RegistrationService {
     await cacheService.delPattern('events:*');
 
     return { id: docRef.id, ...registrationDoc };
+  }
+
+  async reserveSpotForDummyUser(eventId) {
+    const { actualEventId, occurrenceDate } = this.resolveEventOccurrence(eventId);
+    const event = await eventService.getEvent(actualEventId);
+
+    if (!event.isActive) {
+      throw new ValidationError('Event is not active', 'eventId');
+    }
+
+    let eventDate;
+    if (occurrenceDate) {
+      eventDate = occurrenceDate;
+    } else if (event.isRecurring) {
+      eventDate = event.occurrenceDate || event.date;
+    } else {
+      eventDate = event.date;
+    }
+
+    if (eventDate?.toDate) {
+      eventDate = eventDate.toDate();
+    } else if (typeof eventDate === 'string') {
+      eventDate = new Date(eventDate);
+    }
+
+    if (!(await eventService.checkEventCapacity(actualEventId, eventDate))) {
+      throw new ConflictError('Event is at full capacity', 'eventId');
+    }
+
+    const now = new Date();
+    const eventDateObj = eventDate?.toDate ? eventDate.toDate() : new Date(eventDate);
+
+    const registrationDoc = {
+      userId: DUMMY_USER_ID,
+      transactionId: DUMMY_TRANSACTION_ID,
+      eventId: actualEventId,
+      occurrenceDate: eventDateObj,
+      date: eventDateObj,
+      registrationDate: now,
+      status: REGISTRATION_STATUS.CONFIRMED,
+      createdAt: now,
+    };
+
+    const docRef = await db.collection('event_registrations').add(registrationDoc);
+
+    await cacheService.delPattern('events:*');
+
+    return { id: docRef.id, ...registrationDoc };
+  }
+
+  async removeReservedSpotForDummyUser(eventId) {
+    const { actualEventId, occurrenceDate } = this.resolveEventOccurrence(eventId);
+    const event = await eventService.getEvent(actualEventId);
+
+    let eventDate;
+    if (occurrenceDate) {
+      eventDate = occurrenceDate;
+    } else if (event.isRecurring) {
+      eventDate = event.occurrenceDate || event.date;
+    } else {
+      eventDate = event.date;
+    }
+
+    if (eventDate?.toDate) {
+      eventDate = eventDate.toDate();
+    } else if (typeof eventDate === 'string') {
+      eventDate = new Date(eventDate);
+    }
+
+    const targetDateKey = this.getDateKey(eventDate);
+
+    const snapshot = await db.collection('event_registrations')
+      .where('eventId', '==', actualEventId)
+      .where('userId', '==', DUMMY_USER_ID)
+      .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+      .get();
+
+    if (snapshot.empty) {
+      throw new NotFoundError('No dummy reservation found for this event occurrence');
+    }
+
+    const matchingRegistrations = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(registration => {
+        const regDateValue = registration.date || registration.occurrenceDate;
+        if (!regDateValue) {
+          return false;
+        }
+        return this.getDateKey(regDateValue) === targetDateKey;
+      })
+      .sort((a, b) => {
+        const aDate = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+        const bDate = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+        return bDate - aDate;
+      });
+
+    if (matchingRegistrations.length === 0) {
+      throw new NotFoundError('No dummy reservation found for this event occurrence');
+    }
+
+    const registrationToCancel = matchingRegistrations[0];
+
+    await db.collection('event_registrations').doc(registrationToCancel.id).update({
+      status: REGISTRATION_STATUS.CANCELLED,
+      updatedAt: new Date(),
+    });
+
+    await cacheService.delPattern('events:*');
+
+    return {
+      ...registrationToCancel,
+      status: REGISTRATION_STATUS.CANCELLED,
+    };
   }
 
   async cancelRegistration(registrationId, userId) {

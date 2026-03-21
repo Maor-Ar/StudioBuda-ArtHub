@@ -3,12 +3,19 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Image
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from '@apollo/client';
 import { useCachedEvents, clearEventsCacheForRange } from '../../hooks/useCachedEvents';
-import { REGISTER_FOR_EVENT, CANCEL_REGISTRATION } from '../../services/graphql/mutations';
+import {
+  REGISTER_FOR_EVENT,
+  CANCEL_REGISTRATION,
+  ADMIN_RESERVE_SPOT,
+  ADMIN_REMOVE_RESERVED_SPOT,
+} from '../../services/graphql/mutations';
 import { GET_MY_REGISTRATIONS } from '../../services/graphql/queries';
 import EventCard from '../../components/EventCard';
 import EventDetailModal from '../../components/EventDetailModal';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
 import { getGraphQLErrorMessage } from '../../utils/errorMessages';
+import { useAuth } from '../../context/AuthContext';
+import { USER_ROLES } from '../../utils/constants';
 import LeftArrow from '../../assets/icons/LeftArrow.svg';
 import RightArrow from '../../assets/icons/RightArrow.svg';
 
@@ -31,6 +38,8 @@ const getWeekDates = (date) => {
 
 const CalendarScreen = () => {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const isAdmin = user?.role === USER_ROLES.ADMIN;
   const [selectedTab, setSelectedTab] = useState('יומן'); // 'יומן' or 'הרישומים שלי'
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -178,6 +187,40 @@ const CalendarScreen = () => {
       } else {
         showErrorToast(friendlyMessage);
       }
+    },
+  });
+
+  const [adminReserveSpot, { loading: reservingSpot }] = useMutation(ADMIN_RESERVE_SPOT, {
+    onCompleted: async () => {
+      try {
+        clearEventsCacheForRange(dateRange);
+        await refetchEvents();
+        showSuccessToast('המקום שוריין בהצלחה');
+      } catch (error) {
+        console.error('[ADMIN RESERVE] Error refetching after reserve:', error);
+        showSuccessToast('המקום שוריין בהצלחה');
+      }
+    },
+    onError: (error) => {
+      const friendlyMessage = getGraphQLErrorMessage(error);
+      showErrorToast(friendlyMessage);
+    },
+  });
+
+  const [adminRemoveReservedSpot, { loading: removingReservedSpot }] = useMutation(ADMIN_REMOVE_RESERVED_SPOT, {
+    onCompleted: async () => {
+      try {
+        clearEventsCacheForRange(dateRange);
+        await refetchEvents();
+        showSuccessToast('המקום השמור הוסר בהצלחה');
+      } catch (error) {
+        console.error('[ADMIN REMOVE RESERVE] Error refetching after remove:', error);
+        showSuccessToast('המקום השמור הוסר בהצלחה');
+      }
+    },
+    onError: (error) => {
+      const friendlyMessage = getGraphQLErrorMessage(error);
+      showErrorToast(friendlyMessage);
     },
   });
 
@@ -443,6 +486,36 @@ const CalendarScreen = () => {
     setModalVisible(true);
   };
 
+  const handleAdminReserveSpot = async (eventId) => {
+    if (!isAdmin) return;
+    try {
+      await adminReserveSpot({
+        variables: {
+          input: {
+            eventId,
+          },
+        },
+      });
+    } catch (error) {
+      console.error('[ADMIN RESERVE] Mutation failed:', error);
+    }
+  };
+
+  const handleAdminRemoveReservedSpot = async (eventId) => {
+    if (!isAdmin) return;
+    try {
+      await adminRemoveReservedSpot({
+        variables: {
+          input: {
+            eventId,
+          },
+        },
+      });
+    } catch (error) {
+      console.error('[ADMIN REMOVE RESERVE] Mutation failed:', error);
+    }
+  };
+
   const handleCloseModal = () => {
     setModalVisible(false);
     setSelectedEvent(null);
@@ -671,6 +744,10 @@ const CalendarScreen = () => {
               isFull={selectedEvent.availableSpots === 0}
               disabled={registering || cancelling}
               isPast={isPastModal}
+              isAdmin={isAdmin}
+              onReserveSpot={() => selectedEvent && handleAdminReserveSpot(selectedEvent.id)}
+              onRemoveReservedSpot={() => selectedEvent && handleAdminRemoveReservedSpot(selectedEvent.id)}
+              adminActionLoading={reservingSpot || removingReservedSpot}
             />
           );
         })()}

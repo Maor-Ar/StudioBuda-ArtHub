@@ -50,6 +50,8 @@ export const typeDefs = gql`
     # Registrations (Authenticated users)
     registerForEvent(input: RegisterForEventInput!): EventRegistration!
     cancelRegistration(id: ID!): EventRegistration!
+    adminReserveSpot(input: AdminReserveSpotInput!): EventRegistration!
+    adminRemoveReservedSpot(input: AdminReserveSpotInput!): EventRegistration!
 
     # Transactions
     createTransaction(input: CreateTransactionInput!): Transaction!

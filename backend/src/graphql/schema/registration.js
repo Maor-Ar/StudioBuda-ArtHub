@@ -19,5 +19,9 @@ export const registrationTypeDefs = gql`
     eventId: String!
     transactionData: CreateTransactionInput
   }
+
+  input AdminReserveSpotInput {
+    eventId: String!
+  }
 `;
 
