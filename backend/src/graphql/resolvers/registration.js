@@ -10,6 +10,10 @@ export const registrationResolvers = {
       const user = await requireAuthenticated(context);
       return await registrationService.getUserRegistrations(user.id, true);
     },
+    eventRegistrations: async (_, { eventId }, context) => {
+      await requireAdmin(context);
+      return await registrationService.getRegistrationsForEventOccurrence(eventId);
+    },
   },
 
   Mutation: {
@@ -25,6 +29,11 @@ export const registrationResolvers = {
     cancelRegistration: async (_, { id }, context) => {
       const user = await requireAuthenticated(context);
       return await registrationService.cancelRegistration(id, user.id);
+    },
+
+    adminCancelRegistration: async (_, { id }, context) => {
+      await requireAdmin(context);
+      return await registrationService.cancelRegistrationAsAdmin(id);
     },
 
     adminReserveSpot: async (_, { input }, context) => {

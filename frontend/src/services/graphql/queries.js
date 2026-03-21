@@ -98,6 +98,24 @@ export const GET_MY_REGISTRATIONS = gql`
   }
 `;
 
+export const GET_EVENT_REGISTRATIONS = gql`
+  query GetEventRegistrations($eventId: String!) {
+    eventRegistrations(eventId: $eventId) {
+      id
+      userId
+      eventId
+      occurrenceDate
+      registrationDate
+      status
+      user {
+        id
+        firstName
+        lastName
+      }
+    }
+  }
+`;
+
 // Transaction Queries
 export const GET_MY_TRANSACTIONS = gql`
   query GetMyTransactions {
@@ -158,6 +176,7 @@ export const GET_ALL_TRANSACTIONS = gql`
       isActive
       purchaseDate
       lastRenewalDate
+      lastPaymentDate
       entriesUsedThisMonth
       totalEntries
       entriesRemaining

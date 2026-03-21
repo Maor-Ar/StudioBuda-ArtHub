@@ -6,10 +6,11 @@ import { useCachedEvents, clearEventsCacheForRange } from '../../hooks/useCached
 import {
   REGISTER_FOR_EVENT,
   CANCEL_REGISTRATION,
+  ADMIN_CANCEL_REGISTRATION,
   ADMIN_RESERVE_SPOT,
   ADMIN_REMOVE_RESERVED_SPOT,
 } from '../../services/graphql/mutations';
-import { GET_MY_REGISTRATIONS } from '../../services/graphql/queries';
+import { GET_MY_REGISTRATIONS, GET_EVENT_REGISTRATIONS } from '../../services/graphql/queries';
 import EventCard from '../../components/EventCard';
 import EventDetailModal from '../../components/EventDetailModal';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
@@ -43,6 +44,7 @@ const CalendarScreen = () => {
   const [selectedTab, setSelectedTab] = useState('יומן'); // 'יומן' or 'הרישומים שלי'
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [removingRegistrationId, setRemovingRegistrationId] = useState(null);
 
   // Initialize with current date
   const today = new Date();
@@ -221,6 +223,40 @@ const CalendarScreen = () => {
     onError: (error) => {
       const friendlyMessage = getGraphQLErrorMessage(error);
       showErrorToast(friendlyMessage);
+    },
+  });
+
+  const {
+    data: eventRegistrationsData,
+    loading: eventRegistrationsLoading,
+    refetch: refetchEventRegistrations,
+  } = useQuery(GET_EVENT_REGISTRATIONS, {
+    variables: { eventId: selectedEvent?.id || '' },
+    skip: !isAdmin || !selectedEvent || !modalVisible,
+    fetchPolicy: 'network-only',
+  });
+
+  const [adminCancelRegistration] = useMutation(ADMIN_CANCEL_REGISTRATION, {
+    onCompleted: async () => {
+      try {
+        clearEventsCacheForRange(dateRange);
+        await Promise.all([
+          refetchEvents(),
+          refetchRegistrations(),
+          refetchEventRegistrations(),
+        ]);
+        showSuccessToast('הרישום הוסר בהצלחה');
+      } catch (error) {
+        console.error('[ADMIN CANCEL REGISTRATION] Error refetching after removal:', error);
+        showSuccessToast('הרישום הוסר בהצלחה');
+      } finally {
+        setRemovingRegistrationId(null);
+      }
+    },
+    onError: (error) => {
+      const friendlyMessage = getGraphQLErrorMessage(error);
+      showErrorToast(friendlyMessage);
+      setRemovingRegistrationId(null);
     },
   });
 
@@ -519,6 +555,26 @@ const CalendarScreen = () => {
   const handleCloseModal = () => {
     setModalVisible(false);
     setSelectedEvent(null);
+    setRemovingRegistrationId(null);
+  };
+
+  const adminEventRegistrations = useMemo(() => {
+    if (!isAdmin) return [];
+    return eventRegistrationsData?.eventRegistrations || [];
+  }, [eventRegistrationsData, isAdmin]);
+
+  const handleAdminRemoveRegistration = async (registrationId) => {
+    if (!isAdmin) return;
+    setRemovingRegistrationId(registrationId);
+    try {
+      await adminCancelRegistration({
+        variables: {
+          id: registrationId,
+        },
+      });
+    } catch (error) {
+      console.error('[ADMIN CANCEL REGISTRATION] Mutation failed:', error);
+    }
   };
 
   // Days of week in Hebrew (RTL) - Sunday to Saturday
@@ -748,6 +804,10 @@ const CalendarScreen = () => {
               onReserveSpot={() => selectedEvent && handleAdminReserveSpot(selectedEvent.id)}
               onRemoveReservedSpot={() => selectedEvent && handleAdminRemoveReservedSpot(selectedEvent.id)}
               adminActionLoading={reservingSpot || removingReservedSpot}
+              registrations={adminEventRegistrations}
+              registrationsLoading={eventRegistrationsLoading}
+              onRemoveRegistration={handleAdminRemoveRegistration}
+              removingRegistrationId={removingRegistrationId}
             />
           );
         })()}

@@ -195,8 +195,49 @@ class TransactionService {
   }
 
   async updateTransaction(transactionId, data) {
+    const normalizedData = { ...data };
+    const dateFields = ['purchaseDate', 'lastRenewalDate', 'lastPaymentDate'];
+    dateFields.forEach((field) => {
+      if (normalizedData[field] !== undefined && normalizedData[field] !== null) {
+        if (normalizedData[field] === '') {
+          normalizedData[field] = null;
+        } else if (typeof normalizedData[field] === 'string') {
+          normalizedData[field] = new Date(normalizedData[field]);
+        }
+      }
+    });
+
+    const nonNegativeNumberFields = [
+      'monthlyEntries',
+      'entriesUsedThisMonth',
+      'entriesRemaining',
+      'totalEntries',
+    ];
+    nonNegativeNumberFields.forEach((field) => {
+      if (normalizedData[field] !== undefined && normalizedData[field] !== null) {
+        if (
+          typeof normalizedData[field] !== 'number' ||
+          !Number.isFinite(normalizedData[field]) ||
+          normalizedData[field] < 0
+        ) {
+          throw new ValidationError(`${field} must be a non-negative number`, field);
+        }
+      }
+    });
+
+    if (
+      normalizedData.entriesRemaining !== undefined &&
+      normalizedData.totalEntries !== undefined &&
+      normalizedData.entriesRemaining > normalizedData.totalEntries
+    ) {
+      throw new ValidationError(
+        'entriesRemaining cannot be greater than totalEntries',
+        'entriesRemaining'
+      );
+    }
+
     const updateData = {
-      ...data,
+      ...normalizedData,
       updatedAt: new Date(),
     };
 

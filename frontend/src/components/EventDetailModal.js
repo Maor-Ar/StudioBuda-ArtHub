@@ -18,6 +18,10 @@ const EventDetailModal = ({
   onReserveSpot,
   onRemoveReservedSpot,
   adminActionLoading = false,
+  registrations = [],
+  registrationsLoading = false,
+  onRemoveRegistration,
+  removingRegistrationId = null,
 }) => {
   if (!event) return null;
 
@@ -166,6 +170,40 @@ const EventDetailModal = ({
                     {adminActionLoading ? 'מסיר...' : 'הסרת מקום שמור'}
                   </Text>
                 </TouchableOpacity>
+              </View>
+            )}
+
+            {isAdmin && (
+              <View style={styles.registrationsContainer}>
+                <Text style={styles.registrationsTitle}>נרשמים לאירוע</Text>
+                {registrationsLoading ? (
+                  <Text style={styles.registrationsLoadingText}>טוען רשימת נרשמים...</Text>
+                ) : registrations.length === 0 ? (
+                  <Text style={styles.emptyRegistrationsText}>אין נרשמים כרגע</Text>
+                ) : (
+                  registrations.map((registration) => {
+                    const fullName = registration.user
+                      ? `${registration.user.firstName} ${registration.user.lastName}`
+                      : registration.userId === 'DummyUser'
+                        ? 'Dummy User'
+                        : 'משתמש לא ידוע';
+                    const isRemoving = removingRegistrationId === registration.id;
+                    return (
+                      <View key={registration.id} style={styles.registrationRow}>
+                        <TouchableOpacity
+                          style={[styles.removeRegistrationButton, isRemoving && styles.adminButtonDisabled]}
+                          onPress={() => onRemoveRegistration && onRemoveRegistration(registration.id)}
+                          disabled={isRemoving}
+                        >
+                          <Text style={styles.removeRegistrationButtonText}>
+                            {isRemoving ? 'מסיר...' : 'הסר'}
+                          </Text>
+                        </TouchableOpacity>
+                        <Text style={styles.registrationName}>{fullName}</Text>
+                      </View>
+                    );
+                  })
+                )}
               </View>
             )}
           </ScrollView>
@@ -395,6 +433,64 @@ const styles = StyleSheet.create({
   },
   adminButtonDisabled: {
     opacity: 0.6,
+  },
+  registrationsContainer: {
+    marginTop: 18,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 209, 227, 0.35)',
+    paddingTop: 14,
+  },
+  registrationsTitle: {
+    color: '#FFD1E3',
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'right',
+    marginBottom: 10,
+    writingDirection: 'rtl',
+  },
+  registrationsLoadingText: {
+    color: '#FFE2ED',
+    fontSize: 14,
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  emptyRegistrationsText: {
+    color: '#D4B8E0',
+    fontSize: 14,
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  registrationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 209, 227, 0.14)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  registrationName: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '500',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+    flex: 1,
+    marginLeft: 10,
+  },
+  removeRegistrationButton: {
+    backgroundColor: '#4E0D66',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  removeRegistrationButtonText: {
+    color: '#FFD1E3',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+    writingDirection: 'rtl',
   },
 });
 

@@ -176,6 +176,19 @@ export const CANCEL_REGISTRATION = gql`
   }
 `;
 
+export const ADMIN_CANCEL_REGISTRATION = gql`
+  mutation AdminCancelRegistration($id: ID!) {
+    adminCancelRegistration(id: $id) {
+      id
+      userId
+      eventId
+      occurrenceDate
+      registrationDate
+      status
+    }
+  }
+`;
+
 export const ADMIN_RESERVE_SPOT = gql`
   mutation AdminReserveSpot($input: AdminReserveSpotInput!) {
     adminReserveSpot(input: $input) {

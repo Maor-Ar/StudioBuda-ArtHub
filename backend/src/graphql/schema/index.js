@@ -26,6 +26,7 @@ export const typeDefs = gql`
     events(dateRange: DateRangeInput, filters: EventFilters): [Event!]!
     event(id: ID!): Event
     myRegistrations: [EventRegistration!]!
+    eventRegistrations(eventId: String!): [EventRegistration!]!
     myTransactions: [Transaction!]!
     transactions: [Transaction!]!
     users: [User!]!
@@ -50,6 +51,7 @@ export const typeDefs = gql`
     # Registrations (Authenticated users)
     registerForEvent(input: RegisterForEventInput!): EventRegistration!
     cancelRegistration(id: ID!): EventRegistration!
+    adminCancelRegistration(id: ID!): EventRegistration!
     adminReserveSpot(input: AdminReserveSpotInput!): EventRegistration!
     adminRemoveReservedSpot(input: AdminReserveSpotInput!): EventRegistration!
 

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput,
   ActivityIndicator, Alert, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ const AdminTransactionsScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState('all');
   const [selectedTx, setSelectedTx] = useState(null);
+  const [editForm, setEditForm] = useState(null);
 
   const { data, loading, refetch } = useQuery(GET_ALL_TRANSACTIONS, { fetchPolicy: 'network-only' });
   const { data: usersData } = useQuery(GET_ALL_USERS);
@@ -51,9 +52,72 @@ const AdminTransactionsScreen = ({ navigation }) => {
   }, [data, filter]);
 
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
+  const toDateInputValue = (d) => {
+    if (!d) return '';
+    return new Date(d).toISOString().split('T')[0];
+  };
   const getUserName = (uid) => {
     const u = usersMap[uid];
     return u ? `${u.firstName} ${u.lastName}` : uid?.substring(0, 8);
+  };
+
+  const openTransactionModal = (tx) => {
+    setSelectedTx(tx);
+    setEditForm({
+      isActive: !!tx.isActive,
+      purchaseDate: toDateInputValue(tx.purchaseDate),
+      lastRenewalDate: toDateInputValue(tx.lastRenewalDate),
+      lastPaymentDate: toDateInputValue(tx.lastPaymentDate),
+      monthlyEntries: tx.monthlyEntries != null ? String(tx.monthlyEntries) : '',
+      entriesUsedThisMonth: tx.entriesUsedThisMonth != null ? String(tx.entriesUsedThisMonth) : '0',
+      totalEntries: tx.totalEntries != null ? String(tx.totalEntries) : '',
+      entriesRemaining: tx.entriesRemaining != null ? String(tx.entriesRemaining) : '',
+    });
+  };
+
+  const closeTransactionModal = () => {
+    setSelectedTx(null);
+    setEditForm(null);
+  };
+
+  const handleSaveTransaction = async () => {
+    if (!selectedTx || !editForm) return;
+
+    if (!editForm.purchaseDate) {
+      showAlert('שגיאה', 'יש להזין תאריך רכישה');
+      return;
+    }
+
+    const input = {
+      isActive: !!editForm.isActive,
+      purchaseDate: new Date(`${editForm.purchaseDate}T00:00:00.000Z`).toISOString(),
+    };
+    if (editForm.lastPaymentDate) {
+      input.lastPaymentDate = new Date(`${editForm.lastPaymentDate}T00:00:00.000Z`).toISOString();
+    }
+
+    if (selectedTx.transactionType === 'subscription') {
+      if (editForm.monthlyEntries !== '') {
+        input.monthlyEntries = Number(editForm.monthlyEntries);
+      }
+      if (editForm.entriesUsedThisMonth !== '') {
+        input.entriesUsedThisMonth = Number(editForm.entriesUsedThisMonth);
+      }
+      if (editForm.lastRenewalDate) {
+        input.lastRenewalDate = new Date(`${editForm.lastRenewalDate}T00:00:00.000Z`).toISOString();
+      }
+    }
+
+    if (selectedTx.transactionType === 'punch_card') {
+      if (editForm.totalEntries !== '') {
+        input.totalEntries = Number(editForm.totalEntries);
+      }
+      if (editForm.entriesRemaining !== '') {
+        input.entriesRemaining = Number(editForm.entriesRemaining);
+      }
+    }
+
+    await updateTransaction({ variables: { id: selectedTx.id, input } });
   };
 
   return (
@@ -83,7 +147,7 @@ const AdminTransactionsScreen = ({ navigation }) => {
           <Text style={styles.emptyText}>אין עסקאות</Text>
         ) : (
           transactions.map(tx => (
-            <TouchableOpacity key={tx.id} style={styles.txCard} onPress={() => setSelectedTx(tx)} activeOpacity={0.7}>
+            <TouchableOpacity key={tx.id} style={styles.txCard} onPress={() => openTransactionModal(tx)} activeOpacity={0.7}>
               <View style={styles.txRow}>
                 <View style={[styles.statusDot, { backgroundColor: tx.isActive ? '#4CAF50' : '#E57373' }]} />
                 <Text style={styles.txType}>{TYPE_LABELS[tx.transactionType] || tx.transactionType}</Text>
@@ -105,27 +169,107 @@ const AdminTransactionsScreen = ({ navigation }) => {
           <View style={styles.modalContent}>
             {selectedTx && (
               <ScrollView showsVerticalScrollIndicator={false}>
+                {/** Use edited status to keep action buttons consistent with form state */}
+                {(() => {
+                  const effectiveIsActive = editForm?.isActive ?? selectedTx.isActive;
+                  return (
+                    <>
                 <Text style={styles.modalTitle}>{TYPE_LABELS[selectedTx.transactionType]}</Text>
                 <Text style={styles.modalField}>משתמש: {getUserName(selectedTx.userId)}</Text>
                 <Text style={styles.modalField}>סכום: ₪{selectedTx.amount}</Text>
-                <Text style={styles.modalField}>סטטוס: {selectedTx.isActive ? 'פעיל ✅' : 'לא פעיל ❌'}</Text>
-                <Text style={styles.modalField}>תאריך רכישה: {formatDate(selectedTx.purchaseDate)}</Text>
+                <Text style={styles.sectionLabel}>עריכת שדות רכישה</Text>
+
+                <Text style={styles.inputLabel}>סטטוס</Text>
+                <View style={styles.statusRow}>
+                  <TouchableOpacity
+                    style={[styles.statusBtn, editForm?.isActive && styles.statusBtnActive]}
+                    onPress={() => setEditForm(prev => ({ ...prev, isActive: true }))}
+                  >
+                    <Text style={[styles.statusBtnText, editForm?.isActive && styles.statusBtnTextActive]}>פעיל</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.statusBtn, !editForm?.isActive && styles.statusBtnActive]}
+                    onPress={() => setEditForm(prev => ({ ...prev, isActive: false }))}
+                  >
+                    <Text style={[styles.statusBtnText, !editForm?.isActive && styles.statusBtnTextActive]}>לא פעיל</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.inputLabel}>תאריך רכישה (YYYY-MM-DD)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editForm?.purchaseDate || ''}
+                  onChangeText={(v) => setEditForm(prev => ({ ...prev, purchaseDate: v }))}
+                  placeholder="2026-03-01"
+                  placeholderTextColor="#999"
+                />
+
+                <Text style={styles.inputLabel}>תאריך תשלום אחרון (YYYY-MM-DD)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editForm?.lastPaymentDate || ''}
+                  onChangeText={(v) => setEditForm(prev => ({ ...prev, lastPaymentDate: v }))}
+                  placeholder="2026-03-01"
+                  placeholderTextColor="#999"
+                />
                 {selectedTx.transactionType === 'subscription' && (
                   <>
-                    <Text style={styles.modalField}>כניסות חודשיות: {selectedTx.monthlyEntries}</Text>
-                    <Text style={styles.modalField}>נוצלו: {selectedTx.entriesUsedThisMonth ?? 0}</Text>
-                    <Text style={styles.modalField}>חידוש אחרון: {formatDate(selectedTx.lastRenewalDate)}</Text>
+                    <Text style={styles.inputLabel}>כניסות חודשיות</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm?.monthlyEntries || ''}
+                      onChangeText={(v) => setEditForm(prev => ({ ...prev, monthlyEntries: v }))}
+                      keyboardType="numeric"
+                      placeholderTextColor="#999"
+                    />
+                    <Text style={styles.inputLabel}>כניסות שנוצלו החודש</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm?.entriesUsedThisMonth || ''}
+                      onChangeText={(v) => setEditForm(prev => ({ ...prev, entriesUsedThisMonth: v }))}
+                      keyboardType="numeric"
+                      placeholderTextColor="#999"
+                    />
+                    <Text style={styles.inputLabel}>חידוש אחרון (YYYY-MM-DD)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm?.lastRenewalDate || ''}
+                      onChangeText={(v) => setEditForm(prev => ({ ...prev, lastRenewalDate: v }))}
+                      placeholder="2026-03-01"
+                      placeholderTextColor="#999"
+                    />
                   </>
                 )}
                 {selectedTx.transactionType === 'punch_card' && (
                   <>
-                    <Text style={styles.modalField}>סה״כ כניסות: {selectedTx.totalEntries}</Text>
-                    <Text style={styles.modalField}>נותרו: {selectedTx.entriesRemaining ?? 0}</Text>
+                    <Text style={styles.inputLabel}>סה״כ כניסות</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm?.totalEntries || ''}
+                      onChangeText={(v) => setEditForm(prev => ({ ...prev, totalEntries: v }))}
+                      keyboardType="numeric"
+                      placeholderTextColor="#999"
+                    />
+                    <Text style={styles.inputLabel}>כניסות שנותרו</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm?.entriesRemaining || ''}
+                      onChangeText={(v) => setEditForm(prev => ({ ...prev, entriesRemaining: v }))}
+                      keyboardType="numeric"
+                      placeholderTextColor="#999"
+                    />
                   </>
                 )}
 
                 <View style={styles.modalActions}>
-                  {selectedTx.isActive && selectedTx.transactionType === 'subscription' && (
+                  <TouchableOpacity
+                    style={styles.saveBtn}
+                    onPress={handleSaveTransaction}
+                    disabled={updatingTx}
+                  >
+                    {updatingTx ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.btnText}>שמור שינויים</Text>}
+                  </TouchableOpacity>
+                  {effectiveIsActive && selectedTx.transactionType === 'subscription' && (
                     <>
                       <TouchableOpacity style={styles.renewBtn} onPress={() => renewSubscription({ variables: { id: selectedTx.id } })} disabled={renewing}>
                         {renewing ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.btnText}>חדש מנוי</Text>}
@@ -135,21 +279,24 @@ const AdminTransactionsScreen = ({ navigation }) => {
                       </TouchableOpacity>
                     </>
                   )}
-                  {selectedTx.isActive && (
+                  {effectiveIsActive && (
                     <TouchableOpacity style={styles.deactivateBtn} onPress={() => updateTransaction({ variables: { id: selectedTx.id, input: { isActive: false } } })} disabled={updatingTx}>
                       <Text style={styles.btnText}>השבת</Text>
                     </TouchableOpacity>
                   )}
-                  {!selectedTx.isActive && (
+                  {!effectiveIsActive && (
                     <TouchableOpacity style={styles.renewBtn} onPress={() => updateTransaction({ variables: { id: selectedTx.id, input: { isActive: true } } })} disabled={updatingTx}>
                       <Text style={styles.btnText}>הפעל</Text>
                     </TouchableOpacity>
                   )}
                 </View>
 
-                <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedTx(null)}>
+                <TouchableOpacity style={styles.closeBtn} onPress={closeTransactionModal}>
                   <Text style={styles.closeBtnText}>סגור</Text>
                 </TouchableOpacity>
+                    </>
+                  );
+                })()}
               </ScrollView>
             )}
           </View>
@@ -184,10 +331,19 @@ const styles = StyleSheet.create({
   modalContent: { backgroundColor: '#FFF', borderRadius: 20, padding: 24, maxHeight: '80%' },
   modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#4E0D66', textAlign: 'center', marginBottom: 16 },
   modalField: { fontSize: 15, color: '#333', textAlign: 'right', marginBottom: 8 },
+  sectionLabel: { fontSize: 16, color: '#5D3587', fontWeight: '700', textAlign: 'right', marginBottom: 8, marginTop: 4 },
+  inputLabel: { fontSize: 13, color: '#5D3587', textAlign: 'right', marginBottom: 4, marginTop: 8, fontWeight: '600' },
+  input: { backgroundColor: '#F5EBF8', borderRadius: 10, padding: 10, fontSize: 14, color: '#333', textAlign: 'right', borderWidth: 1, borderColor: '#E0D4E8' },
+  statusRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 4, marginBottom: 6 },
+  statusBtn: { borderWidth: 1, borderColor: '#AB5FBD', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
+  statusBtnActive: { backgroundColor: '#AB5FBD' },
+  statusBtnText: { color: '#AB5FBD', fontSize: 13, fontWeight: '600' },
+  statusBtnTextActive: { color: '#FFF' },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 16, flexWrap: 'wrap', justifyContent: 'center' },
   renewBtn: { backgroundColor: '#4CAF50', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
   cancelSubBtn: { backgroundColor: '#E57373', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
   deactivateBtn: { backgroundColor: '#FF9800', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
+  saveBtn: { backgroundColor: '#5D3587', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
   btnText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
   closeBtn: { backgroundColor: '#F0E6F6', borderRadius: 14, paddingVertical: 12, alignItems: 'center', marginTop: 16 },
   closeBtnText: { color: '#5D3587', fontSize: 16, fontWeight: '600' },

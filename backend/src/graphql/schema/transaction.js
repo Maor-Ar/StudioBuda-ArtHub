@@ -39,7 +39,10 @@ export const transactionTypeDefs = gql`
   input UpdateTransactionInput {
     isActive: Boolean
     monthlyEntries: Int
+    purchaseDate: String
     lastRenewalDate: String
+    lastPaymentDate: String
+    totalEntries: Int
     entriesUsedThisMonth: Int
     entriesRemaining: Int
   }

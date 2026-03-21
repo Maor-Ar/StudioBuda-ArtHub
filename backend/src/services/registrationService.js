@@ -332,6 +332,90 @@ class RegistrationService {
     };
   }
 
+  async getRegistrationsForEventOccurrence(eventId) {
+    const { actualEventId, occurrenceDate } = this.resolveEventOccurrence(eventId);
+    const event = await eventService.getEvent(actualEventId);
+
+    let eventDate;
+    if (occurrenceDate) {
+      eventDate = occurrenceDate;
+    } else if (event.isRecurring) {
+      eventDate = event.occurrenceDate || event.date;
+    } else {
+      eventDate = event.date;
+    }
+
+    const targetDateKey = this.getDateKey(eventDate);
+
+    const snapshot = await db.collection('event_registrations')
+      .where('eventId', '==', actualEventId)
+      .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+      .get();
+
+    return snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(registration => {
+        const regDateValue = registration.date || registration.occurrenceDate;
+        if (!regDateValue) {
+          return false;
+        }
+        return this.getDateKey(regDateValue) === targetDateKey;
+      })
+      .sort((a, b) => {
+        const aDate = a.registrationDate?.toDate
+          ? a.registrationDate.toDate()
+          : new Date(a.registrationDate || a.createdAt);
+        const bDate = b.registrationDate?.toDate
+          ? b.registrationDate.toDate()
+          : new Date(b.registrationDate || b.createdAt);
+        return aDate - bDate;
+      });
+  }
+
+  async cancelRegistrationAsAdmin(registrationId) {
+    const registration = await this.getRegistrationById(registrationId);
+
+    if (registration.status === REGISTRATION_STATUS.CANCELLED) {
+      throw new ConflictError('Registration is already cancelled', 'registrationId');
+    }
+
+    await db.collection('event_registrations').doc(registrationId).update({
+      status: REGISTRATION_STATUS.CANCELLED,
+      updatedAt: new Date(),
+    });
+
+    // Refund only real transactions (dummy reservations have no real transaction to refund)
+    if (
+      registration.transactionId &&
+      registration.transactionId !== DUMMY_TRANSACTION_ID
+    ) {
+      const transaction = await transactionService.getTransactionById(registration.transactionId);
+      if (transaction.transactionType === TRANSACTION_TYPES.SUBSCRIPTION) {
+        const newCount = Math.max(0, (transaction.entriesUsedThisMonth || 0) - 1);
+        await transactionService.updateTransaction(registration.transactionId, {
+          entriesUsedThisMonth: newCount,
+        });
+      } else if (transaction.transactionType === TRANSACTION_TYPES.PUNCH_CARD) {
+        const newRemaining = (transaction.entriesRemaining || 0) + 1;
+        await transactionService.updateTransaction(registration.transactionId, {
+          entriesRemaining: newRemaining,
+          isActive: true,
+        });
+      }
+    }
+
+    if (registration.userId && registration.userId !== DUMMY_USER_ID) {
+      await cacheService.invalidateUserCache(registration.userId);
+    }
+    await cacheService.delPattern('events:*');
+
+    return {
+      id: registrationId,
+      ...registration,
+      status: REGISTRATION_STATUS.CANCELLED,
+    };
+  }
+
   async cancelRegistration(registrationId, userId) {
     const registration = await this.getRegistrationById(registrationId);
 
