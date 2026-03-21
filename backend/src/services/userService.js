@@ -1,4 +1,4 @@
-import { db } from '../config/firebase.js';
+import { db, auth } from '../config/firebase.js';
 import { USER_TYPES, USER_ROLES } from '../config/constants.js';
 import { NotFoundError, ValidationError } from '../utils/errors.js';
 import { validateEmail, validatePhone, validateName } from '../utils/validators.js';
@@ -106,6 +106,11 @@ class UserService {
   async checkTrialPurchaseStatus(userId) {
     const user = await this.getUserById(userId);
     return user.hasPurchasedTrial || false;
+  }
+
+  async updateAuthEmail(firebaseUid, email) {
+    validateEmail(email);
+    await auth.updateUser(firebaseUid, { email });
   }
 }
 

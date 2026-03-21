@@ -4,6 +4,8 @@ import { eventResolvers } from './event.js';
 import { transactionResolvers } from './transaction.js';
 import { registrationResolvers } from './registration.js';
 import { paymentResolvers } from './payment.js';
+import { productResolvers } from './product.js';
+import { adminResolvers } from './admin.js';
 import userService from '../../services/userService.js';
 
 export const resolvers = {
@@ -23,6 +25,7 @@ export const resolvers = {
         ...doc.data(),
       }));
     },
+    ...productResolvers.Query,
   },
 
   Mutation: {
@@ -31,6 +34,8 @@ export const resolvers = {
     ...transactionResolvers.Mutation,
     ...registrationResolvers.Mutation,
     ...paymentResolvers.Mutation,
+    ...productResolvers.Mutation,
+    ...adminResolvers.Mutation,
   },
 
   User: {
@@ -44,7 +49,13 @@ export const resolvers = {
       if (user.updatedAt?.toDate) {
         return user.updatedAt.toDate().toISOString();
       }
-      return new Date(user.updatedAt).toISOString();
+      if (user.updatedAt) {
+        return new Date(user.updatedAt).toISOString();
+      }
+      if (user.createdAt?.toDate) {
+        return user.createdAt.toDate().toISOString();
+      }
+      return new Date(user.createdAt || Date.now()).toISOString();
     },
   },
 
@@ -58,6 +69,10 @@ export const resolvers = {
 
   EventRegistration: {
     ...registrationResolvers.EventRegistration,
+  },
+
+  Product: {
+    ...productResolvers.Product,
   },
 };
 

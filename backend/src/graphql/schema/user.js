@@ -32,5 +32,16 @@ export const userTypeDefs = gql`
     token: String!
     newPassword: String!
   }
+
+  input AdminUpdateUserInput {
+    firstName: String
+    lastName: String
+    email: String
+    phone: String
+    userType: String
+    role: String
+    hasPurchasedTrial: Boolean
+    isActive: Boolean
+  }
 `;
 

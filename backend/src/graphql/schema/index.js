@@ -4,6 +4,7 @@ import { eventTypeDefs } from './event.js';
 import { transactionTypeDefs } from './transaction.js';
 import { registrationTypeDefs } from './registration.js';
 import { paymentTypeDefs } from './payment.js';
+import { productTypeDefs } from './product.js';
 
 export const typeDefs = gql`
   ${userTypeDefs}
@@ -11,6 +12,7 @@ export const typeDefs = gql`
   ${transactionTypeDefs}
   ${registrationTypeDefs}
   ${paymentTypeDefs}
+  ${productTypeDefs}
 
   type AuthPayload {
     token: String!
@@ -28,6 +30,8 @@ export const typeDefs = gql`
     transactions: [Transaction!]!
     users: [User!]!
     allEvents: [Event!]!
+    products: [Product!]!
+    allProducts: [Product!]!
   }
 
   type Mutation {
@@ -52,6 +56,15 @@ export const typeDefs = gql`
     updateTransaction(id: ID!, input: UpdateTransactionInput!): Transaction!
     renewSubscription(id: ID!): Transaction!
     cancelSubscription(id: ID!): Transaction!
+    adminCreateTransactionForUser(userId: ID!, input: AdminCreateTransactionInput!): Transaction!
+
+    # Users (Manager/Admin)
+    adminUpdateUser(id: ID!, input: AdminUpdateUserInput!): User!
+
+    # Products (Manager/Admin)
+    createProduct(input: CreateProductInput!): Product!
+    updateProduct(id: ID!, input: UpdateProductInput!): Product!
+    deleteProduct(id: ID!): Product!
   }
 `;
 

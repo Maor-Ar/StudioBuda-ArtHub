@@ -160,7 +160,7 @@ const AdminTransactionsScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'transparent' },
+  container: { flex: 1, minHeight: 0, backgroundColor: 'transparent' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#5D3587' },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFE2ED' },
   backBtn: { padding: 8 },
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
   filterText: { color: '#FFD1E3', fontSize: 13 },
   filterTextActive: { color: '#FFF' },
   countText: { textAlign: 'center', color: '#FFD1E3', fontSize: 13, marginTop: 4 },
-  list: { flex: 1 },
+  list: { flex: 1, minHeight: 0 },
   listContent: { padding: 16, paddingBottom: 180 },
   emptyText: { textAlign: 'center', color: '#FFD1E3', fontSize: 16, marginTop: 40 },
   txCard: { backgroundColor: 'rgba(255,209,227,0.15)', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,209,227,0.3)' },

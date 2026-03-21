@@ -181,7 +181,46 @@ export const GET_ALL_USERS = gql`
       userType
       hasPurchasedTrial
       createdAt
+      updatedAt
       isActive
+    }
+  }
+`;
+
+export const GET_PRODUCTS = gql`
+  query GetProducts {
+    products {
+      id
+      title
+      subtitle
+      type
+      price
+      monthlyEntries
+      totalEntries
+      validityMonths
+      termsHtml
+      sortOrder
+    }
+  }
+`;
+
+export const GET_ALL_PRODUCTS = gql`
+  query GetAllProducts {
+    allProducts {
+      id
+      title
+      subtitle
+      type
+      price
+      monthlyEntries
+      totalEntries
+      validityMonths
+      termsHtml
+      sortOrder
+      isActive
+      isPurchasable
+      createdAt
+      updatedAt
     }
   }
 `;

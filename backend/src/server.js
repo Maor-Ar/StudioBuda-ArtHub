@@ -38,9 +38,28 @@ const parseAllowedOrigins = (raw) => {
     .filter(Boolean);
 };
 
+const buildProductionOrigins = () => {
+  const parsed = parseAllowedOrigins(config.cors.origin);
+  if (parsed.includes('*')) return parsed;
+  const fe = (config.urls?.frontend || '').trim().replace(/\/$/, '');
+  if (fe && !parsed.includes(fe)) return [...parsed, fe];
+  return parsed;
+};
+
+/** Browsers only send these for pages served from the user's machine — safe to allow for local Expo / web dev even when NODE_ENV=production. */
+const isLoopbackOrigin = (origin) => {
+  if (!origin) return false;
+  try {
+    const { hostname } = new URL(origin);
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+  } catch {
+    return false;
+  }
+};
+
 const allowedOrigins = isDevelopment
   ? ['*'] // allow all in dev
-  : parseAllowedOrigins(config.cors.origin);
+  : buildProductionOrigins();
 
 console.log('[CORS] Initialization:', {
   isDevelopment,
@@ -59,16 +78,22 @@ const corsOrigin = (origin, callback) => {
 
   console.log('[CORS] Checking origin:', origin, 'against allowed:', allowedOrigins);
 
-  // Allow all
+  // Allow all (reflect specific origin when credentials are used)
   if (allowedOrigins.includes('*')) {
     console.log('[CORS] Allowing all origins (*)');
-    return callback(null, true);
+    return callback(null, origin);
   }
 
   // Allow exact-match list
   if (allowedOrigins.includes(origin)) {
     console.log('[CORS] Origin allowed:', origin);
-    return callback(null, true);
+    return callback(null, origin);
+  }
+
+  // Local Expo web (8081), Metro, Vite, etc. — avoids preflight failing with no ACAO when NODE_ENV is production locally
+  if (isLoopbackOrigin(origin)) {
+    console.log('[CORS] Allowing loopback origin:', origin);
+    return callback(null, origin);
   }
 
   console.warn('[CORS] ❌ Blocked origin:', origin, 'Allowed origins:', allowedOrigins);

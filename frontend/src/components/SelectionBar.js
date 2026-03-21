@@ -29,6 +29,8 @@ const getTabConfig = (name) => {
 };
 
 const LABEL_WIDTH = 76; // Width for text + stroke to animate
+/** Equal space between tab clusters (not equal-width columns per tab). */
+const PILL_TAB_GAP = 10;
 
 const AnimatedLabelWithStroke = ({ label, visible }) => {
   const widthAnim = useRef(new Animated.Value(visible ? LABEL_WIDTH : 0)).current;
@@ -176,13 +178,14 @@ const styles = StyleSheet.create({
     borderRadius: 35,
     paddingHorizontal: 16,
     alignItems: 'center',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
+    gap: PILL_TAB_GAP,
   },
   tabButton: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     height: 48,
+    paddingHorizontal: 4,
   },
   tabContent: {
     flexDirection: 'row',
@@ -202,7 +205,6 @@ const styles = StyleSheet.create({
   },
   labelWrapper: {
     overflow: 'hidden',
-    marginRight: 6,
   },
   labelWithStroke: {
     flexDirection: 'column',

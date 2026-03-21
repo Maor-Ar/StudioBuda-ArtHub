@@ -13,5 +13,7 @@ export const generalRateLimiter = rateLimit({
   max: 100, // Limit each IP to 100 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
+  // CORS preflight must not consume the budget or return 429 without ACAO headers
+  skip: (req) => req.method === 'OPTIONS',
 });
 

@@ -10,7 +10,9 @@ const requiredEnvVars = [
 
 const optionalEnvVars = {
   PORT: 4000,
-  NODE_ENV: 'production',
+  // Default to development when unset so local runs get permissive CORS and CSP-off;
+  // production deployments must set NODE_ENV=production (e.g. Cloud Run does).
+  NODE_ENV: 'development',
   REDIS_PASSWORD: '',
   CORS_ORIGIN: '*',
   PASSWORD_RESET_TOKEN_EXPIRY: 3600,

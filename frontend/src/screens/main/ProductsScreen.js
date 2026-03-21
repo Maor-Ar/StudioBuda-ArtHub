@@ -3,9 +3,8 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-nat
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
-import { PRODUCTS } from '../../utils/constants';
 import { CREATE_PAYMENT_SESSION } from '../../services/graphql/mutations';
-import { GET_MY_TRANSACTIONS } from '../../services/graphql/queries';
+import { GET_MY_TRANSACTIONS, GET_PRODUCTS } from '../../services/graphql/queries';
 import ProductCard from '../../components/ProductCard';
 import PaymentModal from '../../components/PaymentModal';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
@@ -22,9 +21,13 @@ const ProductsScreen = () => {
   const [currentProduct, setCurrentProduct] = useState(null);
   const [isRecurring, setIsRecurring] = useState(false);
 
-  // Refetch transactions query
+  const { data: productsData, loading: productsLoading, error: productsError } = useQuery(GET_PRODUCTS, {
+    skip: !user,
+    fetchPolicy: 'network-only',
+  });
+
   const { refetch: refetchTransactions } = useQuery(GET_MY_TRANSACTIONS, {
-    skip: true, // Don't fetch on mount
+    skip: true,
   });
 
   // Create payment session mutation
@@ -58,17 +61,7 @@ const ProductsScreen = () => {
 
     try {
       await createPaymentSession({
-        variables: {
-          productId: product.id,
-          product: {
-            id: product.id,
-            name: product.name,
-            type: product.type,
-            price: product.price,
-            monthlyEntries: product.monthlyEntries || null,
-            totalEntries: product.totalEntries || null,
-          },
-        },
+        variables: { productId: product.id },
       });
     } catch (error) {
       console.error('[Products] Purchase failed:', error);
@@ -135,16 +128,23 @@ const ProductsScreen = () => {
           <Text style={styles.subtitle}>בחרו את המנוי או הכרטיסייה המתאימה לכם</Text>
         </View>
 
-        {/* Products List */}
         <View style={styles.productsList}>
-          {PRODUCTS.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              onPurchase={() => handlePurchase(product)}
-              isPurchasing={purchasingProductId === product.id}
-            />
-          ))}
+          {!user ? (
+            <Text style={styles.errorText}>יש להתחבר כדי לצפות במוצרים ולבצע רכישה.</Text>
+          ) : productsLoading ? (
+            <ActivityIndicator size="large" color="#FFD1E3" style={{ marginTop: 24 }} />
+          ) : productsError ? (
+            <Text style={styles.errorText}>לא ניתן לטעון מוצרים. נסו שוב מאוחר יותר.</Text>
+          ) : (
+            (productsData?.products || []).map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                onPurchase={() => handlePurchase(product)}
+                isPurchasing={purchasingProductId === product.id}
+              />
+            ))
+          )}
         </View>
       </ScrollView>
 
@@ -213,6 +213,13 @@ const styles = StyleSheet.create({
   productsList: {
     paddingHorizontal: 20,
     paddingTop: 10,
+  },
+  errorText: {
+    textAlign: 'center',
+    color: '#FFD1E3',
+    marginTop: 24,
+    paddingHorizontal: 16,
+    fontSize: 15,
   },
 });
 

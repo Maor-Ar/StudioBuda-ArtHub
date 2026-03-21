@@ -231,12 +231,94 @@ export const CANCEL_SUBSCRIPTION = gql`
 
 // Payment Mutations
 export const CREATE_PAYMENT_SESSION = gql`
-  mutation CreatePaymentSession($productId: String!, $product: ProductInput!) {
-    createPaymentSession(productId: $productId, product: $product) {
+  mutation CreatePaymentSession($productId: String!) {
+    createPaymentSession(productId: $productId) {
       sessionId
       sessionUrl
       uniqueId
       isRecurring
+    }
+  }
+`;
+
+export const CREATE_PRODUCT = gql`
+  mutation CreateProduct($input: CreateProductInput!) {
+    createProduct(input: $input) {
+      id
+      title
+      subtitle
+      type
+      price
+      monthlyEntries
+      totalEntries
+      validityMonths
+      termsHtml
+      sortOrder
+      isActive
+      isPurchasable
+    }
+  }
+`;
+
+export const UPDATE_PRODUCT = gql`
+  mutation UpdateProduct($id: ID!, $input: UpdateProductInput!) {
+    updateProduct(id: $id, input: $input) {
+      id
+      title
+      subtitle
+      type
+      price
+      monthlyEntries
+      totalEntries
+      validityMonths
+      termsHtml
+      sortOrder
+      isActive
+      isPurchasable
+    }
+  }
+`;
+
+export const DELETE_PRODUCT = gql`
+  mutation DeleteProduct($id: ID!) {
+    deleteProduct(id: $id) {
+      id
+      isActive
+    }
+  }
+`;
+
+export const ADMIN_UPDATE_USER = gql`
+  mutation AdminUpdateUser($id: ID!, $input: AdminUpdateUserInput!) {
+    adminUpdateUser(id: $id, input: $input) {
+      id
+      firstName
+      lastName
+      email
+      phone
+      role
+      userType
+      hasPurchasedTrial
+      isActive
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const ADMIN_CREATE_TRANSACTION_FOR_USER = gql`
+  mutation AdminCreateTransactionForUser($userId: ID!, $input: AdminCreateTransactionInput!) {
+    adminCreateTransactionForUser(userId: $userId, input: $input) {
+      id
+      userId
+      transactionType
+      amount
+      monthlyEntries
+      totalEntries
+      entriesRemaining
+      isActive
+      purchaseDate
+      invoiceId
     }
   }
 `;

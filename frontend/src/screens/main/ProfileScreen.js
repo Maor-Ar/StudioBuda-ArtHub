@@ -3,11 +3,10 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
-import { GET_ME, GET_MY_REGISTRATIONS, GET_MY_TRANSACTIONS } from '../../services/graphql/queries';
+import { GET_ME, GET_MY_REGISTRATIONS, GET_MY_TRANSACTIONS, GET_PRODUCTS } from '../../services/graphql/queries';
 import { CANCEL_SUBSCRIPTION } from '../../services/graphql/mutations';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { getGraphQLErrorMessage } from '../../utils/errorMessages';
-import { PRODUCTS } from '../../utils/constants';
 import TextModal from '../../components/TextModal';
 
 // Terms of Service and Cancellation Policy content
@@ -117,6 +116,12 @@ const ProfileScreen = () => {
     },
   });
 
+  const { data: catalogData } = useQuery(GET_PRODUCTS, {
+    skip: !user,
+    fetchPolicy: 'cache-first',
+  });
+  const productCatalog = catalogData?.products || [];
+
   // Cancel subscription mutation
   const [cancelSubscription] = useMutation(CANCEL_SUBSCRIPTION, {
     onCompleted: async (data) => {
@@ -172,13 +177,14 @@ const ProfileScreen = () => {
 
   // Get product name from transaction
   const getProductName = (transaction) => {
-    // Try to find matching product
-    const product = PRODUCTS.find(p => 
-      p.type === transaction.transactionType &&
-      (p.monthlyEntries === transaction.monthlyEntries || p.totalEntries === transaction.totalEntries)
+    const product = productCatalog.find(
+      (p) =>
+        p.type === transaction.transactionType &&
+        (p.monthlyEntries === transaction.monthlyEntries ||
+          p.totalEntries === transaction.totalEntries)
     );
-    
-    if (product) return product.name;
+
+    if (product) return product.title;
     
     // Fallback to generic names
     switch (transaction.transactionType) {

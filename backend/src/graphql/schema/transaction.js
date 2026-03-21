@@ -24,6 +24,8 @@ export const transactionTypeDefs = gql`
     lastPaymentDate: String
     # Computed field for subscription access end date
     accessEndsDate: String
+    paymentSource: String
+    adminNote: String
   }
 
   input CreateTransactionInput {
@@ -40,6 +42,13 @@ export const transactionTypeDefs = gql`
     lastRenewalDate: String
     entriesUsedThisMonth: Int
     entriesRemaining: Int
+  }
+
+  input AdminCreateTransactionInput {
+    productId: ID!
+    amount: Float
+    purchaseDate: String
+    adminNote: String
   }
 `;
 

@@ -24,6 +24,8 @@ const TabNavigator = () => {
           // CRITICAL: Make the scene container transparent so AuthenticatedLayout shows through
           sceneContainerStyle: {
             backgroundColor: 'transparent',
+            flex: 1,
+            minHeight: 0,
             paddingBottom: 160, // Space for SelectionBar (154px from Figma)
           },
         }}

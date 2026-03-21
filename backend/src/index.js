@@ -1,7 +1,8 @@
 // Critical: Start listening IMMEDIATELY to pass Cloud Run health check
 // Initialize everything else asynchronously after the port is open
 
-const PORT = parseInt(process.env.PORT || '8080', 10);
+// Align with config/environment.js (4000). Cloud Run always sets PORT.
+const PORT = parseInt(process.env.PORT || '4000', 10);
 
 console.log('[INIT] Starting server...');
 console.log(`[INIT] PORT=${PORT}`);
@@ -9,6 +10,7 @@ console.log(`[INIT] NODE_ENV=${process.env.NODE_ENV || 'undefined'}`);
 
 // Import modules - wrap in try-catch to handle import errors
 let app, setupGraphQL, config, logger, closeRedisConnection;
+let modulesLoadOk = false;
 
 try {
   // Import all modules synchronously first
@@ -26,12 +28,21 @@ try {
   closeRedisConnection = redisModule.closeRedisConnection;
   
   console.log('[INIT] Modules loaded successfully');
+  modulesLoadOk = true;
 } catch (importError) {
   console.error('[INIT] ❌ Error importing modules:', importError.message);
   console.error('[INIT] Stack:', importError.stack);
-  // Create minimal Express app as fallback
+  // Create minimal Express app as fallback (still attach CORS so Expo web preflight does not fail opaquely)
   const express = (await import('express')).default;
+  const cors = (await import('cors')).default;
   app = express();
+  app.use(
+    cors({
+      origin: true,
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    })
+  );
   app.get('/health', (req, res) => {
     res.status(200).json({ 
       status: 'error', 

@@ -1,5 +1,6 @@
 import paymentService from '../../services/paymentService.js';
 import transactionService from '../../services/transactionService.js';
+import productService from '../../services/productService.js';
 import { requireAuthenticated } from '../middleware/permissions.js';
 import { ValidationError } from '../../utils/errors.js';
 import logger from '../../utils/logger.js';
@@ -55,37 +56,42 @@ export const paymentResolvers = {
   },
 
   Mutation: {
-    createPaymentSession: async (_, { productId, product }, context) => {
+    createPaymentSession: async (_, { productId, product: productInput }, context) => {
       await requireAuthenticated(context);
-      
+
       const userId = context.user.id;
-      
-      logger.info('Creating payment session via GraphQL', {
-        userId,
-        productId,
-        productType: product.type,
-        amount: product.price,
-      });
 
-      // Validate product data
-      if (!product.type || !product.price || !product.name) {
-        throw new ValidationError('Product must have type, price, and name');
-      }
+      const serverProduct = await productService.getActivePurchasableForCheckout(productId);
 
-      if (product.price <= 0) {
+      if (serverProduct.price <= 0) {
         throw new ValidationError('Product price must be greater than 0');
       }
 
-      // Create the checkout session
+      if (productInput) {
+        if (productInput.price != null && Number(productInput.price) !== Number(serverProduct.price)) {
+          throw new ValidationError('Product price does not match catalog', 'product');
+        }
+        if (productInput.type && productInput.type !== serverProduct.type) {
+          throw new ValidationError('Product type does not match catalog', 'product');
+        }
+      }
+
+      logger.info('Creating payment session via GraphQL', {
+        userId,
+        productId,
+        productType: serverProduct.type,
+        amount: serverProduct.price,
+      });
+
       const session = await paymentService.createCheckoutSession(
         userId,
         productId,
         {
-          type: product.type,
-          price: product.price,
-          name: product.name,
-          monthlyEntries: product.monthlyEntries,
-          totalEntries: product.totalEntries,
+          type: serverProduct.type,
+          price: serverProduct.price,
+          name: serverProduct.title,
+          monthlyEntries: serverProduct.monthlyEntries,
+          totalEntries: serverProduct.totalEntries,
         },
         {
           customerEmail: context.user.email,

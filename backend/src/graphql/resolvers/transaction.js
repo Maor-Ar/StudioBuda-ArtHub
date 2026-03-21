@@ -89,6 +89,8 @@ export const transactionResolvers = {
       }
       return new Date(transaction.lastPaymentDate).toISOString();
     },
+    paymentSource: (transaction) => transaction.paymentSource ?? null,
+    adminNote: (transaction) => transaction.adminNote ?? null,
     accessEndsDate: (transaction) => {
       // Only applicable to subscriptions
       if (transaction.transactionType !== 'subscription') {

@@ -24,6 +24,13 @@ const SECTIONS = [
     icon: '👥',
     screen: 'AdminUsers',
   },
+  {
+    key: 'products',
+    title: 'ניהול מוצרים',
+    description: 'מחירים, תנאים ורכישות באתר',
+    icon: '🛒',
+    screen: 'AdminProducts',
+  },
 ];
 
 const AdminHubScreen = ({ navigation }) => {
@@ -57,7 +64,6 @@ const AdminHubScreen = ({ navigation }) => {
                 <Text style={styles.cardDescription}>{section.description}</Text>
               </View>
             </View>
-            <Text style={styles.cardArrow}>←</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -68,6 +74,7 @@ const AdminHubScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    minHeight: 0,
     backgroundColor: 'transparent',
   },
   header: {
@@ -84,6 +91,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+    minHeight: 0,
   },
   scrollContent: {
     padding: 20,

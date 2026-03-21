@@ -34,6 +34,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    minHeight: 0,
     position: 'relative',
     backgroundColor: 'transparent',
   },
@@ -58,6 +59,7 @@ const styles = StyleSheet.create({
   },
   tabContent: {
     flex: 1,
+    minHeight: 0,
     zIndex: 1,
     elevation: 1,
     backgroundColor: 'transparent',

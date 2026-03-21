@@ -28,6 +28,8 @@ class TransactionService {
       entriesUsedThisMonth,
       lastRenewalDate,
       entriesRemaining,
+      paymentSource,
+      adminNote,
     } = transactionData;
 
     // Validate transaction type
@@ -78,6 +80,8 @@ class TransactionService {
       cardLast4: cardLast4 || null,
       cardBrand: cardBrand || null,
       lastPaymentDate: lastPaymentDate || now,
+      ...(paymentSource != null && { paymentSource }),
+      ...(adminNote != null && { adminNote }),
     };
 
     // Add type-specific fields

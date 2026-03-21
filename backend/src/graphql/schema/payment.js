@@ -51,7 +51,8 @@ export const paymentTypeDefs = gql`
     """
     Create a payment session for iframe checkout.
     Returns session URL to load in iframe.
+    product is optional; when omitted, server loads authoritative fields from Firestore by productId.
     """
-    createPaymentSession(productId: String!, product: ProductInput!): PaymentSession!
+    createPaymentSession(productId: String!, product: ProductInput): PaymentSession!
   }
 `;
