@@ -4,11 +4,13 @@
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "build:icons": "node scripts/generate-app-icon.js",
+    "build:pwa-icons": "node scripts/generate-pwa-icons.js",
     "start": "expo start",
     "start:tunnel": "expo start --tunnel",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "web:build": "expo export --platform web",
     "build:apk": "eas build --platform android --profile preview"
   },
   "dependencies": {

@@ -33,7 +33,8 @@
     },
     "web": {
       "favicon": "./assets/images/favicon.png",
-      "backgroundColor": "#5D3587"
+      "backgroundColor": "#5D3587",
+      "themeColor": "#5D3587"
     },
     "plugins": ["expo-apple-authentication", "expo-web-browser"],
     "extra": {

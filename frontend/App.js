@@ -13,6 +13,7 @@ import client from './src/config/apollo';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { toastConfig } from './src/utils/toast';
+import { attachServiceWorkerUpdateFlow } from './src/utils/pwaUpdate';
 
 // Custom theme with dark purple background to prevent white flash
 const AppTheme = {
@@ -30,10 +31,61 @@ export default function App() {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       document.documentElement.style.backgroundColor = '#5D3587';
       document.body.style.backgroundColor = '#5D3587';
-      const meta = document.createElement('meta');
-      meta.name = 'theme-color';
-      meta.content = '#5D3587';
-      document.head.appendChild(meta);
+
+      const ensureMeta = (name, content) => {
+        let meta = document.querySelector(`meta[name="${name}"]`);
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.name = name;
+          document.head.appendChild(meta);
+        }
+        meta.content = content;
+      };
+
+      const ensureLink = (rel, href) => {
+        let link = document.querySelector(`link[rel="${rel}"]`);
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = rel;
+          document.head.appendChild(link);
+        }
+        link.href = href;
+      };
+
+      ensureMeta('theme-color', '#5D3587');
+      ensureMeta('apple-mobile-web-app-capable', 'yes');
+      ensureMeta('apple-mobile-web-app-status-bar-style', 'default');
+      ensureMeta('apple-mobile-web-app-title', 'StudioBuda');
+      ensureMeta('mobile-web-app-capable', 'yes');
+      ensureLink('manifest', '/manifest.json');
+      ensureLink('apple-touch-icon', '/icons/apple-touch-icon.png');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (
+      Platform.OS === 'web' &&
+      typeof window !== 'undefined' &&
+      'serviceWorker' in navigator
+    ) {
+      const registerServiceWorker = async () => {
+        try {
+          const registration = await navigator.serviceWorker.register('/sw.js', {
+            scope: '/',
+          });
+          console.log('[PWA] Service worker registered');
+          attachServiceWorkerUpdateFlow(registration);
+        } catch (error) {
+          console.warn('[PWA] Service worker registration failed:', error);
+        }
+      };
+
+      // Register after page load for a safer startup path.
+      if (document.readyState === 'complete') {
+        registerServiceWorker();
+      } else {
+        window.addEventListener('load', registerServiceWorker, { once: true });
+      }
     }
   }, []);
 
