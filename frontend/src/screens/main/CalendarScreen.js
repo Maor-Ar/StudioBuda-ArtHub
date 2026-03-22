@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from '@apollo/client';
@@ -37,6 +37,19 @@ const getWeekDates = (date) => {
   return weekDates;
 };
 
+const getLocalDateKey = (dateValue) => {
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseLocalDateKey = (dateKey) => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
 const CalendarScreen = () => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -45,6 +58,7 @@ const CalendarScreen = () => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [removingRegistrationId, setRemovingRegistrationId] = useState(null);
+  const didAutoSwitchInitialDateRef = useRef(false);
 
   // Initialize with current date
   const today = new Date();
@@ -453,6 +467,50 @@ const CalendarScreen = () => {
   };
 
   const weekDates = useMemo(() => getWeekDates(selectedDateObj), [selectedDateObj]);
+
+  useEffect(() => {
+    if (selectedTab !== 'יומן' || loading || !data?.events || didAutoSwitchInitialDateRef.current) {
+      return;
+    }
+
+    const todayDate = new Date();
+    const todayStart = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate());
+    const selectedStart = new Date(
+      selectedDateObj.getFullYear(),
+      selectedDateObj.getMonth(),
+      selectedDateObj.getDate()
+    );
+
+    // Apply this auto-selection behavior only for the initial "today" date.
+    if (selectedStart.getTime() !== todayStart.getTime()) {
+      return;
+    }
+
+    if (eventsForSelectedDate.length > 0) {
+      didAutoSwitchInitialDateRef.current = true;
+      return;
+    }
+
+    const weekDateKeys = weekDates.map(getLocalDateKey);
+    const weekDateSet = new Set(weekDateKeys);
+    const todayKey = getLocalDateKey(todayStart);
+    const futureKeysInWeek = weekDateKeys.filter((key) => key > todayKey);
+
+    const eventDateKeys = new Set(
+      data.events
+        .map((event) => event.occurrenceDate || event.date)
+        .filter(Boolean)
+        .map(getLocalDateKey)
+        .filter((key) => weekDateSet.has(key))
+    );
+
+    const nearestFutureDateKey = futureKeysInWeek.find((key) => eventDateKeys.has(key));
+    if (nearestFutureDateKey) {
+      setSelectedDateObj(parseLocalDateKey(nearestFutureDateKey));
+    }
+
+    didAutoSwitchInitialDateRef.current = true;
+  }, [selectedTab, loading, data, selectedDateObj, eventsForSelectedDate, weekDates]);
 
   // Get month name based on selected date
   const displayMonth = useMemo(() => formatMonthYear(selectedDateObj), [selectedDateObj]);

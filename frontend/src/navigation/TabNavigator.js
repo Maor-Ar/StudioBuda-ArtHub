@@ -2,7 +2,6 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import CalendarScreen from '../screens/main/CalendarScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
-import ProductsScreen from '../screens/main/ProductsScreen';
 import AdminNavigator from './AdminNavigator';
 import AuthenticatedLayout from '../components/AuthenticatedLayout';
 import SelectionBar from '../components/SelectionBar';
@@ -18,6 +17,7 @@ const TabNavigator = () => {
   return (
     <AuthenticatedLayout>
       <Tab.Navigator
+        initialRouteName="Calendar"
         tabBar={(props) => <SelectionBar {...props} />}
         screenOptions={{
           headerShown: false,
@@ -30,7 +30,6 @@ const TabNavigator = () => {
           },
         }}
       >
-        <Tab.Screen name="Products" component={ProductsScreen} options={{ title: 'רכישות' }} />
         <Tab.Screen name="Calendar" component={CalendarScreen} options={{ title: 'יומן' }} />
         <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'פרופיל' }} />
         {isManager && (

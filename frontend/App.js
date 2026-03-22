@@ -10,9 +10,12 @@ import {
 } from '@expo-google-fonts/miriam-libre';
 import Toast from 'react-native-toast-message';
 import client from './src/config/apollo';
+import { setApolloAuthFailureHandler } from './src/config/apollo';
 import { AuthProvider } from './src/context/AuthContext';
+import { useAuth } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { toastConfig } from './src/utils/toast';
+import { showErrorToast } from './src/utils/toast';
 import { attachServiceWorkerUpdateFlow } from './src/utils/pwaUpdate';
 
 // Custom theme with dark purple background to prevent white flash
@@ -22,6 +25,24 @@ const AppTheme = {
     ...DefaultTheme.colors,
     background: 'transparent', 
   },
+};
+
+const ApolloAuthBridge = () => {
+  const { isAuthenticated, logout } = useAuth();
+
+  useEffect(() => {
+    setApolloAuthFailureHandler(async () => {
+      if (!isAuthenticated) return;
+      await logout();
+      showErrorToast('החיבור פג תוקף, יש להתחבר מחדש');
+    });
+
+    return () => {
+      setApolloAuthFailureHandler(null);
+    };
+  }, [isAuthenticated, logout]);
+
+  return null;
 };
 
 export default function App() {
@@ -101,6 +122,7 @@ export default function App() {
     <SafeAreaProvider style={{ backgroundColor: '#5D3587' }}>
       <ApolloProvider client={client}>
         <AuthProvider>
+          <ApolloAuthBridge />
           <NavigationContainer theme={AppTheme}>
             <AppNavigator />
             <StatusBar style="light" />

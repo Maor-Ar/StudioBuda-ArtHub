@@ -9,9 +9,7 @@ import { OAUTH_PROVIDERS } from '../../utils/constants';
 import { validateEmail } from '../../utils/validation';
 import { getGraphQLErrorMessage, getOAuthErrorMessage, SUCCESS_MESSAGES } from '../../utils/errorMessages';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
-import AppleIcon from '../../assets/icons/Apple.svg';
 import GoogleIcon from '../../assets/icons/Google.svg';
-import FacebookIcon from '../../assets/icons/Facebook.svg';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -223,16 +221,6 @@ const LoginScreen = ({ navigation }) => {
 
       {/* OAuth Buttons */}
       <View style={styles.oauthContainer}>
-        {/* Apple Button */}
-        <TouchableOpacity
-          style={styles.appleButton}
-          onPress={() => handleOAuth(OAUTH_PROVIDERS.APPLE)}
-          disabled={oauthLoading || loading}
-        >
-          <AppleIcon width={20} height={20} style={styles.icon} />
-          <Text style={styles.appleButtonText}>המשך עם אפל</Text>
-        </TouchableOpacity>
-
         {/* Google Button */}
         <TouchableOpacity
           style={styles.googleButton}
@@ -367,27 +355,6 @@ const styles = StyleSheet.create({
   },
   oauthContainer: {
     width: '100%',
-  },
-  appleButton: {
-    width: '100%',
-    height: 44,
-    backgroundColor: '#000000',
-    borderRadius: 20,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 15,
-    shadowColor: '#4E0D66',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  appleButtonText: {
-    color: '#FFD1E3',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
   },
   googleButton: {
     width: '100%',

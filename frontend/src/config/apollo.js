@@ -1,5 +1,6 @@
-import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
+import { ApolloClient, InMemoryCache, createHttpLink, from } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
+import { onError } from '@apollo/client/link/error';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { GRAPHQL_ENDPOINT, STORAGE_KEYS } from '../utils/constants';
@@ -7,6 +8,8 @@ import { GRAPHQL_ENDPOINT, STORAGE_KEYS } from '../utils/constants';
 // Try static import for web
 let firebaseAppModuleStatic = null;
 let firebaseAuthModuleStatic = null;
+let authFailureHandler = null;
+let isAuthFailureHandling = false;
 if (Platform.OS === 'web') {
   try {
     firebaseAppModuleStatic = require('firebase/app');
@@ -15,6 +18,28 @@ if (Platform.OS === 'web') {
     // Ignore - will use dynamic import
   }
 }
+
+export const setApolloAuthFailureHandler = (handler) => {
+  authFailureHandler = handler;
+};
+
+const invokeAuthFailureHandler = async () => {
+  if (!authFailureHandler || isAuthFailureHandling) {
+    return;
+  }
+
+  isAuthFailureHandling = true;
+  try {
+    await authFailureHandler();
+  } catch (error) {
+    console.error('[APOLLO] ❌ Auth failure handler threw:', error);
+  } finally {
+    // Small debounce window to avoid repeated logout calls from concurrent queries.
+    setTimeout(() => {
+      isAuthFailureHandling = false;
+    }, 1000);
+  }
+};
 
 // Create HTTP link
 console.log('[APOLLO] 🔗 Creating HTTP link with endpoint:', GRAPHQL_ENDPOINT);
@@ -150,9 +175,32 @@ const authLink = setContext(async (_, { headers }) => {
   }
 });
 
+const errorLink = onError(({ graphQLErrors, networkError }) => {
+  const hasAuthGraphQLError = Array.isArray(graphQLErrors) && graphQLErrors.some((err) => {
+    const message = (err?.message || '').toLowerCase();
+    const code = (err?.extensions?.code || '').toUpperCase();
+    return (
+      message.includes('authentication required') ||
+      message.includes('invalid or expired token') ||
+      message.includes('authentication failed') ||
+      message.includes('insufficient permissions') ||
+      code === 'UNAUTHENTICATED' ||
+      code === 'AUTHENTICATION_ERROR'
+    );
+  });
+
+  const networkStatusCode = networkError?.statusCode || networkError?.status;
+  const has401NetworkError = networkStatusCode === 401;
+
+  if (hasAuthGraphQLError || has401NetworkError) {
+    console.warn('[APOLLO] ⚠️ Authentication error detected, triggering logout');
+    invokeAuthFailureHandler();
+  }
+});
+
 // Create Apollo Client
 const client = new ApolloClient({
-  link: authLink.concat(httpLink),
+  link: from([errorLink, authLink, httpLink]),
   cache: new InMemoryCache({
     typePolicies: {
       Query: {
