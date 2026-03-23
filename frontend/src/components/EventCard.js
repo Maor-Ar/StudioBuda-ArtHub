@@ -92,7 +92,7 @@ const EventCard = ({ event, onRegister, onCancel, isRegistered, isFull = false, 
           disabled={disabled}
         >
           <Text style={styles.registerButtonText}>
-            {disabled ? 'מרשם...' : 'תרשמו אותי'}
+            {disabled ? 'נרשם...' : 'תרשמו אותי'}
           </Text>
         </TouchableOpacity>
       )}

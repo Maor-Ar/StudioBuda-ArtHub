@@ -145,7 +145,7 @@ const EventDetailModal = ({
                 disabled={disabled}
               >
                 <Text style={styles.registerButtonText}>
-                  {disabled ? 'מרשם...' : 'תרשמו אותי'}
+                  {disabled ? 'נרשם...' : 'תרשמו אותי'}
                 </Text>
               </TouchableOpacity>
             )}

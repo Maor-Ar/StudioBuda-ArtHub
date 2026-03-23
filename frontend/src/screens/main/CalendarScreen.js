@@ -55,6 +55,10 @@ const CalendarScreen = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === USER_ROLES.ADMIN;
   const [selectedTab, setSelectedTab] = useState('יומן'); // 'יומן' or 'הרישומים שלי'
+  const [tabLabelWidths, setTabLabelWidths] = useState({
+    calendar: 0,
+    myRegistrations: 0,
+  });
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [removingRegistrationId, setRemovingRegistrationId] = useState(null);
@@ -656,35 +660,60 @@ const CalendarScreen = () => {
             style={styles.tab}
             onPress={() => setSelectedTab('הרישומים שלי')}
           >
-            <Text style={[
-              styles.tabText,
-              selectedTab === 'הרישומים שלי' && styles.tabTextActive
-            ]}>
-              הרישומים שלי
-            </Text>
+            <View style={styles.tabContentWrap}>
+              <Text
+                onLayout={(e) => {
+                  const w = e?.nativeEvent?.layout?.width ?? 0;
+                  setTabLabelWidths((prev) => ({ ...prev, myRegistrations: w }));
+                }}
+                style={[
+                  styles.tabText,
+                  selectedTab === 'הרישומים שלי' && styles.tabTextActive,
+                ]}
+              >
+                הרישומים שלי
+              </Text>
+              {selectedTab === 'הרישומים שלי' && tabLabelWidths.myRegistrations > 0 && (
+                <Image
+                  source={require('../../assets/Underline-stroke.png')}
+                  style={[
+                    styles.tabUnderline,
+                    { width: Math.max(151, tabLabelWidths.myRegistrations + 24) },
+                  ]}
+                  resizeMode="contain"
+                />
+              )}
+            </View>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.tab}
             onPress={() => setSelectedTab('יומן')}
           >
-            <Text style={[
-              styles.tabText,
-              selectedTab === 'יומן' && styles.tabTextActive
-            ]}>
-              יומן
-            </Text>
+            <View style={styles.tabContentWrap}>
+              <Text
+                onLayout={(e) => {
+                  const w = e?.nativeEvent?.layout?.width ?? 0;
+                  setTabLabelWidths((prev) => ({ ...prev, calendar: w }));
+                }}
+                style={[
+                  styles.tabText,
+                  selectedTab === 'יומן' && styles.tabTextActive,
+                ]}
+              >
+                יומן
+              </Text>
+              {selectedTab === 'יומן' && tabLabelWidths.calendar > 0 && (
+                <Image
+                  source={require('../../assets/Underline-stroke.png')}
+                  style={[
+                    styles.tabUnderline,
+                    { width: Math.max(151, tabLabelWidths.calendar + 24) },
+                  ]}
+                  resizeMode="contain"
+                />
+              )}
+            </View>
           </TouchableOpacity>
-          {/* Underline - positioned based on selected tab */}
-          <View style={[
-            styles.underlineContainer,
-            selectedTab === 'יומן' ? styles.underlineRight : styles.underlineLeft
-          ]}>
-            <Image 
-              source={require('../../assets/Underline-stroke.png')} 
-              style={styles.tabUnderline}
-              resizeMode="contain"
-            />
-          </View>
         </View>
 
         {/* Month Navigation - RTL: Right arrow = previous week, Left arrow = next week */}
@@ -906,6 +935,12 @@ const styles = StyleSheet.create({
   tab: {
     marginHorizontal: 20,
     position: 'relative',
+    alignItems: 'center',
+  },
+  tabContentWrap: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabText: {
     fontSize: 20,
@@ -917,24 +952,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#4E0D66', // Dark purple when active
   },
-  underlineContainer: {
-    position: 'absolute',
-    bottom: 0,
-    width: SCREEN_WIDTH * 0.5, // Half of view width
-    height: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  underlineLeft: {
-    left: 0, // Left half
-  },
-  underlineRight: {
-    right: 0, // Right half
-  },
   tabUnderline: {
-    width: '100%',
     height: 6,
-    transform: [{ translateY: -10 }],
+    marginTop: 0, // Put underline directly under the text (slightly lower)
   },
   monthNavigation: {
     flexDirection: 'row',

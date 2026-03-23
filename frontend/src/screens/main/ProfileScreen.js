@@ -1,12 +1,9 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, Alert, Linking } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Linking, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery, useMutation } from '@apollo/client';
+import { useQuery } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
 import { GET_ME, GET_MY_REGISTRATIONS, GET_MY_TRANSACTIONS, GET_PRODUCTS } from '../../services/graphql/queries';
-import { CANCEL_SUBSCRIPTION } from '../../services/graphql/mutations';
-import { showSuccessToast, showErrorToast } from '../../utils/toast';
-import { getGraphQLErrorMessage } from '../../utils/errorMessages';
 import TextModal from '../../components/TextModal';
 
 // Terms of Service and Cancellation Policy content
@@ -91,11 +88,6 @@ const ProfileScreen = () => {
   const insets = useSafeAreaInsets();
   const { user, transactions: contextTransactions, logout, updateTransactions } = useAuth();
   
-  // Cancel subscription modal state
-  const [cancelModalVisible, setCancelModalVisible] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState(null);
-  const [cancellingId, setCancellingId] = useState(null);
-  
   // Terms and Privacy modals state
   const [termsModalVisible, setTermsModalVisible] = useState(false);
   const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
@@ -121,29 +113,6 @@ const ProfileScreen = () => {
     fetchPolicy: 'cache-first',
   });
   const productCatalog = catalogData?.products || [];
-
-  // Cancel subscription mutation
-  const [cancelSubscription] = useMutation(CANCEL_SUBSCRIPTION, {
-    onCompleted: async (data) => {
-      console.log('[Profile] Subscription cancelled:', data);
-      setCancellingId(null);
-      setCancelModalVisible(false);
-      setSelectedTransaction(null);
-      
-      // Refetch transactions
-      const { data: refreshedData } = await refetchTransactions();
-      if (refreshedData?.myTransactions) {
-        updateTransactions(refreshedData.myTransactions);
-      }
-      
-      showSuccessToast('המנוי בוטל בהצלחה');
-    },
-    onError: (error) => {
-      console.error('[Profile] Cancel subscription error:', error);
-      setCancellingId(null);
-      showErrorToast(getGraphQLErrorMessage(error));
-    },
-  });
 
   const currentUser = userData?.me || user;
   const registrations = registrationsData?.myRegistrations || [];
@@ -177,12 +146,30 @@ const ProfileScreen = () => {
 
   // Get product name from transaction
   const getProductName = (transaction) => {
-    const product = productCatalog.find(
-      (p) =>
-        p.type === transaction.transactionType &&
-        (p.monthlyEntries === transaction.monthlyEntries ||
-          p.totalEntries === transaction.totalEntries)
-    );
+    const txType = transaction.transactionType;
+
+    const product = productCatalog.find((p) => {
+      if (p.type !== txType) return false;
+
+      // IMPORTANT:
+      // The previous logic did (monthly match OR total match). When one side is
+      // `undefined`, `undefined === undefined` can become true and `.find()`
+      // returns the wrong product.
+      if (txType === 'subscription') {
+        const pMonthly = p.monthlyEntries;
+        const txMonthly = transaction.monthlyEntries;
+        return pMonthly != null && txMonthly != null && Number(pMonthly) === Number(txMonthly);
+      }
+
+      if (txType === 'punch_card') {
+        const pTotal = p.totalEntries;
+        const txTotal = transaction.totalEntries;
+        return pTotal != null && txTotal != null && Number(pTotal) === Number(txTotal);
+      }
+
+      // trial_lesson / unknown: no matching by entries; fallback below will be used
+      return false;
+    });
 
     if (product) return product.title;
     
@@ -210,25 +197,27 @@ const ProfileScreen = () => {
     });
   };
 
-  // Handle cancel subscription button press
-  const handleCancelPress = useCallback((transaction) => {
-    setSelectedTransaction(transaction);
-    setCancelModalVisible(true);
-  }, []);
+  const openStudioAddress = async () => {
+    const address = 'תל חי 39 כפר סבא';
+    const encoded = encodeURIComponent(address);
 
-  // Confirm cancel subscription
-  const handleConfirmCancel = useCallback(async () => {
-    if (!selectedTransaction) return;
-    
-    setCancellingId(selectedTransaction.id);
+    const appUrl =
+      Platform.OS === 'ios'
+        ? `maps://?q=${encoded}`
+        : Platform.OS === 'android'
+        ? `geo:0,0?q=${encoded}`
+        : `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+
+    const webFallback = `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+
     try {
-      await cancelSubscription({
-        variables: { id: selectedTransaction.id },
-      });
+      const canOpenApp = await Linking.canOpenURL(appUrl);
+      await Linking.openURL(canOpenApp ? appUrl : webFallback);
     } catch (error) {
-      console.error('[Profile] Cancel error:', error);
+      // Final fallback to browser map search if deep link fails.
+      await Linking.openURL(webFallback);
     }
-  }, [selectedTransaction, cancelSubscription]);
+  };
 
   if (userLoading) {
     return (
@@ -315,18 +304,6 @@ const ProfileScreen = () => {
                           </Text>
                         )}
                         
-                        {/* Cancel subscription button */}
-                        <TouchableOpacity 
-                          style={styles.cancelButton}
-                          onPress={() => handleCancelPress(transaction)}
-                          disabled={cancellingId === transaction.id}
-                        >
-                          {cancellingId === transaction.id ? (
-                            <ActivityIndicator size="small" color="#FFF" />
-                          ) : (
-                            <Text style={styles.cancelButtonText}>ביטול מנוי</Text>
-                          )}
-                        </TouchableOpacity>
                       </>
                     )}
                     
@@ -416,10 +393,13 @@ const ProfileScreen = () => {
             <Text style={styles.contactValue}>055-664-6033 </Text>
             <Text style={styles.contactLabel}>טלפון לבירורים:</Text>
           </TouchableOpacity>
-          <View style={styles.contactItem}>
+          <TouchableOpacity
+            style={styles.contactItem}
+            onPress={openStudioAddress}
+          >
             <Text style={styles.contactValue}>תל חי 39 כפר סבא, קומה 1  </Text>
             <Text style={styles.contactLabel}>כתובת הסטודיו: </Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Logout Button */}
@@ -427,57 +407,6 @@ const ProfileScreen = () => {
           <Text style={styles.buttonText}>התנתק</Text>
         </TouchableOpacity>
       </ScrollView>
-
-      {/* Cancel Subscription Confirmation Modal */}
-      <Modal
-        visible={cancelModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setCancelModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>⚠️ ביטול מנוי</Text>
-            
-            <Text style={styles.modalText}>
-              האם את/ה בטוח/ה שברצונך לבטל את המנוי?
-            </Text>
-            
-            {selectedTransaction?.accessEndsDate && (
-              <Text style={styles.modalWarning}>
-                לאחר הביטול, תוכל/י להמשיך להשתמש במנוי עד לתאריך:{'\n'}
-                <Text style={styles.modalDate}>{formatDate(selectedTransaction.accessEndsDate)}</Text>
-                {'\n\n'}
-                לאחר תאריך זה לא תוכל/י להירשם לשיעורים נוספים.
-              </Text>
-            )}
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity 
-                style={styles.modalCancelButton}
-                onPress={() => {
-                  setCancelModalVisible(false);
-                  setSelectedTransaction(null);
-                }}
-              >
-                <Text style={styles.modalCancelButtonText}>ביטול</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.modalConfirmButton}
-                onPress={handleConfirmCancel}
-                disabled={cancellingId !== null}
-              >
-                {cancellingId !== null ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <Text style={styles.modalConfirmButtonText}>אישור הביטול</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Terms of Service Modal */}
       <TextModal
@@ -765,7 +694,6 @@ const styles = StyleSheet.create({
   },
   contactItem: {
     flexDirection: 'row',
-    direction: 'rtl',
     justifyContent: 'flex-end',
     alignItems: 'center',
     paddingVertical: 8,
@@ -776,7 +704,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#5D3587',
     fontWeight: '500',
-    marginEnd: 10,
+    marginLeft: 12,
     textAlign: 'right',
   },
   contactValue: {
