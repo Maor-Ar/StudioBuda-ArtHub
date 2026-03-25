@@ -1,4 +1,4 @@
-const CACHE_NAME = 'studiobuda-pwa-v2';
+const CACHE_NAME = 'studiobuda-pwa-v3';
 const OFFLINE_URLS = ['/', '/manifest.json'];
 
 // Let the client decide when to activate a new worker (reload prompt + skipWaiting).
