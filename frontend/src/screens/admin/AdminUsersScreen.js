@@ -380,7 +380,11 @@ const AdminUsersScreen = ({ navigation }) => {
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>רכישה במזומן</Text>
             <Text style={styles.fieldLabel}>בחר מוצר</Text>
-            <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+            <ScrollView
+              style={styles.productListScroll}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            >
               {activeProducts.map((p) => (
                 <TouchableOpacity
                   key={p.id}
@@ -549,6 +553,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
+  productListScroll: { maxHeight: 200, minHeight: 140 },
   productPickOn: { borderColor: '#AB5FBD', backgroundColor: 'rgba(171,95,189,0.25)' },
   productPickText: { color: '#FFE2ED', textAlign: 'right', fontSize: 14 },
 });

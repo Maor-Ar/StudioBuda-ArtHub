@@ -7,6 +7,8 @@ import cacheService from './cacheService.js';
 
 const DUMMY_USER_ID = 'DummyUser';
 const DUMMY_TRANSACTION_ID = 'DUMMY_RESERVATION';
+const MANUAL_REGISTRATIONS_COLLECTION = 'event_manual_registrations';
+const MANUAL_REGISTRATION_ID_PREFIX = 'manual:';
 
 class RegistrationService {
   resolveEventOccurrence(eventId) {
@@ -38,6 +40,32 @@ class RegistrationService {
   getDateKey(dateValue) {
     const dateObj = dateValue?.toDate ? dateValue.toDate() : new Date(dateValue);
     return dateObj.toISOString().split('T')[0];
+  }
+
+  getEventEndDateTime(dateValue, startTime, durationMinutes) {
+    const eventDate = dateValue?.toDate ? dateValue.toDate() : new Date(dateValue);
+    if (isNaN(eventDate.getTime())) return null;
+
+    const [hours = 0, minutes = 0] = String(startTime || '00:00')
+      .split(':')
+      .map((part) => parseInt(part, 10));
+    const safeDuration = Number.isFinite(Number(durationMinutes)) ? Number(durationMinutes) : 0;
+
+    const endDateTime = new Date(eventDate);
+    endDateTime.setHours(hours, minutes, 0, 0);
+    endDateTime.setMinutes(endDateTime.getMinutes() + safeDuration);
+    return endDateTime;
+  }
+
+  ensureEventHasNotEnded(eventDate, event) {
+    const eventEndDateTime = this.getEventEndDateTime(eventDate, event?.startTime, event?.duration);
+    if (!eventEndDateTime) {
+      throw new ValidationError('Invalid event date or time', 'eventId');
+    }
+
+    if (eventEndDateTime.getTime() < Date.now()) {
+      throw new ConflictError('Cannot register to an event that has already ended', 'eventId');
+    }
   }
 
   async registerForEvent(userId, eventId, transactionData = null) {
@@ -85,6 +113,9 @@ class RegistrationService {
       const cancellationReason = cancellationDoc.data()?.reason;
       throw new ConflictError(cancellationReason || 'Event is cancelled', 'eventId');
     }
+
+    // Block registration after occurrence end time has passed.
+    this.ensureEventHasNotEnded(eventDate, event);
 
     // Check capacity for this specific date (use actualEventId - the base event ID)
     if (!(await eventService.checkEventCapacity(actualEventId, eventDate))) {
@@ -230,7 +261,7 @@ class RegistrationService {
     return { id: docRef.id, ...registrationDoc };
   }
 
-  async reserveSpotForDummyUser(eventId) {
+  async reserveSpotForDummyUser(eventId, customerName) {
     const { actualEventId, occurrenceDate } = this.resolveEventOccurrence(eventId);
     const event = await eventService.getEvent(actualEventId);
 
@@ -264,29 +295,77 @@ class RegistrationService {
       throw new ConflictError(cancellationReason || 'Event is cancelled', 'eventId');
     }
 
+    // Block dummy reservations after occurrence end time has passed.
+    this.ensureEventHasNotEnded(eventDate, event);
+
     if (!(await eventService.checkEventCapacity(actualEventId, eventDate))) {
       throw new ConflictError('Event is at full capacity', 'eventId');
+    }
+
+    const cleanCustomerName = String(customerName || '').trim();
+    if (!cleanCustomerName) {
+      throw new ValidationError('Customer name is required', 'customerName');
     }
 
     const now = new Date();
     const eventDateObj = eventDate?.toDate ? eventDate.toDate() : new Date(eventDate);
 
-    const registrationDoc = {
-      userId: DUMMY_USER_ID,
-      transactionId: DUMMY_TRANSACTION_ID,
+    const manualRegistrationDoc = {
+      customerName: cleanCustomerName,
       eventId: actualEventId,
       occurrenceDate: eventDateObj,
       date: eventDateObj,
-      registrationDate: now,
       status: REGISTRATION_STATUS.CONFIRMED,
       createdAt: now,
+      updatedAt: now,
     };
 
-    const docRef = await db.collection('event_registrations').add(registrationDoc);
+    const docRef = await db.collection(MANUAL_REGISTRATIONS_COLLECTION).add(manualRegistrationDoc);
 
     await cacheService.delPattern('events:*');
 
-    return { id: docRef.id, ...registrationDoc };
+    return {
+      id: `${MANUAL_REGISTRATION_ID_PREFIX}${docRef.id}`,
+      manualRegistrationId: docRef.id,
+      userId: DUMMY_USER_ID,
+      transactionId: DUMMY_TRANSACTION_ID,
+      registrationDate: now,
+      isManual: true,
+      displayName: cleanCustomerName,
+      ...manualRegistrationDoc,
+    };
+  }
+
+  async cancelManualRegistrationAsAdmin(manualRegistrationId) {
+    const manualDocRef = db.collection(MANUAL_REGISTRATIONS_COLLECTION).doc(manualRegistrationId);
+    const manualDoc = await manualDocRef.get();
+    if (!manualDoc.exists) {
+      throw new NotFoundError('Manual registration not found');
+    }
+
+    const manualRegistration = { id: manualDoc.id, ...manualDoc.data() };
+    if (manualRegistration.status === REGISTRATION_STATUS.CANCELLED) {
+      throw new ConflictError('Registration is already cancelled', 'registrationId');
+    }
+
+    await manualDocRef.update({
+      status: REGISTRATION_STATUS.CANCELLED,
+      updatedAt: new Date(),
+    });
+
+    await cacheService.delPattern('events:*');
+
+    return {
+      id: `${MANUAL_REGISTRATION_ID_PREFIX}${manualDoc.id}`,
+      manualRegistrationId: manualDoc.id,
+      userId: DUMMY_USER_ID,
+      transactionId: DUMMY_TRANSACTION_ID,
+      registrationDate: manualRegistration.createdAt || new Date(),
+      isManual: true,
+      displayName: manualRegistration.customerName,
+      ...manualRegistration,
+      status: REGISTRATION_STATUS.CANCELLED,
+    };
   }
 
   async removeReservedSpotForDummyUser(eventId) {
@@ -374,7 +453,12 @@ class RegistrationService {
       .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
       .get();
 
-    return snapshot.docs
+    const manualSnapshot = await db.collection(MANUAL_REGISTRATIONS_COLLECTION)
+      .where('eventId', '==', actualEventId)
+      .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+      .get();
+
+    const standardRegistrations = snapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() }))
       .filter(registration => {
         const regDateValue = registration.date || registration.occurrenceDate;
@@ -383,6 +467,38 @@ class RegistrationService {
         }
         return this.getDateKey(regDateValue) === targetDateKey;
       })
+      .map((registration) => ({
+        ...registration,
+        isManual: false,
+        displayName: null,
+        manualRegistrationId: null,
+      }));
+
+    const manualRegistrations = manualSnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(registration => {
+        const regDateValue = registration.date || registration.occurrenceDate;
+        if (!regDateValue) {
+          return false;
+        }
+        return this.getDateKey(regDateValue) === targetDateKey;
+      })
+      .map((registration) => ({
+        id: `${MANUAL_REGISTRATION_ID_PREFIX}${registration.id}`,
+        manualRegistrationId: registration.id,
+        userId: DUMMY_USER_ID,
+        transactionId: DUMMY_TRANSACTION_ID,
+        eventId: registration.eventId,
+        occurrenceDate: registration.occurrenceDate || registration.date,
+        date: registration.date || registration.occurrenceDate,
+        registrationDate: registration.createdAt || registration.updatedAt || new Date(),
+        status: registration.status,
+        createdAt: registration.createdAt || registration.updatedAt || new Date(),
+        isManual: true,
+        displayName: registration.customerName || null,
+      }));
+
+    return [...standardRegistrations, ...manualRegistrations]
       .sort((a, b) => {
         const aDate = a.registrationDate?.toDate
           ? a.registrationDate.toDate()
@@ -395,6 +511,11 @@ class RegistrationService {
   }
 
   async cancelRegistrationAsAdmin(registrationId) {
+    if (String(registrationId).startsWith(MANUAL_REGISTRATION_ID_PREFIX)) {
+      const manualRegistrationId = String(registrationId).replace(MANUAL_REGISTRATION_ID_PREFIX, '');
+      return this.cancelManualRegistrationAsAdmin(manualRegistrationId);
+    }
+
     const registration = await this.getRegistrationById(registrationId);
 
     if (registration.status === REGISTRATION_STATUS.CANCELLED) {
@@ -489,8 +610,22 @@ class RegistrationService {
       .where('eventId', '==', actualEventId)
       .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
       .get();
+    const manualSnapshot = await db
+      .collection(MANUAL_REGISTRATIONS_COLLECTION)
+      .where('eventId', '==', actualEventId)
+      .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+      .get();
 
     const matchingRegistrations = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((registration) => {
+        const regDateValue = registration.occurrenceDate || registration.date;
+        if (!regDateValue) return false;
+        const regDate = regDateValue?.toDate ? regDateValue.toDate() : new Date(regDateValue);
+        return this.getDateKey(regDate) === dateKey;
+      });
+
+    const matchingManualRegistrations = manualSnapshot.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .filter((registration) => {
         const regDateValue = registration.occurrenceDate || registration.date;
@@ -530,6 +665,13 @@ class RegistrationService {
           });
         }
       }
+    }
+
+    for (const registration of matchingManualRegistrations) {
+      await db.collection(MANUAL_REGISTRATIONS_COLLECTION).doc(registration.id).update({
+        status: REGISTRATION_STATUS.CANCELLED,
+        updatedAt: now,
+      });
     }
 
     // Invalidate caches so the UI reflects cancellation.
@@ -599,8 +741,22 @@ class RegistrationService {
       .where('eventId', '==', actualEventId)
       .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
       .get();
+    const manualSnapshot = await db
+      .collection(MANUAL_REGISTRATIONS_COLLECTION)
+      .where('eventId', '==', actualEventId)
+      .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+      .get();
 
     const matchingRegistrations = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((registration) => {
+        const regDateValue = registration.occurrenceDate || registration.date;
+        if (!regDateValue) return false;
+        const regDate = regDateValue?.toDate ? regDateValue.toDate() : new Date(regDateValue);
+        return this.getDateKey(regDate) === dateKey;
+      });
+
+    const matchingManualRegistrations = manualSnapshot.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .filter((registration) => {
         const regDateValue = registration.occurrenceDate || registration.date;
@@ -619,6 +775,13 @@ class RegistrationService {
       if (registration.userId && registration.userId !== DUMMY_USER_ID) {
         affectedUserIds.add(registration.userId);
       }
+    }
+
+    for (const registration of matchingManualRegistrations) {
+      await db.collection(MANUAL_REGISTRATIONS_COLLECTION).doc(registration.id).update({
+        status: REGISTRATION_STATUS.CANCELLED,
+        updatedAt: now,
+      });
     }
 
     for (const userId of affectedUserIds) {
@@ -705,20 +868,13 @@ class RegistrationService {
   }
 
   async getUserRegistrations(userId, futureOnly = true) {
-    // Avoid Firestore `in` queries (they can require composite indexes).
-    // We merge two equality queries instead.
-    const [confirmedSnapshot, cancelledSnapshot] = await Promise.all([
-      db.collection('event_registrations')
-        .where('userId', '==', userId)
-        .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
-        .get(),
-      db.collection('event_registrations')
-        .where('userId', '==', userId)
-        .where('status', '==', REGISTRATION_STATUS.CANCELLED)
-        .get(),
-    ]);
+    // "myRegistrations" should return active registrations only.
+    const snapshot = await db.collection('event_registrations')
+      .where('userId', '==', userId)
+      .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+      .get();
 
-    let registrations = [...confirmedSnapshot.docs, ...cancelledSnapshot.docs].map((doc) => ({
+    let registrations = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
@@ -846,13 +1002,20 @@ class RegistrationService {
 
     console.log('[COUNT REGISTRATIONS] 📊 Counting registrations for eventIds:', eventIds);
 
-    // Get all registrations for these events
-    const snapshot = await db.collection('event_registrations')
-      .where('eventId', 'in', eventIds)
-      .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
-      .get();
+    // Get all real + manual registrations for these events
+    const [snapshot, manualSnapshot] = await Promise.all([
+      db.collection('event_registrations')
+        .where('eventId', 'in', eventIds)
+        .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+        .get(),
+      db.collection(MANUAL_REGISTRATIONS_COLLECTION)
+        .where('eventId', 'in', eventIds)
+        .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+        .get(),
+    ]);
 
     console.log('[COUNT REGISTRATIONS] 📊 Found registrations:', snapshot.size);
+    console.log('[COUNT REGISTRATIONS] 📊 Found manual registrations:', manualSnapshot.size);
 
     const counts = {};
 
@@ -876,6 +1039,15 @@ class RegistrationService {
         usedField: reg.occurrenceDate ? 'occurrenceDate' : 'date'
       });
 
+      counts[key] = (counts[key] || 0) + 1;
+    });
+
+    manualSnapshot.docs.forEach(doc => {
+      const reg = doc.data();
+      const dateField = reg.occurrenceDate || reg.date;
+      const regDate = dateField?.toDate ? dateField.toDate() : new Date(dateField);
+      const dateKey = regDate.toISOString().split('T')[0];
+      const key = `${reg.eventId}:${dateKey}`;
       counts[key] = (counts[key] || 0) + 1;
     });
 

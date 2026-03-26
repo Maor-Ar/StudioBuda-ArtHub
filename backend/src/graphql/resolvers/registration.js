@@ -39,7 +39,7 @@ export const registrationResolvers = {
 
     adminReserveSpot: async (_, { input }, context) => {
       await requireAdmin(context);
-      return await registrationService.reserveSpotForDummyUser(input.eventId);
+      return await registrationService.reserveSpotForDummyUser(input.eventId, input.customerName);
     },
 
     adminRemoveReservedSpot: async (_, { input }, context) => {
@@ -60,6 +60,9 @@ export const registrationResolvers = {
 
   EventRegistration: {
     user: async (registration) => {
+      if (registration.isManual || registration.userId === 'DummyUser') {
+        return null;
+      }
       return await userService.getUserById(registration.userId);
     },
     event: async (registration) => {
@@ -134,6 +137,15 @@ export const registrationResolvers = {
         return registration.createdAt.toDate().toISOString();
       }
       return new Date(registration.createdAt).toISOString();
+    },
+    isManual: (registration) => {
+      return registration.isManual === true;
+    },
+    displayName: (registration) => {
+      return registration.displayName || null;
+    },
+    manualRegistrationId: (registration) => {
+      return registration.manualRegistrationId || null;
     },
   },
 };

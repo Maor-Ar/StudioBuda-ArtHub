@@ -196,8 +196,12 @@ export const ADMIN_RESERVE_SPOT = gql`
       userId
       eventId
       occurrenceDate
+      date
       registrationDate
       status
+      isManual
+      displayName
+      manualRegistrationId
     }
   }
 `;

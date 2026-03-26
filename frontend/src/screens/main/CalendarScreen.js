@@ -8,7 +8,6 @@ import {
   CANCEL_REGISTRATION,
   ADMIN_CANCEL_REGISTRATION,
   ADMIN_RESERVE_SPOT,
-  ADMIN_REMOVE_RESERVED_SPOT,
   ADMIN_CANCEL_EVENT_OCCURRENCE,
   ADMIN_REENABLE_EVENT_OCCURRENCE,
 } from '../../services/graphql/mutations';
@@ -50,6 +49,29 @@ const getLocalDateKey = (dateValue) => {
 const parseLocalDateKey = (dateKey) => {
   const [year, month, day] = dateKey.split('-').map(Number);
   return new Date(year, month - 1, day);
+};
+
+const getEventEndDateTime = (dateValue, startTime, duration) => {
+  const eventDate = dateValue instanceof Date ? new Date(dateValue) : new Date(dateValue);
+  if (Number.isNaN(eventDate.getTime())) return null;
+
+  const [hours = 0, minutes = 0] = (startTime || '00:00')
+    .split(':')
+    .map((part) => parseInt(part, 10));
+
+  const safeDuration = Number.isFinite(Number(duration)) ? Number(duration) : 0;
+  const endDateTime = new Date(eventDate);
+  endDateTime.setHours(hours, minutes, 0, 0);
+  endDateTime.setMinutes(endDateTime.getMinutes() + safeDuration);
+  return endDateTime;
+};
+
+const hasEventEnded = (event) => {
+  const eventDateValue = event?.occurrenceDate || event?.date;
+  if (!eventDateValue) return false;
+  const eventEndDateTime = getEventEndDateTime(eventDateValue, event?.startTime, event?.duration);
+  if (!eventEndDateTime) return false;
+  return eventEndDateTime.getTime() < Date.now();
 };
 
 const CalendarScreen = () => {
@@ -254,23 +276,6 @@ const CalendarScreen = () => {
     },
   });
 
-  const [adminRemoveReservedSpot, { loading: removingReservedSpot }] = useMutation(ADMIN_REMOVE_RESERVED_SPOT, {
-    onCompleted: async () => {
-      try {
-        clearEventsCacheForRange(dateRange);
-        await refetchEvents();
-        showSuccessToast('המקום השמור הוסר בהצלחה');
-      } catch (error) {
-        console.error('[ADMIN REMOVE RESERVE] Error refetching after remove:', error);
-        showSuccessToast('המקום השמור הוסר בהצלחה');
-      }
-    },
-    onError: (error) => {
-      const friendlyMessage = getGraphQLErrorMessage(error);
-      showErrorToast(friendlyMessage);
-    },
-  });
-
   const [adminCancelEventOccurrence, { loading: adminCancellingOccurrence }] = useMutation(
     ADMIN_CANCEL_EVENT_OCCURRENCE,
     {
@@ -443,16 +448,10 @@ const CalendarScreen = () => {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const futureRegistrations = registrationsData.myRegistrations.filter((registration) => {
-      // Show:
-      // - confirmed registrations
-      // - registrations cancelled due to an admin cancelling the occurrence (not user-initiated cancellation)
-      if (registration.status === 'confirmed') {
-        // ok
-      } else if (registration.status === 'cancelled') {
-        if (!registration.event?.isCancelled) return false;
-      } else {
-        return false;
-      }
+      // "הרישומים שלי" should contain only active registrations.
+      if (registration.status !== 'confirmed') return false;
+      // Hide occurrences cancelled by admin from this tab.
+      if (registration.event?.isCancelled) return false;
       const eventDate = new Date(registration.occurrenceDate || registration.event?.date);
       const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
       return eventDay >= todayStart;
@@ -488,8 +487,17 @@ const CalendarScreen = () => {
       };
     });
 
+    // Safety guard: dedupe same occurrence if backend has duplicate registrations.
+    const dedupedEvents = Array.from(
+      events.reduce((map, event) => {
+        const key = `${event.baseEventId || event.id}_${new Date(event.occurrenceDate || event.date).toISOString().split('T')[0]}`;
+        if (!map.has(key)) map.set(key, event);
+        return map;
+      }, new Map()).values()
+    );
+
     // Sort by date (earliest first)
-    return events.sort((a, b) => {
+    return dedupedEvents.sort((a, b) => {
       const dateA = new Date(a.date);
       const dateB = new Date(b.date);
       if (dateA < dateB) return -1;
@@ -676,33 +684,19 @@ const CalendarScreen = () => {
     setModalVisible(true);
   };
 
-  const handleAdminReserveSpot = async (eventId) => {
+  const handleAdminReserveSpot = async (eventId, customerName) => {
     if (!isAdmin) return;
     try {
       await adminReserveSpot({
         variables: {
           input: {
             eventId,
+            customerName,
           },
         },
       });
     } catch (error) {
       console.error('[ADMIN RESERVE] Mutation failed:', error);
-    }
-  };
-
-  const handleAdminRemoveReservedSpot = async (eventId) => {
-    if (!isAdmin) return;
-    try {
-      await adminRemoveReservedSpot({
-        variables: {
-          input: {
-            eventId,
-          },
-        },
-      });
-    } catch (error) {
-      console.error('[ADMIN REMOVE RESERVE] Mutation failed:', error);
     }
   };
 
@@ -930,10 +924,7 @@ const CalendarScreen = () => {
                   const registration = userRegistrationsMap.get(registrationKey);
                   const isRegistered = !!registration;
                   const isFull = event.availableSpots === 0;
-                  const eventDateObj = new Date(eventDateValue);
-                  const todayStart = new Date();
-                  todayStart.setHours(0, 0, 0, 0);
-                  const isPastEvent = eventDateObj < todayStart;
+                  const isPastEvent = hasEventEnded(event);
                   
                   return (
                     <EventCard
@@ -959,11 +950,7 @@ const CalendarScreen = () => {
 
         {/* Event Detail Modal */}
         {selectedEvent && (() => {
-          const evtDateVal = selectedEvent.occurrenceDate || selectedEvent.date;
-          const evtDateObj = new Date(evtDateVal);
-          const todayStartModal = new Date();
-          todayStartModal.setHours(0, 0, 0, 0);
-          const isPastModal = evtDateObj < todayStartModal;
+          const isPastModal = hasEventEnded(selectedEvent);
           return (
             <EventDetailModal
               event={selectedEvent}
@@ -985,14 +972,9 @@ const CalendarScreen = () => {
               onReserveSpot={
                 selectedEvent?.isCancelled
                   ? undefined
-                  : () => selectedEvent && handleAdminReserveSpot(selectedEvent.id)
+                  : (customerName) => selectedEvent && handleAdminReserveSpot(selectedEvent.id, customerName)
               }
-              onRemoveReservedSpot={
-                selectedEvent?.isCancelled
-                  ? undefined
-                  : () => selectedEvent && handleAdminRemoveReservedSpot(selectedEvent.id)
-              }
-              adminActionLoading={reservingSpot || removingReservedSpot}
+              adminActionLoading={reservingSpot}
               onAdminCancelOccurrence={(reason) => {
                 if (!selectedEvent) return;
                 adminCancelEventOccurrence({

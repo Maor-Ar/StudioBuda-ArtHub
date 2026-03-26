@@ -11,6 +11,9 @@ export const registrationTypeDefs = gql`
     registrationDate: String!
     status: String!
     createdAt: String!
+    isManual: Boolean!
+    displayName: String
+    manualRegistrationId: String
     user: User
     event: Event
   }
@@ -30,6 +33,11 @@ export const registrationTypeDefs = gql`
   }
 
   input AdminReserveSpotInput {
+    eventId: String!
+    customerName: String!
+  }
+
+  input AdminRemoveReservedSpotInput {
     eventId: String!
   }
 

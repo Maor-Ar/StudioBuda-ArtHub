@@ -53,7 +53,7 @@ export const typeDefs = gql`
     cancelRegistration(id: ID!): EventRegistration!
     adminCancelRegistration(id: ID!): EventRegistration!
     adminReserveSpot(input: AdminReserveSpotInput!): EventRegistration!
-    adminRemoveReservedSpot(input: AdminReserveSpotInput!): EventRegistration!
+    adminRemoveReservedSpot(input: AdminRemoveReservedSpotInput!): EventRegistration!
     adminCancelEventOccurrence(input: AdminCancelEventOccurrenceInput!): EventCancellation!
     adminReenableEventOccurrence(input: AdminReenableEventOccurrenceInput!): EventCancellation!
 

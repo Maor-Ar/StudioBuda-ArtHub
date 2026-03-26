@@ -16,7 +16,6 @@ const EventDetailModal = ({
   isPast = false,
   isAdmin = false,
   onReserveSpot,
-  onRemoveReservedSpot,
   adminActionLoading = false,
   registrations = [],
   registrationsLoading = false,
@@ -32,9 +31,15 @@ const EventDetailModal = ({
   if (!event) return null;
 
   const [adminCancelReason, setAdminCancelReason] = useState('');
+  const [manualNameModalVisible, setManualNameModalVisible] = useState(false);
+  const [manualCustomerName, setManualCustomerName] = useState('');
 
   useEffect(() => {
-    if (!visible) setAdminCancelReason('');
+    if (!visible) {
+      setAdminCancelReason('');
+      setManualNameModalVisible(false);
+      setManualCustomerName('');
+    }
   }, [visible]);
 
   const formatTime = (time) => {
@@ -172,20 +177,11 @@ const EventDetailModal = ({
               <View style={styles.adminActionsContainer}>
                 <TouchableOpacity
                   style={[styles.reserveSpotButton, adminActionLoading && styles.adminButtonDisabled]}
-                  onPress={onReserveSpot}
+                  onPress={() => setManualNameModalVisible(true)}
                   disabled={adminActionLoading}
                 >
                   <Text style={styles.reserveSpotButtonText}>
-                    {adminActionLoading ? 'שומר...' : 'שריון מקום'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.removeReservedSpotButton, adminActionLoading && styles.adminButtonDisabled]}
-                  onPress={onRemoveReservedSpot}
-                  disabled={adminActionLoading}
-                >
-                  <Text style={styles.removeReservedSpotButtonText}>
-                    {adminActionLoading ? 'מסיר...' : 'הסרת מקום שמור'}
+                    {adminActionLoading ? 'שומר...' : 'שריון מקום ידני'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -245,7 +241,9 @@ const EventDetailModal = ({
                   <Text style={styles.emptyRegistrationsText}>אין נרשמים כרגע</Text>
                 ) : (
                   registrations.map((registration) => {
-                    const fullName = registration.user
+                    const fullName = registration.isManual
+                      ? (registration.displayName || 'ללא שם')
+                      : registration.user
                       ? `${registration.user.firstName} ${registration.user.lastName}`
                       : registration.userId === 'DummyUser'
                         ? 'Dummy User'
@@ -262,7 +260,15 @@ const EventDetailModal = ({
                             {isRemoving ? 'מסיר...' : 'הסר'}
                           </Text>
                         </TouchableOpacity>
-                        <Text style={styles.registrationName}>{fullName}</Text>
+                        <View style={styles.registrationNameWrap}>
+                          <Text style={styles.registrationName}>
+                            {fullName}
+                            {registration.isManual ? ' ' : ''}
+                          </Text>
+                          {registration.isManual ? (
+                            <Text style={styles.manualBadgeText}>(הוזן ידנית)</Text>
+                          ) : null}
+                        </View>
                       </View>
                     );
                   })
@@ -272,6 +278,57 @@ const EventDetailModal = ({
           </ScrollView>
         </View>
       </View>
+      <Modal
+        visible={manualNameModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setManualNameModalVisible(false)}
+      >
+        <View style={styles.inlineModalOverlay}>
+          <View style={styles.inlineModalCard}>
+            <Text style={styles.inlineModalTitle}>שריון מקום ידני</Text>
+            <Text style={styles.inlineModalLabel}>שם הלקוח/ה</Text>
+            <TextInput
+              style={styles.inlineModalInput}
+              value={manualCustomerName}
+              onChangeText={setManualCustomerName}
+              placeholder="הכנס/י שם"
+              placeholderTextColor="#B0A0B8"
+              autoFocus
+            />
+            <View style={styles.inlineModalActions}>
+              <TouchableOpacity
+                style={styles.inlineModalSecondaryButton}
+                onPress={() => {
+                  setManualNameModalVisible(false);
+                  setManualCustomerName('');
+                }}
+                disabled={adminActionLoading}
+              >
+                <Text style={styles.inlineModalSecondaryButtonText}>ביטול</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.inlineModalPrimaryButton,
+                  (!manualCustomerName.trim() || adminActionLoading) && styles.adminButtonDisabled,
+                ]}
+                onPress={() => {
+                  const value = manualCustomerName.trim();
+                  if (!value) return;
+                  onReserveSpot?.(value);
+                  setManualNameModalVisible(false);
+                  setManualCustomerName('');
+                }}
+                disabled={!manualCustomerName.trim() || adminActionLoading}
+              >
+                <Text style={styles.inlineModalPrimaryButtonText}>
+                  {adminActionLoading ? 'שומר...' : 'שמור'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 };
@@ -489,23 +546,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  removeReservedSpotButton: {
-    width: '100%',
-    height: 46,
-    backgroundColor: '#6B2A85',
-    borderRadius: 23,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   reserveSpotButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-    writingDirection: 'rtl',
-  },
-  removeReservedSpotButtonText: {
-    color: '#FFE2ED',
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
@@ -550,14 +592,26 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 8,
   },
+  registrationNameWrap: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'flex-end',
+    flex: 1,
+    marginLeft: 10,
+    flexWrap: 'wrap',
+  },
   registrationName: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '500',
     textAlign: 'right',
     writingDirection: 'rtl',
-    flex: 1,
-    marginLeft: 10,
+  },
+  manualBadgeText: {
+    color: '#FFD1E3',
+    fontSize: 13,
+    fontStyle: 'italic',
+    marginRight: 4,
   },
   removeRegistrationButton: {
     backgroundColor: '#4E0D66',
@@ -635,6 +689,75 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: 'right',
     writingDirection: 'rtl',
+  },
+  inlineModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  inlineModalCard: {
+    backgroundColor: '#4E0D66',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 209, 227, 0.35)',
+    padding: 16,
+  },
+  inlineModalTitle: {
+    color: '#FFD1E3',
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  inlineModalLabel: {
+    color: '#FFE2ED',
+    fontSize: 14,
+    marginTop: 12,
+    marginBottom: 6,
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  inlineModalInput: {
+    backgroundColor: 'rgba(255, 209, 227, 0.15)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 209, 227, 0.3)',
+    color: '#FFFFFF',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  inlineModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 14,
+    gap: 10,
+  },
+  inlineModalPrimaryButton: {
+    flex: 1,
+    backgroundColor: '#AB5FBD',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  inlineModalPrimaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  inlineModalSecondaryButton: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 209, 227, 0.16)',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  inlineModalSecondaryButtonText: {
+    color: '#FFD1E3',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
 

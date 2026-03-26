@@ -111,8 +111,12 @@ export const GET_EVENT_REGISTRATIONS = gql`
       userId
       eventId
       occurrenceDate
+      date
       registrationDate
       status
+      isManual
+      displayName
+      manualRegistrationId
       user {
         id
         firstName
