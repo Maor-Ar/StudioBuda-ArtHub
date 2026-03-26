@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMutation, useQuery } from '@apollo/client';
+import { useApolloClient, useMutation, useQuery } from '@apollo/client';
 import { useCachedEvents, clearEventsCacheForRange } from '../../hooks/useCachedEvents';
 import {
   REGISTER_FOR_EVENT,
@@ -9,8 +9,10 @@ import {
   ADMIN_CANCEL_REGISTRATION,
   ADMIN_RESERVE_SPOT,
   ADMIN_REMOVE_RESERVED_SPOT,
+  ADMIN_CANCEL_EVENT_OCCURRENCE,
+  ADMIN_REENABLE_EVENT_OCCURRENCE,
 } from '../../services/graphql/mutations';
-import { GET_MY_REGISTRATIONS, GET_EVENT_REGISTRATIONS } from '../../services/graphql/queries';
+import { GET_MY_REGISTRATIONS, GET_EVENT_REGISTRATIONS, GET_MY_TRANSACTIONS } from '../../services/graphql/queries';
 import EventCard from '../../components/EventCard';
 import EventDetailModal from '../../components/EventDetailModal';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
@@ -52,7 +54,8 @@ const parseLocalDateKey = (dateKey) => {
 
 const CalendarScreen = () => {
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, updateTransactions } = useAuth();
+  const apolloClient = useApolloClient();
   const isAdmin = user?.role === USER_ROLES.ADMIN;
   const [selectedTab, setSelectedTab] = useState('יומן'); // 'יומן' or 'הרישומים שלי'
   const [tabLabelWidths, setTabLabelWidths] = useState({
@@ -67,6 +70,20 @@ const CalendarScreen = () => {
   // Initialize with current date
   const today = new Date();
   const [selectedDateObj, setSelectedDateObj] = useState(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
+
+  const refreshMyTransactions = async () => {
+    try {
+      const { data: txData } = await apolloClient.query({
+        query: GET_MY_TRANSACTIONS,
+        fetchPolicy: 'network-only',
+      });
+      if (txData?.myTransactions) {
+        updateTransactions(txData.myTransactions);
+      }
+    } catch (txError) {
+      console.warn('[TRANSACTIONS] Failed to refresh user transactions:', txError);
+    }
+  };
 
   // Calculate date range for the current week
   const dateRange = useMemo(() => {
@@ -103,6 +120,14 @@ const CalendarScreen = () => {
       });
     }
   }, [data]);
+
+  // Keep the modal's selected event in sync with the latest events query result
+  // (so cancellationReason / isCancelled updates are immediately visible).
+  useEffect(() => {
+    if (!selectedEvent?.id || !data?.events) return;
+    const updated = data.events.find((e) => e.id === selectedEvent.id);
+    if (updated) setSelectedEvent(updated);
+  }, [data?.events, selectedEvent?.id]);
 
   // Fetch user registrations
   const { data: registrationsData, loading: registrationsLoading, refetch: refetchRegistrations } = useQuery(GET_MY_REGISTRATIONS);
@@ -144,6 +169,7 @@ const CalendarScreen = () => {
         // Refetch events and registrations to get updated data from DB
         console.log('[REGISTRATION] Refetching events and registrations...');
         const [eventsResult, registrationsResult] = await Promise.all([refetchEvents(), refetchRegistrations()]);
+        await refreshMyTransactions();
         console.log('[REGISTRATION] ✅ Events and registrations refetched successfully');
         console.log('[REGISTRATION] 📊 Events result:', eventsResult);
         console.log('[REGISTRATION] 📊 Events data:', eventsResult?.data);
@@ -193,6 +219,7 @@ const CalendarScreen = () => {
         clearEventsCacheForRange(dateRange);
         await refetchEvents();
         await refetchRegistrations();
+        await refreshMyTransactions();
         showSuccessToast('הרישום בוטל בהצלחה');
       } catch (error) {
         console.error('[CANCELLATION] Error refetching after cancellation:', error);
@@ -244,6 +271,56 @@ const CalendarScreen = () => {
     },
   });
 
+  const [adminCancelEventOccurrence, { loading: adminCancellingOccurrence }] = useMutation(
+    ADMIN_CANCEL_EVENT_OCCURRENCE,
+    {
+      onCompleted: async () => {
+        try {
+          clearEventsCacheForRange(dateRange);
+          await Promise.all([
+            refetchEvents(),
+            refetchRegistrations(),
+            refetchEventRegistrations(),
+          ]);
+          await refreshMyTransactions();
+          showSuccessToast('האירוע בוטל לתאריך הנבחר');
+        } catch (error) {
+          console.error('[ADMIN CANCEL EVENT OCCURRENCE] Error refetching:', error);
+          showSuccessToast('האירוע בוטל לתאריך הנבחר');
+        }
+      },
+      onError: (e) => {
+        const friendlyMessage = getGraphQLErrorMessage(e);
+        showErrorToast(friendlyMessage);
+      },
+    }
+  );
+
+  const [adminReenableEventOccurrence, { loading: adminReenablingOccurrence }] = useMutation(
+    ADMIN_REENABLE_EVENT_OCCURRENCE,
+    {
+      onCompleted: async () => {
+        try {
+          clearEventsCacheForRange(dateRange);
+          await Promise.all([
+            refetchEvents(),
+            refetchRegistrations(),
+            refetchEventRegistrations(),
+          ]);
+          await refreshMyTransactions();
+          showSuccessToast('האירוע הופעל מחדש לתאריך הנבחר');
+        } catch (error) {
+          console.error('[ADMIN REENABLE EVENT OCCURRENCE] Error refetching:', error);
+          showSuccessToast('האירוע הופעל מחדש לתאריך הנבחר');
+        }
+      },
+      onError: (e) => {
+        const friendlyMessage = getGraphQLErrorMessage(e);
+        showErrorToast(friendlyMessage);
+      },
+    }
+  );
+
   const {
     data: eventRegistrationsData,
     loading: eventRegistrationsLoading,
@@ -263,6 +340,7 @@ const CalendarScreen = () => {
           refetchRegistrations(),
           refetchEventRegistrations(),
         ]);
+        await refreshMyTransactions();
         showSuccessToast('הרישום הוסר בהצלחה');
       } catch (error) {
         console.error('[ADMIN CANCEL REGISTRATION] Error refetching after removal:', error);
@@ -365,7 +443,16 @@ const CalendarScreen = () => {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const futureRegistrations = registrationsData.myRegistrations.filter((registration) => {
-      if (registration.status !== 'confirmed') return false;
+      // Show:
+      // - confirmed registrations
+      // - registrations cancelled due to an admin cancelling the occurrence (not user-initiated cancellation)
+      if (registration.status === 'confirmed') {
+        // ok
+      } else if (registration.status === 'cancelled') {
+        if (!registration.event?.isCancelled) return false;
+      } else {
+        return false;
+      }
       const eventDate = new Date(registration.occurrenceDate || registration.event?.date);
       const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
       return eventDay >= todayStart;
@@ -375,9 +462,12 @@ const CalendarScreen = () => {
     const events = futureRegistrations.map((registration) => {
       const event = registration.event;
       const occurrenceDate = new Date(registration.occurrenceDate || event.date);
+      const dateKey = occurrenceDate.toISOString().split('T')[0];
       
       return {
-        id: event.id,
+        // For recurring occurrences we need an "instance-like" id (baseEventId + dateKey)
+        // because backend resolvers parse the date from the id.
+        id: `${event.id}_${dateKey}`,
         title: event.title,
         date: occurrenceDate.toISOString(),
         occurrenceDate: occurrenceDate.toISOString(),
@@ -392,6 +482,8 @@ const CalendarScreen = () => {
         baseEventId: event.id,
         registeredCount: event.registeredCount || 0, // Use from event data (calculated by backend)
         availableSpots: event.availableSpots || 0, // Use from event data (calculated by backend)
+        isCancelled: event.isCancelled ?? false,
+        cancellationReason: event.cancellationReason ?? null,
         registrationId: registration.id, // Store registration ID for cancellation
       };
     });
@@ -783,11 +875,11 @@ const CalendarScreen = () => {
                   key={`${event.id}-${event.occurrenceDate}`}
                   event={event}
                   onRegister={() => handleRegister(event.id)}
-                  onCancel={() => handleCancelRegistration(event.registrationId)}
+                  onCancel={!event.isCancelled ? () => handleCancelRegistration(event.registrationId) : undefined}
                   onPress={() => handleEventPress(event)}
-                  isRegistered={true}
+                  isRegistered={!event.isCancelled}
                   isFull={false}
-                  disabled={cancelling}
+                  disabled={cancelling || event.isCancelled}
                   showDate={true}
                 />
               ))
@@ -852,7 +944,7 @@ const CalendarScreen = () => {
                       onPress={() => handleEventPress(event)}
                       isRegistered={isRegistered}
                       isFull={isFull}
-                      disabled={registering || cancelling}
+                      disabled={registering || cancelling || event.isCancelled}
                       isPast={isPastEvent}
                     />
                   );
@@ -885,12 +977,45 @@ const CalendarScreen = () => {
               onCancel={selectedEventRegistration ? () => handleCancelRegistration(selectedEventRegistration.id) : undefined}
               isRegistered={!!selectedEventRegistration}
               isFull={selectedEvent.availableSpots === 0}
-              disabled={registering || cancelling}
+              disabled={registering || cancelling || selectedEvent?.isCancelled}
               isPast={isPastModal}
               isAdmin={isAdmin}
-              onReserveSpot={() => selectedEvent && handleAdminReserveSpot(selectedEvent.id)}
-              onRemoveReservedSpot={() => selectedEvent && handleAdminRemoveReservedSpot(selectedEvent.id)}
+              isCancelled={selectedEvent?.isCancelled ?? false}
+              cancellationReason={selectedEvent?.cancellationReason ?? null}
+              onReserveSpot={
+                selectedEvent?.isCancelled
+                  ? undefined
+                  : () => selectedEvent && handleAdminReserveSpot(selectedEvent.id)
+              }
+              onRemoveReservedSpot={
+                selectedEvent?.isCancelled
+                  ? undefined
+                  : () => selectedEvent && handleAdminRemoveReservedSpot(selectedEvent.id)
+              }
               adminActionLoading={reservingSpot || removingReservedSpot}
+              onAdminCancelOccurrence={(reason) => {
+                if (!selectedEvent) return;
+                adminCancelEventOccurrence({
+                  variables: {
+                    input: {
+                      eventId: selectedEvent.id,
+                      reason,
+                    },
+                  },
+                });
+              }}
+              adminCancelLoading={adminCancellingOccurrence}
+              onAdminReenableOccurrence={() => {
+                if (!selectedEvent) return;
+                adminReenableEventOccurrence({
+                  variables: {
+                    input: {
+                      eventId: selectedEvent.id,
+                    },
+                  },
+                });
+              }}
+              adminReenableLoading={adminReenablingOccurrence}
               registrations={adminEventRegistrations}
               registrationsLoading={eventRegistrationsLoading}
               onRemoveRegistration={handleAdminRemoveRegistration}

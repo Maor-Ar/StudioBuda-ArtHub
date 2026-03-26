@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, TextInput } from 'react-native';
 import UserHeadIcon from '../assets/icons/user-head.svg';
 import UsersFourIcon from '../assets/icons/users-four.svg';
 import LeftArrow from '../assets/icons/LeftArrow.svg';
@@ -22,8 +22,20 @@ const EventDetailModal = ({
   registrationsLoading = false,
   onRemoveRegistration,
   removingRegistrationId = null,
+  isCancelled = false,
+  cancellationReason = null,
+  onAdminCancelOccurrence,
+  adminCancelLoading = false,
+  onAdminReenableOccurrence,
+  adminReenableLoading = false,
 }) => {
   if (!event) return null;
+
+  const [adminCancelReason, setAdminCancelReason] = useState('');
+
+  useEffect(() => {
+    if (!visible) setAdminCancelReason('');
+  }, [visible]);
 
   const formatTime = (time) => {
     if (!time) return '';
@@ -77,7 +89,9 @@ const EventDetailModal = ({
             showsVerticalScrollIndicator={false}
           >
             {/* Event Title */}
-            <Text style={styles.title}>{event.title || 'שיעור רישום'}</Text>
+            <Text style={styles.title}>
+              {isCancelled ? (cancellationReason || 'השיעור בוטל') : (event.title || 'שיעור רישום')}
+            </Text>
 
             {/* Event Date */}
             <View style={styles.detailRow}>
@@ -120,7 +134,11 @@ const EventDetailModal = ({
             )}
 
             {/* Button States: Past, Cancel, Full, or Register */}
-            {isPast ? (
+            {isCancelled ? (
+              <View style={styles.cancelledButton}>
+                <Text style={styles.cancelledButtonText}>הרשמה בוטלה</Text>
+              </View>
+            ) : isPast ? (
               <View style={styles.pastButton}>
                 <Text style={styles.pastButtonText}>הרשמה סגורה</Text>
               </View>
@@ -150,7 +168,7 @@ const EventDetailModal = ({
               </TouchableOpacity>
             )}
 
-            {isAdmin && (
+            {isAdmin && !isCancelled && (
               <View style={styles.adminActionsContainer}>
                 <TouchableOpacity
                   style={[styles.reserveSpotButton, adminActionLoading && styles.adminButtonDisabled]}
@@ -170,6 +188,51 @@ const EventDetailModal = ({
                     {adminActionLoading ? 'מסיר...' : 'הסרת מקום שמור'}
                   </Text>
                 </TouchableOpacity>
+              </View>
+            )}
+
+            {isAdmin && !isPast && (
+              <View style={styles.adminCancelContainer}>
+                {isCancelled ? (
+                  <>
+                    <Text style={styles.adminCancelInfoText}>
+                      בוטל: {cancellationReason || 'ללא סיבה'}
+                    </Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.adminReenableButton,
+                        adminReenableLoading && styles.adminButtonDisabled,
+                      ]}
+                      onPress={onAdminReenableOccurrence}
+                      disabled={adminReenableLoading}
+                    >
+                      <Text style={styles.adminReenableButtonText}>
+                        {adminReenableLoading ? 'מפעיל...' : 'הפעל מחדש'}
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.adminCancelLabel}>סיבת ביטול (לתאריך הזה)</Text>
+                    <TextInput
+                      style={styles.adminCancelInput}
+                      value={adminCancelReason}
+                      onChangeText={setAdminCancelReason}
+                      placeholder="כתוב/י סיבה..."
+                      placeholderTextColor="#999"
+                      multiline
+                    />
+                    <TouchableOpacity
+                      style={[styles.adminCancelButton, adminCancelLoading && styles.adminButtonDisabled]}
+                      onPress={() => onAdminCancelOccurrence?.(adminCancelReason)}
+                      disabled={adminCancelLoading || !adminCancelReason.trim()}
+                    >
+                      <Text style={styles.adminCancelButtonText}>
+                        {adminCancelLoading ? 'מבטל...' : 'בטל לתאריך'}
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             )}
 
@@ -401,6 +464,23 @@ const styles = StyleSheet.create({
     marginTop: 14,
     gap: 10,
   },
+  cancelledButton: {
+    width: '100%',
+    height: 50,
+    backgroundColor: '#B0A0B8',
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+    opacity: 0.9,
+  },
+  cancelledButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
   reserveSpotButton: {
     width: '100%',
     height: 46,
@@ -490,6 +570,70 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  adminCancelContainer: {
+    marginTop: 18,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 209, 227, 0.35)',
+  },
+  adminCancelLabel: {
+    color: '#FFD1E3',
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'right',
+    marginBottom: 6,
+    writingDirection: 'rtl',
+  },
+  adminCancelInput: {
+    backgroundColor: 'rgba(255, 209, 227, 0.15)',
+    borderRadius: 14,
+    padding: 12,
+    minHeight: 70,
+    color: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 209, 227, 0.25)',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  adminCancelButton: {
+    width: '100%',
+    height: 46,
+    backgroundColor: '#4E0D66',
+    borderRadius: 23,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  adminCancelButtonText: {
+    color: '#FFE2ED',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  adminReenableButton: {
+    width: '100%',
+    height: 46,
+    backgroundColor: '#AB5FBD',
+    borderRadius: 23,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  adminReenableButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  adminCancelInfoText: {
+    color: '#FFE2ED',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'right',
     writingDirection: 'rtl',
   },
 });

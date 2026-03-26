@@ -35,6 +35,8 @@ export const GET_EVENTS = gql`
       eventType
       price
       isActive
+      isCancelled
+      cancellationReason
       registeredCount
       availableSpots
       occurrenceDate
@@ -60,6 +62,8 @@ export const GET_EVENT = gql`
       eventType
       price
       isActive
+      isCancelled
+      cancellationReason
       registeredCount
       availableSpots
       occurrenceDate
@@ -93,6 +97,8 @@ export const GET_MY_REGISTRATIONS = gql`
         maxRegistrations
         registeredCount
         availableSpots
+        isCancelled
+        cancellationReason
       }
     }
   }

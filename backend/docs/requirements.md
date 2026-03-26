@@ -113,6 +113,22 @@ StudioBuda ArtHub is a user-friendly web platform backend for seamless registrat
 }
 ```
 
+### EventCancellations Collection
+
+```javascript
+{
+  // Stored as a doc id to guarantee uniqueness for a specific occurrence:
+  // `${eventId}_${dateKey}`
+  id: string (doc id),
+  eventId: string,      // baseEventId for recurring occurrences (or the one-time event id)
+  dateKey: string,      // YYYY-MM-DD (UTC) for the cancelled occurrence date
+  reason: string,
+  cancelledBy: string, // admin user id
+  cancelledAt: timestamp,
+  isActive: boolean
+}
+```
+
 ## Authentication & Authorization
 
 ### Authentication Methods
@@ -204,7 +220,7 @@ StudioBuda ArtHub is a user-friendly web platform backend for seamless registrat
 - `me`: Get current authenticated user
 - `events(dateRange, filters)`: List events for date range (max 1 month), returns all at once, no pagination. Generates recurring instances on-the-fly.
 - `event(id)`: Get single event details
-- `myRegistrations`: Get user's future registrations
+- `myRegistrations`: Get user's future registrations (includes occurrences cancelled by admins)
 - `myTransactions`: Get user's active transactions (also returned on login)
 - `transactions`: Manager/Admin query for all transactions
 - `users`: Manager/Admin query for all users
@@ -226,6 +242,10 @@ StudioBuda ArtHub is a user-friendly web platform backend for seamless registrat
 **Registrations (Authenticated users only):**
 - `registerForEvent(input)`: Register authenticated user for an event (creates transaction if needed for paid_workshop)
 - `cancelRegistration(id)`: Cancel event registration
+
+**Event cancellations (Admin only):**
+- `adminCancelEventOccurrence(input)`: Cancel a specific event occurrence (recurring instance) using a reason. Stores an `event_cancellations` override (keyed by `eventId + dateKey`), cancels existing confirmed registrations for that occurrence, and refunds subscription/punch-card entries.
+- `adminReenableEventOccurrence(input)`: Re-enable a previously cancelled occurrence. Disables the cancellation override and clears any confirmed registrations for that occurrence (so users must re-register).
 
 **Transactions:**
 - `createTransaction(input)`: Create transaction record with full data (type, amount, monthlyEntries, totalEntries, invoiceId, etc.)

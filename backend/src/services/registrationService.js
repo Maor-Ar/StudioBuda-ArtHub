@@ -75,6 +75,17 @@ class RegistrationService {
       eventDate = new Date(eventDate);
     }
     
+    // Block registration if this specific occurrence was cancelled by admin.
+    const dateKey = this.getDateKey(eventDate);
+    const cancellationDoc = await db
+      .collection('event_cancellations')
+      .doc(`${actualEventId}_${dateKey}`)
+      .get();
+    if (cancellationDoc.exists && cancellationDoc.data()?.isActive !== false) {
+      const cancellationReason = cancellationDoc.data()?.reason;
+      throw new ConflictError(cancellationReason || 'Event is cancelled', 'eventId');
+    }
+
     // Check capacity for this specific date (use actualEventId - the base event ID)
     if (!(await eventService.checkEventCapacity(actualEventId, eventDate))) {
       throw new ConflictError('Event is at full capacity', 'eventId');
@@ -240,6 +251,17 @@ class RegistrationService {
       eventDate = eventDate.toDate();
     } else if (typeof eventDate === 'string') {
       eventDate = new Date(eventDate);
+    }
+
+    // Prevent reserving a spot for a cancelled occurrence.
+    const dateKey = this.getDateKey(eventDate);
+    const cancellationDoc = await db
+      .collection('event_cancellations')
+      .doc(`${actualEventId}_${dateKey}`)
+      .get();
+    if (cancellationDoc.exists && cancellationDoc.data()?.isActive !== false) {
+      const cancellationReason = cancellationDoc.data()?.reason;
+      throw new ConflictError(cancellationReason || 'Event is cancelled', 'eventId');
     }
 
     if (!(await eventService.checkEventCapacity(actualEventId, eventDate))) {
@@ -416,6 +438,203 @@ class RegistrationService {
     };
   }
 
+  async cancelEventOccurrenceAsAdmin(eventId, reason, cancelledBy) {
+    if (!reason || !String(reason).trim()) {
+      throw new ValidationError('Cancellation reason is required', 'reason');
+    }
+
+    const { actualEventId, occurrenceDate } = this.resolveEventOccurrence(eventId);
+    const event = await eventService.getEvent(actualEventId);
+
+    if (!event.isActive) {
+      throw new ValidationError('Event is not active', 'eventId');
+    }
+
+    // Determine the concrete date of this occurrence (recurring or one-time).
+    let eventDate;
+    if (occurrenceDate) {
+      eventDate = occurrenceDate;
+    } else if (event.isRecurring) {
+      eventDate = event.occurrenceDate || event.date;
+    } else {
+      eventDate = event.date;
+    }
+
+    if (eventDate?.toDate) {
+      eventDate = eventDate.toDate();
+    } else if (typeof eventDate === 'string') {
+      eventDate = new Date(eventDate);
+    }
+
+    const dateKey = this.getDateKey(eventDate);
+    const now = new Date();
+    const cancellationDocId = `${actualEventId}_${dateKey}`;
+
+    // Upsert the cancellation override record.
+    await db.collection('event_cancellations').doc(cancellationDocId).set(
+      {
+        eventId: actualEventId,
+        dateKey,
+        reason: String(reason).trim(),
+        cancelledBy,
+        cancelledAt: now,
+        isActive: true,
+      },
+      { merge: true }
+    );
+
+    // Cancel all existing confirmed registrations for this occurrence and refund entries.
+    const snapshot = await db
+      .collection('event_registrations')
+      .where('eventId', '==', actualEventId)
+      .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+      .get();
+
+    const matchingRegistrations = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((registration) => {
+        const regDateValue = registration.occurrenceDate || registration.date;
+        if (!regDateValue) return false;
+        const regDate = regDateValue?.toDate ? regDateValue.toDate() : new Date(regDateValue);
+        return this.getDateKey(regDate) === dateKey;
+      });
+
+    const affectedUserIds = new Set();
+
+    for (const registration of matchingRegistrations) {
+      await db.collection('event_registrations').doc(registration.id).update({
+        status: REGISTRATION_STATUS.CANCELLED,
+        updatedAt: now,
+      });
+
+      if (registration.userId && registration.userId !== DUMMY_USER_ID) {
+        affectedUserIds.add(registration.userId);
+      }
+
+      // Refund only real transactions (dummy reservations have no real transaction to refund)
+      if (
+        registration.transactionId &&
+        registration.transactionId !== DUMMY_TRANSACTION_ID
+      ) {
+        const transaction = await transactionService.getTransactionById(registration.transactionId);
+        if (transaction.transactionType === TRANSACTION_TYPES.SUBSCRIPTION) {
+          const newCount = Math.max(0, (transaction.entriesUsedThisMonth || 0) - 1);
+          await transactionService.updateTransaction(registration.transactionId, {
+            entriesUsedThisMonth: newCount,
+          });
+        } else if (transaction.transactionType === TRANSACTION_TYPES.PUNCH_CARD) {
+          const newRemaining = (transaction.entriesRemaining || 0) + 1;
+          await transactionService.updateTransaction(registration.transactionId, {
+            entriesRemaining: newRemaining,
+            isActive: true,
+          });
+        }
+      }
+    }
+
+    // Invalidate caches so the UI reflects cancellation.
+    for (const userId of affectedUserIds) {
+      await cacheService.invalidateUserCache(userId);
+    }
+    await cacheService.delPattern('events:*');
+
+    return {
+      id: cancellationDocId,
+      eventId: actualEventId,
+      dateKey,
+      reason: String(reason).trim(),
+      cancelledBy,
+      cancelledAt: now.toISOString(),
+    };
+  }
+
+  async reenableEventOccurrenceAsAdmin(eventId, cancelledBy) {
+    const { actualEventId, occurrenceDate } = this.resolveEventOccurrence(eventId);
+    const event = await eventService.getEvent(actualEventId);
+
+    if (!event.isActive) {
+      throw new ValidationError('Event is not active', 'eventId');
+    }
+
+    // Determine the concrete date of this occurrence (recurring or one-time).
+    let eventDate;
+    if (occurrenceDate) {
+      eventDate = occurrenceDate;
+    } else if (event.isRecurring) {
+      eventDate = event.occurrenceDate || event.date;
+    } else {
+      eventDate = event.date;
+    }
+
+    if (eventDate?.toDate) {
+      eventDate = eventDate.toDate();
+    } else if (typeof eventDate === 'string') {
+      eventDate = new Date(eventDate);
+    }
+
+    const dateKey = this.getDateKey(eventDate);
+    const now = new Date();
+    const cancellationDocId = `${actualEventId}_${dateKey}`;
+    const cancellationRef = db.collection('event_cancellations').doc(cancellationDocId);
+    const cancellationDoc = await cancellationRef.get();
+
+    if (!cancellationDoc.exists) {
+      throw new NotFoundError('This event occurrence is not cancelled', 'eventId');
+    }
+
+    // Disable cancellation override, which re-enables the occurrence.
+    await cancellationRef.set(
+      {
+        isActive: false,
+        cancelledBy: cancellationDoc.data()?.cancelledBy || cancelledBy,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+
+    // Clear list of registered users for this occurrence:
+    // cancel confirmed registrations without refund (refund already happened on cancel).
+    const snapshot = await db
+      .collection('event_registrations')
+      .where('eventId', '==', actualEventId)
+      .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+      .get();
+
+    const matchingRegistrations = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((registration) => {
+        const regDateValue = registration.occurrenceDate || registration.date;
+        if (!regDateValue) return false;
+        const regDate = regDateValue?.toDate ? regDateValue.toDate() : new Date(regDateValue);
+        return this.getDateKey(regDate) === dateKey;
+      });
+
+    const affectedUserIds = new Set();
+
+    for (const registration of matchingRegistrations) {
+      await db.collection('event_registrations').doc(registration.id).update({
+        status: REGISTRATION_STATUS.CANCELLED,
+        updatedAt: now,
+      });
+      if (registration.userId && registration.userId !== DUMMY_USER_ID) {
+        affectedUserIds.add(registration.userId);
+      }
+    }
+
+    for (const userId of affectedUserIds) {
+      await cacheService.invalidateUserCache(userId);
+    }
+    await cacheService.delPattern('events:*');
+
+    return {
+      id: cancellationDocId,
+      ...(cancellationDoc.data() || {}),
+      isActive: false,
+      cancelledBy: cancelledBy,
+      updatedAt: now.toISOString(),
+    };
+  }
+
   async cancelRegistration(registrationId, userId) {
     const registration = await this.getRegistrationById(registrationId);
 
@@ -486,12 +705,20 @@ class RegistrationService {
   }
 
   async getUserRegistrations(userId, futureOnly = true) {
-    let query = db.collection('event_registrations')
-      .where('userId', '==', userId)
-      .where('status', '==', REGISTRATION_STATUS.CONFIRMED);
+    // Avoid Firestore `in` queries (they can require composite indexes).
+    // We merge two equality queries instead.
+    const [confirmedSnapshot, cancelledSnapshot] = await Promise.all([
+      db.collection('event_registrations')
+        .where('userId', '==', userId)
+        .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+        .get(),
+      db.collection('event_registrations')
+        .where('userId', '==', userId)
+        .where('status', '==', REGISTRATION_STATUS.CANCELLED)
+        .get(),
+    ]);
 
-    const snapshot = await query.get();
-    let registrations = snapshot.docs.map(doc => ({
+    let registrations = [...confirmedSnapshot.docs, ...cancelledSnapshot.docs].map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));

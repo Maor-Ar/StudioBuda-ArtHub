@@ -15,6 +15,8 @@ export const eventTypeDefs = gql`
     eventType: String!
     price: Float
     isActive: Boolean!
+    isCancelled: Boolean!
+    cancellationReason: String
     registeredCount: Int!
     registeredUsers: [String!]!
     createdAt: String!

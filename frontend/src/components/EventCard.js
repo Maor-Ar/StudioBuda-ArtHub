@@ -3,7 +3,19 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import UserHeadIcon from '../assets/icons/user-head.svg';
 import UsersFourIcon from '../assets/icons/users-four.svg';
 
-const EventCard = ({ event, onRegister, onCancel, isRegistered, isFull = false, onPress, disabled = false, showDate = false, isPast = false }) => {
+const EventCard = ({
+  event,
+  onRegister,
+  onCancel,
+  isRegistered,
+  isFull = false,
+  onPress,
+  disabled = false,
+  showDate = false,
+  isPast = false,
+  isCancelled = false,
+  cancellationReason = null,
+}) => {
   const formatTime = (time) => {
     if (!time) return '';
     return time.substring(0, 5); // HH:mm format
@@ -31,9 +43,12 @@ const EventCard = ({ event, onRegister, onCancel, isRegistered, isFull = false, 
     return `${day}.${month}.${year}`;
   };
 
+  const isCardCancelled = event?.isCancelled ?? isCancelled;
+  const cardCancellationReason = event?.cancellationReason ?? cancellationReason;
+
   return (
     <TouchableOpacity 
-      style={styles.card} 
+      style={[styles.card, isCardCancelled && styles.cardCancelled]} 
       onPress={onPress}
       activeOpacity={0.8}
     >
@@ -53,7 +68,9 @@ const EventCard = ({ event, onRegister, onCancel, isRegistered, isFull = false, 
 
       {/* Right side - Event Title and Time */}
       <View style={styles.rightSection}>
-        <Text style={styles.eventTitle}>{event.title || 'שיעור רישום'}</Text>
+        <Text style={styles.eventTitle}>
+          {isCardCancelled ? (cardCancellationReason || 'השיעור בוטל') : (event.title || 'שיעור רישום')}
+        </Text>
         <View style={styles.timeContainer}>
           <Text style={styles.eventTime}>
             {formatTimeRange(event.startTime, event.duration) || '18:00 - 19:30'}
@@ -67,7 +84,11 @@ const EventCard = ({ event, onRegister, onCancel, isRegistered, isFull = false, 
       </View>
 
       {/* Button States: Past, Cancel, Full, or Register */}
-      {isPast ? (
+      {isCardCancelled ? (
+        <View style={styles.cancelledButton}>
+          <Text style={styles.cancelledButtonText}>השיעור בוטל</Text>
+        </View>
+      ) : isPast ? (
         <View style={styles.pastButton}>
           <Text style={styles.pastButtonText}>הרשמה סגורה</Text>
         </View>
@@ -116,6 +137,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
     paddingBottom: 55, // Space for button at bottom
+  },
+  cardCancelled: {
+    backgroundColor: '#D9D9D9',
+    opacity: 0.7,
   },
   leftSection: {
     width: '45%',
@@ -236,6 +261,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pastButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  cancelledButton: {
+    position: 'absolute',
+    bottom: 15,
+    left: 15,
+    right: 15,
+    height: 31,
+    backgroundColor: '#B0A0B8',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0.6,
+  },
+  cancelledButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',

@@ -15,12 +15,30 @@ export const registrationTypeDefs = gql`
     event: Event
   }
 
+  type EventCancellation {
+    id: ID!
+    eventId: String!
+    dateKey: String!
+    reason: String!
+    cancelledBy: String!
+    cancelledAt: String!
+  }
+
   input RegisterForEventInput {
     eventId: String!
     transactionData: CreateTransactionInput
   }
 
   input AdminReserveSpotInput {
+    eventId: String!
+  }
+
+  input AdminCancelEventOccurrenceInput {
+    eventId: String!
+    reason: String!
+  }
+
+  input AdminReenableEventOccurrenceInput {
     eventId: String!
   }
 `;

@@ -215,6 +215,32 @@ export const ADMIN_REMOVE_RESERVED_SPOT = gql`
   }
 `;
 
+export const ADMIN_CANCEL_EVENT_OCCURRENCE = gql`
+  mutation AdminCancelEventOccurrence($input: AdminCancelEventOccurrenceInput!) {
+    adminCancelEventOccurrence(input: $input) {
+      id
+      eventId
+      dateKey
+      reason
+      cancelledBy
+      cancelledAt
+    }
+  }
+`;
+
+export const ADMIN_REENABLE_EVENT_OCCURRENCE = gql`
+  mutation AdminReenableEventOccurrence($input: AdminReenableEventOccurrenceInput!) {
+    adminReenableEventOccurrence(input: $input) {
+      id
+      eventId
+      dateKey
+      reason
+      cancelledBy
+      cancelledAt
+    }
+  }
+`;
+
 // Transaction Mutations
 export const CREATE_TRANSACTION = gql`
   mutation CreateTransaction($input: CreateTransactionInput!) {

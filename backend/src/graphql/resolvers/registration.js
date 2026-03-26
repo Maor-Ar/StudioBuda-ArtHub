@@ -1,6 +1,7 @@
 import registrationService from '../../services/registrationService.js';
 import eventService from '../../services/eventService.js';
 import userService from '../../services/userService.js';
+import { db } from '../../config/firebase.js';
 import { requireAdmin, requireAuthenticated } from '../middleware/permissions.js';
 import logger from '../../utils/logger.js';
 
@@ -45,6 +46,16 @@ export const registrationResolvers = {
       await requireAdmin(context);
       return await registrationService.removeReservedSpotForDummyUser(input.eventId);
     },
+
+    adminCancelEventOccurrence: async (_, { input }, context) => {
+      const admin = await requireAdmin(context);
+      return await registrationService.cancelEventOccurrenceAsAdmin(input.eventId, input.reason, admin.id);
+    },
+
+    adminReenableEventOccurrence: async (_, { input }, context) => {
+      const admin = await requireAdmin(context);
+      return await registrationService.reenableEventOccurrenceAsAdmin(input.eventId, admin.id);
+    },
   },
 
   EventRegistration: {
@@ -59,7 +70,11 @@ export const registrationResolvers = {
       const regDate = registration.date || registration.occurrenceDate;
       if (!regDate) {
         // If no date, return event without count (shouldn't happen for recurring events)
-        return event;
+        return {
+          ...event,
+          isCancelled: false,
+          cancellationReason: null,
+        };
       }
       
       // Convert to Date object if needed
@@ -74,11 +89,18 @@ export const registrationResolvers = {
       
       const countKey = `${registration.eventId}:${dateKey}`;
       const perDateCount = registrationCounts[countKey] || 0;
-      
-      // Attach the calculated registeredCount to the event
+
+      const cancellationDocId = `${registration.eventId}_${dateKey}`;
+      const cancellationDoc = await db.collection('event_cancellations').doc(cancellationDocId).get();
+      const isCancelled = cancellationDoc.exists === true && cancellationDoc.data()?.isActive !== false;
+      const cancellationReason = cancellationDoc.exists ? cancellationDoc.data().reason : null;
+
+      // Attach the calculated registeredCount and cancellation info to the event (for UI)
       return {
         ...event,
         registeredCount: perDateCount,
+        isCancelled,
+        cancellationReason,
       };
     },
     occurrenceDate: (registration) => {

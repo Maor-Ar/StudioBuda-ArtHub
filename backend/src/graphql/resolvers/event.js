@@ -33,6 +33,26 @@ export const eventResolvers = {
 
       console.log('[EVENTS QUERY] 📊 Registration counts received:', registrationCounts);
 
+      // Fetch cancellation overrides for the occurrences returned in this range.
+      // Docs are keyed by: `${eventId}_${dateKey}` where eventId is baseEventId.
+      const cancellationDocIds = [...new Set(events.map((event) => {
+        const eventId = event.baseEventId || event.id;
+        const eventDate = event.occurrenceDate || event.date;
+        const dateObj = eventDate?.toDate ? eventDate.toDate() : new Date(eventDate);
+        const dateKey = dateObj.toISOString().split('T')[0];
+        return `${eventId}_${dateKey}`;
+      }))];
+
+      const cancellationDocs = await Promise.all(
+        cancellationDocIds.map((docId) => db.collection('event_cancellations').doc(docId).get())
+      );
+
+      const cancellationByDocId = new Map();
+      cancellationDocs.forEach((doc, idx) => {
+        const docId = cancellationDocIds[idx];
+        cancellationByDocId.set(docId, doc.exists ? doc.data() : null);
+      });
+
       // Attach registration counts to events
       return events.map(event => {
         // For recurring instances, use baseEventId; for one-time events, use id
@@ -45,6 +65,11 @@ export const eventResolvers = {
 
         // Use the per-date count, or fallback to the event's registeredCount
         const perDateCount = registrationCounts[countKey] || 0;
+
+        const cancellationDocId = `${eventId}_${dateKey}`;
+        const cancellation = cancellationByDocId.get(cancellationDocId);
+        const isCancelled = cancellation != null && cancellation.isActive !== false;
+        const cancellationReason = cancellation?.reason || null;
 
         console.log('[EVENTS QUERY] 🔍 Event:', {
           id: event.id,
@@ -60,6 +85,8 @@ export const eventResolvers = {
         return {
           ...event,
           registeredCount: perDateCount,
+          isCancelled,
+          cancellationReason,
         };
       });
     },
@@ -85,6 +112,8 @@ export const eventResolvers = {
       return {
         ...event,
         registeredCount: perDateCount,
+        isCancelled: false,
+        cancellationReason: null,
       };
     },
   },
@@ -109,6 +138,7 @@ export const eventResolvers = {
   Event: {
     availableSpots: (event) => {
       // registeredCount is always calculated on-the-fly now
+      if (event.isCancelled) return 0;
       const count = event.registeredCount || 0;
       return event.maxRegistrations - count;
     },
