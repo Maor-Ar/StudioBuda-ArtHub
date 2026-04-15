@@ -13,6 +13,7 @@ const TYPE_LABELS = { subscription: 'מנוי', punch_card: 'כרטיסייה', 
 const AdminTransactionsScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
   const [selectedTx, setSelectedTx] = useState(null);
   const [editForm, setEditForm] = useState(null);
 
@@ -48,8 +49,33 @@ const AdminTransactionsScreen = ({ navigation }) => {
     let list = data?.transactions || [];
     if (filter === 'active') list = list.filter(t => t.isActive);
     if (filter === 'inactive') list = list.filter(t => !t.isActive);
+    const query = search.trim().toLowerCase();
+    if (query) {
+      list = list.filter((t) => {
+        const user = usersMap[t.userId];
+        const userFullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').toLowerCase();
+        const email = user?.email?.toLowerCase() || '';
+        const phone = user?.phone?.toLowerCase() || '';
+        const txType = TYPE_LABELS[t.transactionType]?.toLowerCase() || t.transactionType?.toLowerCase() || '';
+        const amount = String(t.amount ?? '').toLowerCase();
+        const purchaseDate = t.purchaseDate
+          ? new Date(t.purchaseDate)
+              .toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' })
+              .toLowerCase()
+          : '';
+
+        return (
+          userFullName.includes(query) ||
+          email.includes(query) ||
+          phone.includes(query) ||
+          txType.includes(query) ||
+          amount.includes(query) ||
+          purchaseDate.includes(query)
+        );
+      });
+    }
     return list;
-  }, [data, filter]);
+  }, [data, filter, search, usersMap]);
 
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
   const toDateInputValue = (d) => {
@@ -136,6 +162,16 @@ const AdminTransactionsScreen = ({ navigation }) => {
             <Text style={[styles.filterText, filter === val && styles.filterTextActive]}>{label}</Text>
           </TouchableOpacity>
         ))}
+      </View>
+
+      <View style={styles.searchRow}>
+        <TextInput
+          style={styles.searchInput}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="חיפוש לפי משתמש, אימייל, טלפון, סוג או סכום..."
+          placeholderTextColor="#B0A0B8"
+        />
       </View>
 
       <Text style={styles.countText}>{transactions.length} עסקאות</Text>
@@ -317,6 +353,17 @@ const styles = StyleSheet.create({
   filterBtnActive: { backgroundColor: '#AB5FBD', borderColor: '#AB5FBD' },
   filterText: { color: '#FFD1E3', fontSize: 13 },
   filterTextActive: { color: '#FFF' },
+  searchRow: { paddingHorizontal: 16, paddingTop: 4 },
+  searchInput: {
+    backgroundColor: 'rgba(255,209,227,0.2)',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 15,
+    color: '#FFE2ED',
+    textAlign: 'right',
+    borderWidth: 1,
+    borderColor: 'rgba(255,209,227,0.3)',
+  },
   countText: { textAlign: 'center', color: '#FFD1E3', fontSize: 13, marginTop: 4 },
   list: { flex: 1, minHeight: 0 },
   listContent: { padding: 16, paddingBottom: 180 },
