@@ -254,3 +254,78 @@ export const GET_ALL_PRODUCTS = gql`
   }
 `;
 
+export const GET_ADMIN_DASHBOARD_METRICS = gql`
+  query GetAdminDashboardMetrics {
+    adminDashboardMetrics {
+      activeSubscriptions
+      activePunchCards
+      subscriptionJoinLeaveByMonth {
+        monthKey
+        monthLabel
+        joined
+        left
+      }
+      punchCardPurchasesByMonth {
+        monthKey
+        monthLabel
+        count
+      }
+      registrationDistributionLastMonth {
+        subscription
+        punchCard
+        trialLesson
+        singleLesson
+        total
+      }
+      averageStudentsLastMonth {
+        overall
+        drawing
+        color
+        challenges
+      }
+      classTypeDistributionLastMonth {
+        drawing
+        color
+        challenges
+        unclassified
+        total
+      }
+      classDistributionByClassLastMonth {
+        key
+        fullLabel
+        shortLabel
+        registrationsCount
+        occurrencesCount
+        avgStudents
+      }
+      averageStudentsByClassLastMonth {
+        key
+        fullLabel
+        shortLabel
+        registrationsCount
+        occurrencesCount
+        avgStudents
+      }
+      averageTenure {
+        subscriptionsMonths
+        punchCardsPurchasesPerUser
+      }
+      subscriptionRetention {
+        x
+        label
+        percentage
+        usersCount
+        baseUsers
+      }
+      punchCardReturnRate {
+        x
+        label
+        percentage
+        usersCount
+        baseUsers
+      }
+      avgDaysBetweenPunchCardPurchases
+    }
+  }
+`;
+

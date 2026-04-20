@@ -6,6 +6,7 @@ import { registrationResolvers } from './registration.js';
 import { paymentResolvers } from './payment.js';
 import { productResolvers } from './product.js';
 import { adminResolvers } from './admin.js';
+import { adminDashboardResolvers } from './adminDashboard.js';
 import userService from '../../services/userService.js';
 
 export const resolvers = {
@@ -26,6 +27,7 @@ export const resolvers = {
       }));
     },
     ...productResolvers.Query,
+    ...adminDashboardResolvers.Query,
   },
 
   Mutation: {

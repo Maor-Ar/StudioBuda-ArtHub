@@ -21,6 +21,80 @@ export const typeDefs = gql`
     hasPurchasedTrial: Boolean!
   }
 
+  type DashboardMonthlyJoinLeave {
+    monthKey: String!
+    monthLabel: String!
+    joined: Int!
+    left: Int!
+  }
+
+  type DashboardMonthlyCount {
+    monthKey: String!
+    monthLabel: String!
+    count: Int!
+  }
+
+  type DashboardRegistrationDistribution {
+    subscription: Int!
+    punchCard: Int!
+    trialLesson: Int!
+    singleLesson: Int!
+    total: Int!
+  }
+
+  type DashboardAverageStudents {
+    overall: Float!
+    drawing: Float!
+    color: Float!
+    challenges: Float!
+  }
+
+  type DashboardClassTypeDistribution {
+    drawing: Int!
+    color: Int!
+    challenges: Int!
+    unclassified: Int!
+    total: Int!
+  }
+
+  type DashboardClassMetric {
+    key: String!
+    fullLabel: String!
+    shortLabel: String!
+    registrationsCount: Int!
+    occurrencesCount: Int!
+    avgStudents: Float!
+  }
+
+  type DashboardAverageTenure {
+    subscriptionsMonths: Float!
+    punchCardsPurchasesPerUser: Float!
+  }
+
+  type DashboardRetentionPoint {
+    x: Int!
+    label: String!
+    percentage: Float!
+    usersCount: Int!
+    baseUsers: Int!
+  }
+
+  type AdminDashboardMetrics {
+    activeSubscriptions: Int!
+    activePunchCards: Int!
+    subscriptionJoinLeaveByMonth: [DashboardMonthlyJoinLeave!]!
+    punchCardPurchasesByMonth: [DashboardMonthlyCount!]!
+    registrationDistributionLastMonth: DashboardRegistrationDistribution!
+    averageStudentsLastMonth: DashboardAverageStudents!
+    classTypeDistributionLastMonth: DashboardClassTypeDistribution!
+    classDistributionByClassLastMonth: [DashboardClassMetric!]!
+    averageStudentsByClassLastMonth: [DashboardClassMetric!]!
+    averageTenure: DashboardAverageTenure!
+    subscriptionRetention: [DashboardRetentionPoint!]!
+    punchCardReturnRate: [DashboardRetentionPoint!]!
+    avgDaysBetweenPunchCardPurchases: Float!
+  }
+
   type Query {
     me: User
     events(dateRange: DateRangeInput, filters: EventFilters): [Event!]!
@@ -33,6 +107,7 @@ export const typeDefs = gql`
     allEvents: [Event!]!
     products: [Product!]!
     allProducts: [Product!]!
+    adminDashboardMetrics: AdminDashboardMetrics!
   }
 
   type Mutation {
