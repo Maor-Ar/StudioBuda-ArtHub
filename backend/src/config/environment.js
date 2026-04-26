@@ -8,9 +8,12 @@ const gmail = buildGmailConfig(gmailJson);
 const hasSendGridCreds = !!(
   (process.env.EMAIL_API_KEY || '').trim() && (process.env.EMAIL_FROM_ADDRESS || '').trim()
 );
-const explicitEmailProvider = (process.env.EMAIL_SERVICE_PROVIDER || '').trim();
+const explicitEmailProvider = (process.env.EMAIL_SERVICE_PROVIDER || '').trim().toLowerCase();
+// Template often sets "sendgrid" in secrets without EMAIL_API_KEY; treat as Gmail if OAuth is complete.
 const emailProvider = explicitEmailProvider
-  ? explicitEmailProvider
+  ? explicitEmailProvider === 'sendgrid' && !hasSendGridCreds && gmail.isReady
+    ? 'gmail'
+    : explicitEmailProvider
   : hasSendGridCreds
     ? 'sendgrid'
     : gmail.isReady

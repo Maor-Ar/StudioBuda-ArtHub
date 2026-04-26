@@ -171,6 +171,7 @@ class EmailService {
     const payload = { to: email, subject, html };
     const canSendGrid = !!config.email.apiKey && !!config.email.fromAddress;
     const provider = (config.email.provider || 'sendgrid').toLowerCase();
+    const gmailReady = Boolean(config.email.gmail?.isReady);
 
     // If EMAIL_SERVICE_PROVIDER=gmail (or only Gmail is configured), never use SendGrid.
     if (canSendGrid && provider !== 'gmail') {
@@ -184,8 +185,12 @@ class EmailService {
       }
     }
 
+    // If provider is explicitly "sendgrid" but there is no API key (common in Secret
+    // Manager templates), still use Gmail when OAuth is complete — do not require
+    // provider !== 'sendgrid' in that case.
     const useGmail =
-      provider === 'gmail' || (provider !== 'sendgrid' && config.email.gmail?.isReady);
+      gmailReady &&
+      (provider === 'gmail' || provider !== 'sendgrid' || !canSendGrid);
 
     if (useGmail) {
       try {
