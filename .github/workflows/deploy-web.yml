@@ -45,6 +45,15 @@ jobs:
         env:
           CI: true
 
+      # GitHub Pages has no file at /reset-password; serving 404.html (same as the SPA
+      # shell) lets the app load and React Router can read the path + query.
+      - name: GitHub Pages SPA fallback (client-side routes)
+        working-directory: frontend/dist
+        run: |
+          test -f index.html
+          cp index.html 404.html
+          touch .nojekyll
+
       - name: Add CNAME for subdomain
         working-directory: frontend/dist
         run: echo "${{ env.CNAME_SUBDOMAIN }}" > CNAME
