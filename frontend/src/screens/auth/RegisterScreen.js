@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
 import { useMutation } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
 import { REGISTER } from '../../services/graphql/mutations';
+import { STORAGE_KEYS } from '../../utils/constants';
+import RememberMeRow from '../../components/RememberMeRow';
 
 const RegisterScreen = ({ navigation }) => {
   const [firstName, setFirstName] = useState('');
@@ -12,12 +15,28 @@ const RegisterScreen = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const { login } = useAuth();
+  const [rememberMe, setRememberMe] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const v = await AsyncStorage.getItem(STORAGE_KEYS.REMEMBER_ME);
+        if (v === '0' || v === 'false') {
+          setRememberMe(false);
+        }
+      } catch (e) {
+        /* default */
+      }
+    })();
+  }, []);
 
   const [registerMutation, { loading }] = useMutation(REGISTER, {
     onCompleted: async (data) => {
       try {
         // Store token, user data, and transactions in AuthContext
-        await login(data.register.token, data.register.user, data.register.activeTransactions || []);
+        await login(data.register.token, data.register.user, data.register.activeTransactions || [], {
+          rememberMe,
+        });
         Alert.alert('Success', 'Registration successful! Welcome to StudioBuda ArtHub.');
       } catch (error) {
         Alert.alert('Error', 'Failed to save registration data');
@@ -128,6 +147,8 @@ const RegisterScreen = ({ navigation }) => {
         onChangeText={setConfirmPassword}
         secureTextEntry
       />
+
+      <RememberMeRow value={rememberMe} onValueChange={setRememberMe} disabled={loading} />
       
       <TouchableOpacity
         style={[styles.button, loading && styles.buttonDisabled]}

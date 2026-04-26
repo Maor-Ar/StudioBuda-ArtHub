@@ -3,6 +3,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { STORAGE_KEYS } from '../utils/constants';
 
+const shouldPersistAuthToDisk = async () => {
+  const v = await AsyncStorage.getItem(STORAGE_KEYS.REMEMBER_ME);
+  return v !== '0' && v !== 'false';
+};
+
 // Import Firebase (static import for better bundler support)
 let firebaseApp = null;
 let firebaseAuth = null;
@@ -53,65 +58,18 @@ const safeImport = async (modulePath) => {
 };
 
 const initializeFirebase = async () => {
-  if (firebaseApp !== null) return; // null means we tried and failed, undefined means not tried yet
+  if (firebaseApp !== null && firebaseAuth !== null) return;
   try {
-    // Import Firebase modules
-    let firebaseModule, firebaseAuthModule;
-    
-    if (Platform.OS === 'web') {
-      // On web, try to use the pre-loaded modules if available
-      if (firebaseAppModule && firebaseAuthModule) {
-        console.log('[AUTH] Using pre-loaded Firebase imports (web)');
-        firebaseModule = await firebaseAppModule;
-        firebaseAuthModule = await firebaseAuthModule;
-      } else {
-        console.log('[AUTH] Using direct dynamic Firebase imports (web)');
-        firebaseModule = await import('firebase/app');
-        firebaseAuthModule = await import('firebase/auth');
-      }
-    } else {
-      console.log('[AUTH] Using dynamic Firebase imports (native)');
-      firebaseModule = await safeImport('firebase/app');
-      firebaseAuthModule = await safeImport('firebase/auth');
-    }
-    
-    // Import config file (this is a local file, not a module)
-    const { firebaseConfig } = await import('../config/firebase');
-    
-    console.log('[AUTH] Firebase config check:', {
-      hasApiKey: !!firebaseConfig.apiKey && firebaseConfig.apiKey !== 'YOUR_FIREBASE_API_KEY',
-      projectId: firebaseConfig.projectId,
-      authDomain: firebaseConfig.authDomain
-    });
-    
-    if (firebaseModule.getApps().length === 0) {
-      console.log('[AUTH] Initializing Firebase app...');
-      try {
-        firebaseApp = firebaseModule.initializeApp(firebaseConfig);
-        console.log('[AUTH] ✅ Firebase app initialized successfully');
-      } catch (initError) {
-        console.error('[AUTH] ❌ Firebase app initialization failed:', initError.message);
-        throw initError;
-      }
-    } else {
-      firebaseApp = firebaseModule.getApp();
-      console.log('[AUTH] ✅ Using existing Firebase app');
-    }
-    
-    try {
-      firebaseAuth = firebaseAuthModule.getAuth(firebaseApp);
-      console.log('[AUTH] ✅ Firebase Auth initialized successfully');
-    } catch (authError) {
-      console.error('[AUTH] ❌ Firebase Auth initialization failed:', authError.message);
-      throw authError;
-    }
+    const { ensureFirebase } = await import('../config/firebaseAuth');
+    const { app, auth: authInstance } = await ensureFirebase();
+    firebaseApp = app;
+    firebaseAuth = authInstance;
+    console.log('[AUTH] ✅ Firebase (singleton with RN persistence) ready');
   } catch (error) {
-    // Firebase not available - set to null to indicate we tried
     console.warn('[AUTH] ⚠️ Firebase not available:', error.message);
     console.warn('[AUTH] Token exchange will not work. You may need to configure Firebase API keys.');
     firebaseApp = null;
     firebaseAuth = null;
-    // Don't throw - allow app to continue without Firebase
   }
 };
 
@@ -122,7 +80,7 @@ const AuthContext = createContext({
   transactions: [],
   isLoading: true,
   isAuthenticated: false,
-  login: async (token, userData, transactions) => {},
+  login: async (token, userData, transactions, options) => {},
   logout: async () => {},
   updateUser: (userData) => {},
   updateTransactions: (transactions) => {},
@@ -142,6 +100,19 @@ export const AuthProvider = ({ children }) => {
 
   const loadStoredAuth = async () => {
     try {
+      if (!(await shouldPersistAuthToDisk())) {
+        try {
+          await AsyncStorage.multiRemove([
+            STORAGE_KEYS.AUTH_TOKEN,
+            STORAGE_KEYS.USER_DATA,
+            STORAGE_KEYS.USER_TRANSACTIONS,
+          ]);
+        } catch (e) {
+          /* ignore */
+        }
+        return;
+      }
+
       const storedToken = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
       const storedUser = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
       const storedTransactions = await AsyncStorage.getItem(STORAGE_KEYS.USER_TRANSACTIONS);
@@ -196,12 +167,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (customToken, userData, activeTransactions = []) => {
-    console.log('[AUTH] 🔐 Starting login process...');
+  const login = async (customToken, userData, activeTransactions = [], { rememberMe = true } = {}) => {
+    console.log('[AUTH] 🔐 Starting login process...', { rememberMe });
     console.log('[AUTH] Custom token length:', customToken?.length);
     console.log('[AUTH] Custom token preview:', customToken?.substring(0, 50) + '...');
     
     try {
+      await AsyncStorage.setItem(STORAGE_KEYS.REMEMBER_ME, rememberMe ? '1' : '0');
+      const { resetFirebaseClient } = await import('../config/firebaseAuth');
+      await resetFirebaseClient();
+      firebaseApp = null;
+      firebaseAuth = null;
+
       let idToken = customToken; // Fallback to custom token if Firebase fails
       
       // Try to initialize Firebase and exchange token
@@ -257,11 +234,20 @@ export const AuthProvider = ({ children }) => {
       // Filter only active transactions (subscriptions and punch cards)
       const filteredTransactions = activeTransactions.filter(t => t.isActive);
       
-      // Store token (ID token if available, otherwise custom token), user data, and transactions
-      console.log('[AUTH] 💾 Storing token (type:', idToken === customToken ? 'CUSTOM' : 'ID', ', length:', idToken?.length, ')');
-      await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, idToken);
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(userData));
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_TRANSACTIONS, JSON.stringify(filteredTransactions));
+      console.log('[AUTH] 💾 Storing token (type:', idToken === customToken ? 'CUSTOM' : 'ID', ', length:', idToken?.length, ')', 'persistDisk:', rememberMe);
+      if (rememberMe) {
+        await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, idToken);
+        await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(userData));
+        await AsyncStorage.setItem(STORAGE_KEYS.USER_TRANSACTIONS, JSON.stringify(filteredTransactions));
+      } else {
+        try {
+          await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+          await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
+          await AsyncStorage.removeItem(STORAGE_KEYS.USER_TRANSACTIONS);
+        } catch (e) {
+          /* ignore */
+        }
+      }
 
       // Update state
       setToken(idToken);
@@ -293,8 +279,13 @@ export const AuthProvider = ({ children }) => {
         // If Firebase isn't available, continue with logout anyway
         console.warn('Firebase sign out failed, continuing with local logout:', firebaseError);
       }
+
+      const { resetFirebaseClient } = await import('../config/firebaseAuth');
+      await resetFirebaseClient();
+      firebaseApp = null;
+      firebaseAuth = null;
       
-      // Clear stored data
+      // Clear stored data (keep REMEMBER_ME so next login can reuse the same choice)
       await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
       await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
       await AsyncStorage.removeItem(STORAGE_KEYS.USER_TRANSACTIONS);
@@ -319,8 +310,9 @@ export const AuthProvider = ({ children }) => {
       const currentUser = firebaseAuth.currentUser;
       if (currentUser) {
         const idToken = await currentUser.getIdToken(true); // Force refresh
-        // Update stored token
-        await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, idToken);
+        if (await shouldPersistAuthToDisk()) {
+          await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, idToken);
+        }
         setToken(idToken);
         return idToken;
       }
@@ -339,19 +331,25 @@ export const AuthProvider = ({ children }) => {
     const updatedUser = { ...user, ...userData };
     setUser(updatedUser);
     
-    // Update stored user data
-    AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser))
-      .catch(error => console.error('Failed to update stored user:', error));
+    (async () => {
+      if (await shouldPersistAuthToDisk()) {
+        AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser))
+          .catch((error) => console.error('Failed to update stored user:', error));
+      }
+    })();
   };
 
   const updateTransactions = (newTransactions) => {
     // Filter only active transactions
     const filteredTransactions = newTransactions.filter(t => t.isActive);
     setTransactions(filteredTransactions);
-    
-    // Update stored transactions
-    AsyncStorage.setItem(STORAGE_KEYS.USER_TRANSACTIONS, JSON.stringify(filteredTransactions))
-      .catch(error => console.error('Failed to update stored transactions:', error));
+
+    (async () => {
+      if (await shouldPersistAuthToDisk()) {
+        AsyncStorage.setItem(STORAGE_KEYS.USER_TRANSACTIONS, JSON.stringify(filteredTransactions))
+          .catch((error) => console.error('Failed to update stored transactions:', error));
+      }
+    })();
   };
 
   const value = {

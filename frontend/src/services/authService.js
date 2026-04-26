@@ -4,7 +4,8 @@ import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import { OAUTH_PROVIDERS } from '../utils/constants';
-import { oAuthConfig, firebaseConfig } from '../config/firebase';
+import { oAuthConfig } from '../config/firebase';
+import { getFirebaseAuth as getSharedFirebaseAuth } from '../config/firebaseAuth';
 
 // Firebase project 102013040020 (studiobuda-arthub) - OAuth client must match for id_token to be accepted
 const FIREBASE_WEB_CLIENT_ID = '102013040020-on89le0901sibnbho24bdkjvenjt0q34.apps.googleusercontent.com';
@@ -25,13 +26,11 @@ async function generateNonce() {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Lazy-load Firebase Auth for Google credential exchange
+// Lazy-load Firebase Auth for Google credential exchange (same singleton as AuthContext / Apollo)
 const getFirebaseAuth = async () => {
-  const { getApps, initializeApp } = await import('firebase/app');
-  const { getAuth, signInWithCredential, GoogleAuthProvider } = await import('firebase/auth');
-  const apps = getApps();
-  const app = apps.length ? apps[0] : initializeApp(firebaseConfig);
-  return { auth: getAuth(app), signInWithCredential, GoogleAuthProvider };
+  const { signInWithCredential, GoogleAuthProvider } = await import('firebase/auth');
+  const auth = await getSharedFirebaseAuth();
+  return { auth, signInWithCredential, GoogleAuthProvider };
 };
 
 /**

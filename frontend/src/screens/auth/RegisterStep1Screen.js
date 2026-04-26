@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Dimensions, ActivityIndicator, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
 import { LOGIN_WITH_OAUTH } from '../../services/graphql/mutations';
 import authService from '../../services/authService';
-import { OAUTH_PROVIDERS } from '../../utils/constants';
+import { OAUTH_PROVIDERS, STORAGE_KEYS } from '../../utils/constants';
+import RememberMeRow from '../../components/RememberMeRow';
 import { validateEmail } from '../../utils/validation';
 import { getOAuthErrorMessage } from '../../utils/errorMessages';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
@@ -18,12 +20,26 @@ const RegisterStep1Screen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
   const [oauthLoading, setOauthLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const { login } = useAuth();
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const v = await AsyncStorage.getItem(STORAGE_KEYS.REMEMBER_ME);
+        if (v === '0' || v === 'false') {
+          setRememberMe(false);
+        }
+      } catch (e) {
+        /* default */
+      }
+    })();
+  }, []);
 
   const [loginWithOAuthMutation] = useMutation(LOGIN_WITH_OAUTH, {
     onCompleted: async (data) => {
       try {
-        await login(data.loginWithOAuth.token, data.loginWithOAuth.user);
+        await login(data.loginWithOAuth.token, data.loginWithOAuth.user, [], { rememberMe });
         setOauthLoading(false);
         showSuccessToast('התחברת בהצלחה!');
       } catch (error) {
@@ -142,6 +158,12 @@ const RegisterStep1Screen = ({ navigation }) => {
         <Text style={styles.separatorText}>או</Text>
         <View style={styles.separatorLine} />
       </View>
+
+      <RememberMeRow
+        value={rememberMe}
+        onValueChange={setRememberMe}
+        disabled={oauthLoading}
+      />
 
       {/* OAuth Buttons */}
       <View style={styles.oauthContainer}>

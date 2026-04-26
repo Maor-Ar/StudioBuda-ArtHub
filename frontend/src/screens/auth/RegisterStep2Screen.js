@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useMutation } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
@@ -6,6 +7,8 @@ import { REGISTER } from '../../services/graphql/mutations';
 import { validateName, validatePhone, validatePassword, validatePasswordMatch } from '../../utils/validation';
 import { getGraphQLErrorMessage, SUCCESS_MESSAGES } from '../../utils/errorMessages';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
+import { STORAGE_KEYS } from '../../utils/constants';
+import RememberMeRow from '../../components/RememberMeRow';
 
 const RegisterStep2Screen = ({ navigation, route }) => {
   const email = route?.params?.email || '';
@@ -25,11 +28,27 @@ const RegisterStep2Screen = ({ navigation, route }) => {
   });
 
   const { login } = useAuth();
+  const [rememberMe, setRememberMe] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const v = await AsyncStorage.getItem(STORAGE_KEYS.REMEMBER_ME);
+        if (v === '0' || v === 'false') {
+          setRememberMe(false);
+        }
+      } catch (e) {
+        /* default */
+      }
+    })();
+  }, []);
 
   const [registerMutation, { loading }] = useMutation(REGISTER, {
     onCompleted: async (data) => {
       try {
-        await login(data.register.token, data.register.user, data.register.activeTransactions || []);
+        await login(data.register.token, data.register.user, data.register.activeTransactions || [], {
+          rememberMe,
+        });
         showSuccessToast(SUCCESS_MESSAGES.REGISTER_SUCCESS);
       } catch (error) {
         showErrorToast('נכשל בשמירת נתוני ההרשמה');
@@ -272,6 +291,12 @@ const RegisterStep2Screen = ({ navigation, route }) => {
         {errors.confirmPassword ? (
           <Text style={styles.errorText}>{errors.confirmPassword}</Text>
         ) : null}
+
+        <RememberMeRow
+          value={rememberMe}
+          onValueChange={setRememberMe}
+          disabled={loading}
+        />
 
         {/* Register Button */}
         <TouchableOpacity

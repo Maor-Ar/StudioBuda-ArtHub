@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
 import { LOGIN, LOGIN_WITH_OAUTH } from '../../services/graphql/mutations';
 import authService from '../../services/authService';
-import { OAUTH_PROVIDERS } from '../../utils/constants';
+import { OAUTH_PROVIDERS, STORAGE_KEYS } from '../../utils/constants';
+import RememberMeRow from '../../components/RememberMeRow';
 import { validateEmail } from '../../utils/validation';
 import { getGraphQLErrorMessage, getOAuthErrorMessage, SUCCESS_MESSAGES } from '../../utils/errorMessages';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
@@ -20,12 +22,28 @@ const LoginScreen = ({ navigation }) => {
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [oauthLoading, setOauthLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const { login } = useAuth();
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const v = await AsyncStorage.getItem(STORAGE_KEYS.REMEMBER_ME);
+        if (v === '0' || v === 'false') {
+          setRememberMe(false);
+        }
+      } catch (e) {
+        /* default true */
+      }
+    })();
+  }, []);
 
   const [loginMutation, { loading }] = useMutation(LOGIN, {
     onCompleted: async (data) => {
       try {
-        await login(data.login.token, data.login.user, data.login.activeTransactions || []);
+        await login(data.login.token, data.login.user, data.login.activeTransactions || [], {
+          rememberMe,
+        });
         showSuccessToast(SUCCESS_MESSAGES.LOGIN_SUCCESS);
       } catch (error) {
         showErrorToast('נכשל בשמירת נתוני הכניסה');
@@ -40,7 +58,9 @@ const LoginScreen = ({ navigation }) => {
   const [loginWithOAuthMutation] = useMutation(LOGIN_WITH_OAUTH, {
     onCompleted: async (data) => {
       try {
-        await login(data.loginWithOAuth.token, data.loginWithOAuth.user, data.loginWithOAuth.activeTransactions || []);
+        await login(data.loginWithOAuth.token, data.loginWithOAuth.user, data.loginWithOAuth.activeTransactions || [], {
+          rememberMe,
+        });
         setOauthLoading(false);
         showSuccessToast(SUCCESS_MESSAGES.OAUTH_SUCCESS);
       } catch (error) {
@@ -200,6 +220,12 @@ const LoginScreen = ({ navigation }) => {
         spellCheck={false}
       />
       {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+
+      <RememberMeRow
+        value={rememberMe}
+        onValueChange={setRememberMe}
+        disabled={loading || oauthLoading}
+      />
 
       {/* Login Button */}
       <TouchableOpacity

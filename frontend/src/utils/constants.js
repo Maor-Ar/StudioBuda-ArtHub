@@ -111,6 +111,8 @@ export const STORAGE_KEYS = {
   AUTH_TOKEN: '@studiobuda:auth_token',
   USER_DATA: '@studiobuda:user_data',
   USER_TRANSACTIONS: '@studiobuda:user_transactions',
+  /** '1' = keep signed in; '0' = this device / browser only (no long-term local session) */
+  REMEMBER_ME: '@studiobuda:remember_me',
 };
 
 // Event Types

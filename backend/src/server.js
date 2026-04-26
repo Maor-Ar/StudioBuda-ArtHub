@@ -231,12 +231,21 @@ const apolloServer = new ApolloServer({
   resolvers,
   introspection: isDevelopment,
   plugins: isDevelopment ? [] : [ApolloServerPluginLandingPageDisabled()],
-  formatError: (error) => {
-    logger.error('GraphQL Error:', error);
+  formatError: (formattedError) => {
+    logger.error('GraphQL Error:', formattedError);
+    // Preserve AppError.code (e.g. AUTHENTICATION_ERROR) in extensions for the client
+    const orig = formattedError.originalError;
+    const code =
+      (orig && orig.code) ||
+      formattedError.extensions?.code ||
+      'INTERNAL_ERROR';
+    const field = (orig && orig.field) || formattedError.extensions?.field || null;
     return {
-      message: error.message,
-      code: error.extensions?.code || 'INTERNAL_ERROR',
-      field: error.extensions?.field || null,
+      message: formattedError.message,
+      extensions: {
+        code,
+        field,
+      },
     };
   },
 });

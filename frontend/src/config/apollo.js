@@ -2,22 +2,10 @@ import { ApolloClient, InMemoryCache, createHttpLink, from } from '@apollo/clien
 import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
 import { GRAPHQL_ENDPOINT, STORAGE_KEYS } from '../utils/constants';
 
-// Try static import for web
-let firebaseAppModuleStatic = null;
-let firebaseAuthModuleStatic = null;
 let authFailureHandler = null;
 let isAuthFailureHandling = false;
-if (Platform.OS === 'web') {
-  try {
-    firebaseAppModuleStatic = require('firebase/app');
-    firebaseAuthModuleStatic = require('firebase/auth');
-  } catch (e) {
-    // Ignore - will use dynamic import
-  }
-}
 
 export const setApolloAuthFailureHandler = (handler) => {
   authFailureHandler = handler;
@@ -85,53 +73,35 @@ const authLink = setContext(async (_, { headers }) => {
     let token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
     console.log('[APOLLO] Stored token from AsyncStorage:', token ? `Found (length: ${token.length})` : 'Not found');
     
-    // Then try to get fresh token from Firebase Auth if available
-    let firebaseAuthInstance = null;
+    // Then try to get a fresh ID token (Firebase uses long-lived refresh tokens; ID tokens are ~1h)
     try {
-      let firebaseAuthModule, firebaseAppModule;
-      
-      if (Platform.OS === 'web' && firebaseAuthModuleStatic && firebaseAppModuleStatic) {
-        console.log('[APOLLO] Using static Firebase imports (web)');
-        firebaseAuthModule = firebaseAuthModuleStatic;
-        firebaseAppModule = firebaseAppModuleStatic;
-      } else {
-        console.log('[APOLLO] Using dynamic Firebase imports');
-        firebaseAuthModule = await import('firebase/auth');
-        firebaseAppModule = await import('firebase/app');
-      }
-      
-      const apps = firebaseAppModule.getApps();
-      console.log('[APOLLO] Firebase apps count:', apps.length);
-      if (apps.length > 0) {
-        firebaseAuthInstance = firebaseAuthModule.getAuth(apps[0]);
-        console.log('[APOLLO] ✅ Firebase Auth instance obtained');
-        
-        const currentUser = firebaseAuthInstance.currentUser;
-        console.log('[APOLLO] Current Firebase user:', !!currentUser);
-        
-        if (currentUser) {
-          // Get fresh ID token (Firebase automatically refreshes if expired)
-          console.log('[APOLLO] 🔄 Getting fresh ID token from Firebase user...');
-          try {
-            const freshToken = await currentUser.getIdToken();
-            console.log('[APOLLO] ✅ Got fresh ID token from Firebase, length:', freshToken?.length);
-            // Use fresh token if we got one
-            if (freshToken && freshToken.length > 100) {
-              token = freshToken;
-              // Update stored token
+      const { getFirebaseAuth } = await import('./firebaseAuth');
+      const firebaseAuthInstance = await getFirebaseAuth();
+      const currentUser = firebaseAuthInstance.currentUser;
+      console.log('[APOLLO] Current Firebase user:', !!currentUser);
+      if (currentUser) {
+        console.log('[APOLLO] 🔄 Getting fresh ID token from Firebase user...');
+        try {
+          const freshToken = await currentUser.getIdToken();
+          console.log('[APOLLO] ✅ Got fresh ID token from Firebase, length:', freshToken?.length);
+          if (freshToken && freshToken.length > 100) {
+            token = freshToken;
+            const rem = await AsyncStorage.getItem(STORAGE_KEYS.REMEMBER_ME);
+            const usePersistentStorage = rem !== '0' && rem !== 'false';
+            if (usePersistentStorage) {
               await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
               console.log('[APOLLO] ✅ Updated stored token with fresh ID token');
+            } else {
+              console.log('[APOLLO] Session-only: keeping refreshed ID token in memory (not on disk)');
             }
-          } catch (tokenError) {
-            console.warn('[APOLLO] ⚠️ Failed to get fresh token from Firebase, using stored token:', tokenError.message);
-            // Continue with stored token
           }
-        } else {
-          console.log('[APOLLO] ⚠️ No Firebase currentUser, using stored token');
+        } catch (tokenError) {
+          console.warn('[APOLLO] ⚠️ Failed to get fresh token from Firebase, using stored token:', tokenError.message);
         }
+      } else {
+        console.log('[APOLLO] ⚠️ No Firebase currentUser, using stored token (ensure RN auth persistence is enabled)');
       }
     } catch (firebaseError) {
-      // Firebase not available, will use stored token
       console.warn('[APOLLO] ⚠️ Firebase not available in apolloClient, using stored token:', firebaseError.message);
     }
     
@@ -175,24 +145,29 @@ const authLink = setContext(async (_, { headers }) => {
   }
 });
 
+const isAuthLikeGraphQLError = (err) => {
+  const message = (err?.message || '').toLowerCase();
+  const code = (err?.extensions?.code || '').toUpperCase();
+  return (
+    message.includes('authentication required') ||
+    message.includes('invalid or expired token') ||
+    message.includes('authentication failed') ||
+    message.includes('insufficient permissions') ||
+    message.includes('user account is incomplete') ||
+    message.includes('try signing in again') ||
+    message.includes('incomplete. please try signing') ||
+    code === 'UNAUTHENTICATED' ||
+    code === 'AUTHENTICATION_ERROR'
+  );
+};
+
 const errorLink = onError(({ graphQLErrors, networkError }) => {
-  const hasAuthGraphQLError = Array.isArray(graphQLErrors) && graphQLErrors.some((err) => {
-    const message = (err?.message || '').toLowerCase();
-    const code = (err?.extensions?.code || '').toUpperCase();
-    return (
-      message.includes('authentication required') ||
-      message.includes('invalid or expired token') ||
-      message.includes('authentication failed') ||
-      message.includes('insufficient permissions') ||
-      code === 'UNAUTHENTICATED' ||
-      code === 'AUTHENTICATION_ERROR'
-    );
-  });
+  const hasAuthGraphQLError = Array.isArray(graphQLErrors) && graphQLErrors.some(isAuthLikeGraphQLError);
 
   const networkStatusCode = networkError?.statusCode || networkError?.status;
-  const has401NetworkError = networkStatusCode === 401;
+  const hasAuthNetworkError = networkStatusCode === 401;
 
-  if (hasAuthGraphQLError || has401NetworkError) {
+  if (hasAuthGraphQLError || hasAuthNetworkError) {
     console.warn('[APOLLO] ⚠️ Authentication error detected, triggering logout');
     invokeAuthFailureHandler();
   }
