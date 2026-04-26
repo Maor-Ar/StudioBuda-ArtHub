@@ -106,13 +106,7 @@ class TransactionService {
     // Invalidate cache
     await cacheService.invalidateUserCache(userId);
 
-    logger.info('Transaction created', {
-      transactionId: docRef.id,
-      userId,
-      transactionType,
-      amount,
-      hasToken: !!paymentToken,
-    });
+    // logger.info('Transaction created', { transactionId: docRef.id, userId, transactionType });
 
     return { id: docRef.id, ...transactionDoc };
   }

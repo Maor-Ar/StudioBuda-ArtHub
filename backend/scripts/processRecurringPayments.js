@@ -65,11 +65,7 @@ async function processRecurringPayments() {
     errors: [],
   };
 
-  logger.info('Starting recurring payments processing', {
-    timestamp: new Date().toISOString(),
-    dryRun: DRY_RUN,
-    force: FORCE,
-  });
+  // logger.info('Recurring job start', { dryRun: DRY_RUN, force: FORCE });
 
   console.log('\n=== Recurring Payments Processing ===');
   console.log(`Time: ${new Date().toISOString()}`);
@@ -126,12 +122,6 @@ async function processRecurringPayments() {
       }
 
       results.processed++;
-      logger.info('Processing subscription payment', {
-        transactionId: transaction.id,
-        userId: transaction.userId,
-        amount: transaction.amount,
-        daysSincePayment,
-      });
 
       if (DRY_RUN) {
         console.log(`  Status: WOULD CHARGE (dry run)`);
@@ -152,13 +142,6 @@ async function processRecurringPayments() {
           lastPaymentDate: now,
           entriesUsedThisMonth: 0,
           zcreditReferenceNumber: chargeResult.referenceNumber,
-        });
-
-        logger.info('Subscription payment successful', {
-          transactionId: transaction.id,
-          userId: transaction.userId,
-          referenceNumber: chargeResult.referenceNumber,
-          newLastPaymentDate: now.toISOString(),
         });
 
         console.log(`  Status: SUCCESS`);
@@ -214,16 +197,6 @@ async function processRecurringPayments() {
   }
 
   const duration = Date.now() - startTime;
-
-  logger.info('Recurring payments processing completed', {
-    total: results.total,
-    processed: results.processed,
-    successful: results.successful,
-    failed: results.failed,
-    skipped: results.skipped,
-    noToken: results.noToken,
-    duration: `${duration}ms`,
-  });
 
   console.log('\n=== Summary ===');
   console.log(`Total Active Subscriptions: ${results.total}`);

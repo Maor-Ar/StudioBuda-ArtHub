@@ -37,10 +37,12 @@ steps:
       - '0'
       - '--max-instances'
       - '10'
+      # Replaces the *entire* secret set on the service — each Cloud Build deploy must list
+      # every Secret Manager binding, or Gmail/email/redis env vars disappear from the revision.
       - '--set-secrets'
-      - 'FIREBASE_PROJECT_ID=FIREBASE_PROJECT_ID:latest,FIREBASE_CLIENT_EMAIL=FIREBASE_CLIENT_EMAIL:latest,FIREBASE_PRIVATE_KEY=FIREBASE_PRIVATE_KEY:latest'
+      - 'FIREBASE_PROJECT_ID=FIREBASE_PROJECT_ID:latest,FIREBASE_CLIENT_EMAIL=FIREBASE_CLIENT_EMAIL:latest,FIREBASE_PRIVATE_KEY=FIREBASE_PRIVATE_KEY:latest,GMAIL_OAUTH_CLIENT_JSON=GMAIL_OAUTH_CLIENT_JSON:latest,GMAIL_REFRESH_TOKEN=GMAIL_REFRESH_TOKEN:latest,GMAIL_DELEGATED_USER=GMAIL_DELEGATED_USER:latest,EMAIL_FROM_ADDRESS=EMAIL_FROM_ADDRESS:latest,EMAIL_FROM_NAME=EMAIL_FROM_NAME:latest,FRONTEND_URL=FRONTEND_URL:latest,PASSWORD_RESET_URL=PASSWORD_RESET_URL:latest,PASSWORD_RESET_TOKEN_EXPIRY=PASSWORD_RESET_TOKEN_EXPIRY:latest,REDIS_HOST=REDIS_HOST:latest,REDIS_PORT=REDIS_PORT:latest'
       - '--set-env-vars'
-      - 'NODE_ENV=production,CORS_ORIGIN=https://arthub.studiobuda.co.il'
+      - 'NODE_ENV=production,CORS_ORIGIN=https://arthub.studiobuda.co.il,BACKEND_URL=https://studiobuda-backend-873405578260.me-west1.run.app'
 
 images:
   - 'gcr.io/$PROJECT_ID/studiobuda-backend'

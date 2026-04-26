@@ -31,7 +31,7 @@ export const authResolvers = {
         });
       } catch (error) {
         const errorCode = error?.code || '';
-        logger.error('[AUTH_DEBUG] register: Firebase createUser failed', {
+        logger.error('register: Firebase createUser failed', {
           email,
           code: errorCode,
           message: error?.message,
@@ -41,12 +41,12 @@ export const authResolvers = {
         if (errorCode === 'auth/email-already-exists') {
           try {
             firebaseUser = await auth.getUserByEmail(email);
-            logger.warn('[AUTH_DEBUG] register: using existing Firebase Auth user for Firestore sync', {
+            logger.warn('register: using existing Firebase user for Firestore sync', {
               email,
               firebaseUid: firebaseUser?.uid,
             });
           } catch (getUserError) {
-            logger.error('[AUTH_DEBUG] register: failed to fetch existing Firebase user', {
+            logger.error('register: failed to fetch existing Firebase user', {
               email,
               code: getUserError?.code,
               message: getUserError?.message,
@@ -62,7 +62,6 @@ export const authResolvers = {
       const passwordHash = await bcrypt.hash(password, 10);
 
       // Create user in Firestore using Firebase UID as document ID
-      console.log(`[REGISTER] Creating Firestore user with Firebase UID: ${firebaseUser.uid}`);
       const user = await authService.createUser({
         firstName,
         lastName,
@@ -73,8 +72,6 @@ export const authResolvers = {
         role: 'user',
         firebaseUid: firebaseUser.uid, // Use Firebase Auth UID as Firestore document ID
       });
-      console.log(`[REGISTER] Firestore user created successfully: ${user.id}`);
-
       // Get active transactions (will be empty for new user)
       const activeTransactions = await transactionService.getUserActiveTransactions(
         user.id,
@@ -151,27 +148,23 @@ export const authResolvers = {
     loginWithOAuth: async (_, { provider, token }, context) => {
       // Validate provider parameter
       if (!provider || typeof provider !== 'string') {
-        logger.error('[AUTH_DEBUG] loginWithOAuth: invalid provider', { provider });
+        logger.error('loginWithOAuth: invalid provider', { provider });
         throw new ValidationError('Provider is required and must be a string');
       }
 
       // Normalize provider to lowercase for consistency
       const normalizedProvider = provider.trim().toLowerCase();
-      logger.info('[AUTH_DEBUG] loginWithOAuth: provider=%s (normalized=%s) tokenLength=%s', provider, normalizedProvider, token?.length);
-
       // Validate token
       if (!token || typeof token !== 'string' || token.length < 50) {
-        logger.error('[AUTH_DEBUG] loginWithOAuth: invalid token', { tokenLength: token?.length });
+        logger.error('loginWithOAuth: invalid token', { tokenLength: token?.length });
         throw new ValidationError('Valid authentication token is required');
       }
 
       let decodedToken;
       try {
         decodedToken = await authService.verifyToken(token);
-        logger.info('[AUTH_DEBUG] loginWithOAuth: token verified, uid=%s email=%s emailVerified=%s', 
-          decodedToken?.uid, decodedToken?.email, decodedToken?.email_verified);
       } catch (verifyError) {
-        logger.error('[AUTH_DEBUG] loginWithOAuth: token verification failed', { error: verifyError?.message, stack: verifyError?.stack });
+        logger.error('loginWithOAuth: token verification failed', { error: verifyError?.message, stack: verifyError?.stack });
         throw verifyError;
       }
       
@@ -182,9 +175,8 @@ export const authResolvers = {
         // Check if email is in identities
         if (decodedToken.firebase?.identities?.email && decodedToken.firebase.identities.email.length > 0) {
           userEmail = decodedToken.firebase.identities.email[0];
-          logger.info('[AUTH_DEBUG] loginWithOAuth: email found in identities', { email: userEmail });
         } else {
-          logger.error('[AUTH_DEBUG] loginWithOAuth: Firebase token missing email', { 
+          logger.error('loginWithOAuth: Firebase token missing email', { 
             uid: decodedToken.uid, 
             keys: Object.keys(decodedToken),
             hasIdentities: !!decodedToken.firebase?.identities
@@ -199,14 +191,7 @@ export const authResolvers = {
       try {
         existingUserByEmail = await authService.getUserByEmail(userEmail);
         if (existingUserByEmail && existingUserByEmail.firebaseUid !== decodedToken.uid) {
-          logger.info('[AUTH_DEBUG] loginWithOAuth: email exists with different Firebase UID - linking OAuth account', {
-            email: userEmail,
-            existingUid: existingUserByEmail.firebaseUid,
-            newOAuthUid: decodedToken.uid,
-            existingUserType: existingUserByEmail.userType
-          });
-          
-          // Link accounts: Update existing user's firebaseUid to the OAuth UID
+          // Link accounts (OAuth email match, different UID) Update existing user's firebaseUid to the OAuth UID
           // This allows users to login with either email/password or OAuth
           // Also update userType to OAuth if it was regular
           const updateData = {
@@ -218,16 +203,11 @@ export const authResolvers = {
           
           // Update the existing user document
           existingUserByEmail = await authService.updateUser(existingUserByEmail.id, updateData);
-          
-          logger.info('[AUTH_DEBUG] loginWithOAuth: account linked successfully, user can now login with OAuth');
         }
       } catch (error) {
-        // If error is NotFoundError (user doesn't exist), that's fine - continue
         if (error.name !== 'NotFoundError' && !(error.message && error.message.includes('not found'))) {
-          logger.error('[AUTH_DEBUG] loginWithOAuth: error checking existing user by email', { error: error?.message });
-          // Don't throw - continue with normal flow
+          logger.error('loginWithOAuth: error checking user by email', { error: error?.message });
         }
-        logger.info('[AUTH_DEBUG] loginWithOAuth: no existing user found by email, continuing');
       }
       
       // Get or create user
@@ -237,27 +217,20 @@ export const authResolvers = {
       // (We can't use getUserById with new UID because document ID is still old UID)
       if (existingUserByEmail && existingUserByEmail.firebaseUid === decodedToken.uid) {
         user = existingUserByEmail;
-        logger.info('[AUTH_DEBUG] loginWithOAuth: using linked user account, id=%s userType=%s', user?.id, user?.userType);
       } else {
-        // Try to get user by Firebase UID (document ID)
         try {
           user = await authService.getUserById(decodedToken.uid);
-          logger.info('[AUTH_DEBUG] loginWithOAuth: existing user found by UID, id=%s userType=%s', user?.id, user?.userType);
-          
-          // Edge case: Update userType if it changed (e.g., was 'regular' now OAuth)
           if (user.userType === 'regular' && normalizedProvider !== 'regular') {
-            logger.info('[AUTH_DEBUG] loginWithOAuth: updating userType from regular to %s', normalizedProvider);
             user = await authService.updateUser(user.id, { userType: normalizedProvider });
           }
         } catch (error) {
-        logger.info('[AUTH_DEBUG] loginWithOAuth: user not found, creating new. error=%s', error?.message);
         // User doesn't exist, create new user from OAuth
         // First, ensure Firebase Auth user exists (OAuth might have created it)
         let firebaseUser;
         try {
           firebaseUser = await auth.getUser(decodedToken.uid);
         } catch (authError) {
-          logger.error('[AUTH_DEBUG] loginWithOAuth: Firebase user not found', { uid: decodedToken.uid, error: authError?.message });
+          logger.error('loginWithOAuth: Firebase user not found', { uid: decodedToken.uid, error: authError?.message });
           throw new AuthenticationError('OAuth user not found in Firebase Auth');
         }
 
@@ -291,20 +264,8 @@ export const authResolvers = {
         // Log email verification status (informational - Google doesn't always provide this)
         const emailVerified = decodedToken.email_verified === true;
         if (!emailVerified) {
-          logger.warn('[AUTH_DEBUG] loginWithOAuth: email not verified in token', { 
-            email: userEmail,
-            email_verified: decodedToken.email_verified 
-          });
+          logger.warn('loginWithOAuth: email not verified in token', { email: userEmail });
         }
-
-        logger.info('[AUTH_DEBUG] loginWithOAuth: creating user', { 
-          firstName, 
-          lastName, 
-          email: userEmail, 
-          emailVerified: emailVerified,
-          provider: normalizedProvider,
-          photoUrl: decodedToken.picture || decodedToken.photoURL || null
-        });
 
         try {
           // Race condition handling: user might be created between check and create
@@ -319,24 +280,19 @@ export const authResolvers = {
             role: 'user',
             firebaseUid: decodedToken.uid, // Use Firebase Auth UID as Firestore document ID
           });
-          logger.info('[AUTH_DEBUG] loginWithOAuth: new user created, id=%s', user?.id);
         } catch (createError) {
-          // Handle race condition: if user was created concurrently, try to fetch it
           if (createError.message?.includes('already exists') || createError.code === 'ALREADY_EXISTS') {
-            logger.info('[AUTH_DEBUG] loginWithOAuth: user was created concurrently, fetching existing user');
             try {
               user = await authService.getUserById(decodedToken.uid);
-              logger.info('[AUTH_DEBUG] loginWithOAuth: successfully fetched concurrently created user, id=%s', user?.id);
             } catch (fetchError) {
-              logger.error('[AUTH_DEBUG] loginWithOAuth: failed to fetch concurrently created user', { error: fetchError?.message });
-              throw createError; // Re-throw original error if fetch fails
+              logger.error('loginWithOAuth: fetch user after race failed', { error: fetchError?.message });
+              throw createError;
             }
           } else {
-            logger.error('[AUTH_DEBUG] loginWithOAuth: createUser failed', { 
-              error: createError?.message, 
-              stack: createError?.stack, 
+            logger.error('loginWithOAuth: createUser failed', {
+              error: createError?.message,
               name: createError?.name,
-              code: createError?.code
+              code: createError?.code,
             });
             throw createError;
           }

@@ -32,7 +32,8 @@ if (!admin.apps.length) {
           clientEmail: config.firebase.clientEmail,
         }),
       });
-      console.log('✅ Firebase Admin SDK initialized successfully');
+      // logger / console: startup only — enable to verify Admin init in logs
+      // console.log('[START] Firebase Admin initialized');
     }
   } catch (error) {
     console.error('❌ Firebase initialization error:', error.message);

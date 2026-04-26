@@ -1,19 +1,9 @@
-import logger from '../utils/logger.js';
-
+/**
+ * Per-request HTTP logging (disabled: too noisy in production).
+ * Re-enable and use logger.debug if you need request tracing:
+ *   res.on('finish', () => { logger.debug('HTTP', { method, url, statusCode, duration: Date.now() - start }); });
+ */
 export const requestLogger = (req, res, next) => {
-  const start = Date.now();
-
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    logger.info('HTTP Request', {
-      method: req.method,
-      url: req.url,
-      statusCode: res.statusCode,
-      duration: `${duration}ms`,
-      ip: req.ip,
-    });
-  });
-
   next();
 };
 

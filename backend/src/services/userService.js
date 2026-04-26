@@ -44,9 +44,7 @@ class UserService {
 
     // Use Firebase UID as the document ID so it matches the auth token
     const docRef = db.collection('users').doc(firebaseUid);
-    console.log(`[USER_SERVICE] Creating user document with ID: ${firebaseUid}`);
     await docRef.set(userDoc);
-    console.log(`[USER_SERVICE] User document created successfully: ${firebaseUid}`);
     
     // Invalidate cache
     await cacheService.delPattern('user:*');

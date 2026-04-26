@@ -177,7 +177,7 @@ class EmailService {
     if (canSendGrid && provider !== 'gmail') {
       try {
         await this.sendWithSendGrid(payload);
-        logger.info('Password reset email sent via SendGrid', { email });
+        // logger.info('Password reset sent (SendGrid)', { email });
         return true;
       } catch (error) {
         logger.error('SendGrid send failed', { email, message: error?.message });
@@ -195,7 +195,7 @@ class EmailService {
     if (useGmail) {
       try {
         await this.sendWithGmailApi(payload);
-        logger.info('Password reset email sent via Gmail API', { email });
+        // logger.info('Password reset sent (Gmail API)', { email });
         return true;
       } catch (error) {
         logger.error('Failed to send reset email via Gmail API', { email, message: error?.message });
@@ -219,13 +219,8 @@ class EmailService {
   }
 
   async sendWelcomeEmail(email, name) {
-    // Placeholder implementation
-    logger.info('Welcome email would be sent', {
-      email,
-      name,
-      provider: config.email.provider,
-    });
-
+    // Placeholder
+    // logger.info('Welcome email (placeholder)', { email, name, provider: config.email.provider });
     return true;
   }
 }

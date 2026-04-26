@@ -21,17 +21,11 @@ export const eventResolvers = {
       // Get unique event IDs (use baseEventId for recurring instances, otherwise event id)
       const eventIds = [...new Set(events.map(e => e.baseEventId || e.id))];
 
-      console.log('[EVENTS QUERY] 📊 Fetching events for date range:', dateRange);
-      console.log('[EVENTS QUERY] 📊 Found', events.length, 'events');
-      console.log('[EVENTS QUERY] 📊 Unique event IDs:', eventIds);
-
       // Count registrations by eventId and date
       const registrationCounts = await registrationService.countRegistrationsByEventAndDate(
         eventIds,
         []
       );
-
-      console.log('[EVENTS QUERY] 📊 Registration counts received:', registrationCounts);
 
       // Fetch cancellation overrides for the occurrences returned in this range.
       // Docs are keyed by: `${eventId}_${dateKey}` where eventId is baseEventId.
@@ -70,17 +64,6 @@ export const eventResolvers = {
         const cancellation = cancellationByDocId.get(cancellationDocId);
         const isCancelled = cancellation != null && cancellation.isActive !== false;
         const cancellationReason = cancellation?.reason || null;
-
-        console.log('[EVENTS QUERY] 🔍 Event:', {
-          id: event.id,
-          title: event.title,
-          baseEventId: event.baseEventId,
-          eventId,
-          dateKey,
-          countKey,
-          perDateCount,
-          availableInCounts: countKey in registrationCounts
-        });
 
         return {
           ...event,

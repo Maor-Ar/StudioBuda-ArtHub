@@ -30,7 +30,7 @@ async function ensureOAuthUserInFirestore(decodedToken) {
     // Check if email is in identities
     if (decodedToken.firebase?.identities?.email && decodedToken.firebase.identities.email.length > 0) {
       userEmail = decodedToken.firebase.identities.email[0];
-      logger.info('[AUTH] Email found in identities for auto-creation', { email: userEmail });
+      // logger.debug('[AUTH] Email in identities', { email: userEmail });
     } else {
       logger.error('[AUTH] OAuth token missing email for auto-creation', { 
         uid: decodedToken.uid, 
@@ -63,7 +63,7 @@ async function ensureOAuthUserInFirestore(decodedToken) {
     role: 'user',
     firebaseUid: decodedToken.uid,
   });
-  logger.info(`[AUTH] Auto-created Firestore user for OAuth: ${user.id}, email: ${user.email}, emailVerified: ${decodedToken.email_verified}`);
+  // logger.info('[AUTH] Auto-created OAuth user in Firestore', { userId: user.id, email: user.email });
   return user;
 }
 
@@ -77,23 +77,20 @@ export const createContext = async ({ req }) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      logger.info('[AUTH] No authorization header found');
       return context;
     }
 
     const token = authHeader.substring(7);
-    logger.info(`[AUTH] Token received, length: ${token.length}, preview: ${token.substring(0, 50)}...`);
-    
+    // logger.debug('[AUTH] Bearer token', { length: token.length });
+
     const decodedToken = await authService.verifyToken(token);
-    logger.info(`[AUTH] Token verified successfully, UID: ${decodedToken.uid}`);
 
     // Get user from Firestore
     const userService = (await import('../../services/userService.js')).default;
-    logger.info(`[AUTH] Looking up user with ID: ${decodedToken.uid}`);
     let user;
     try {
       user = await userService.getUserById(decodedToken.uid);
-      logger.info(`[AUTH] User found: ${user.id}, email: ${user.email}`);
+      // logger.debug('[AUTH] user loaded', { userId: user.id });
     } catch (error) {
       // User exists in Firebase Auth but not in Firestore (OAuth race or prior failure)
       const isNotFoundError = error instanceof NotFoundError || 

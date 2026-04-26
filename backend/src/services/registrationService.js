@@ -1000,8 +1000,6 @@ class RegistrationService {
       return {};
     }
 
-    console.log('[COUNT REGISTRATIONS] 📊 Counting registrations for eventIds:', eventIds);
-
     // Get all real + manual registrations for these events
     const [snapshot, manualSnapshot] = await Promise.all([
       db.collection('event_registrations')
@@ -1013,9 +1011,6 @@ class RegistrationService {
         .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
         .get(),
     ]);
-
-    console.log('[COUNT REGISTRATIONS] 📊 Found registrations:', snapshot.size);
-    console.log('[COUNT REGISTRATIONS] 📊 Found manual registrations:', manualSnapshot.size);
 
     const counts = {};
 
@@ -1029,16 +1024,6 @@ class RegistrationService {
       const dateKey = regDate.toISOString().split('T')[0];
       const key = `${reg.eventId}:${dateKey}`;
 
-      console.log('[COUNT REGISTRATIONS] ✅ Registration found:', {
-        eventId: reg.eventId,
-        userId: reg.userId,
-        dateKey,
-        key,
-        rawDate: reg.date,
-        occurrenceDate: reg.occurrenceDate,
-        usedField: reg.occurrenceDate ? 'occurrenceDate' : 'date'
-      });
-
       counts[key] = (counts[key] || 0) + 1;
     });
 
@@ -1051,7 +1036,6 @@ class RegistrationService {
       counts[key] = (counts[key] || 0) + 1;
     });
 
-    console.log('[COUNT REGISTRATIONS] 📊 Final counts:', counts);
     return counts;
   }
 }

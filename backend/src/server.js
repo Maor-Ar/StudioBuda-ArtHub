@@ -61,42 +61,30 @@ const allowedOrigins = isDevelopment
   ? ['*'] // allow all in dev
   : buildProductionOrigins();
 
-console.log('[CORS] Initialization:', {
-  isDevelopment,
-  allowedOrigins,
-  corsOriginEnv: process.env.CORS_ORIGIN,
-  corsOriginConfig: config.cors.origin,
-  nodeEnv: config.server.nodeEnv,
-});
+// CORS: see allowedOrigins at startup (uncomment to debug CORS in Cloud Logging)
+// logger.info('[START] CORS', { isDevelopment, allowedOrigins, corsEnv: process.env.CORS_ORIGIN, nodeEnv: config.server.nodeEnv });
+logger.info(
+  `[START] CORS ${isDevelopment ? 'dev' : 'prod'} allowedOrigins=${JSON.stringify(allowedOrigins)}`
+);
 
 const corsOrigin = (origin, callback) => {
   // Allow requests with no Origin header (mobile apps, server-to-server webhooks, Postman)
   if (!origin) {
-    console.log('[CORS] No origin header, allowing request');
     return callback(null, true);
   }
 
-  console.log('[CORS] Checking origin:', origin, 'against allowed:', allowedOrigins);
-
-  // Allow all (reflect specific origin when credentials are used)
   if (allowedOrigins.includes('*')) {
-    console.log('[CORS] Allowing all origins (*)');
     return callback(null, origin);
   }
 
-  // Allow exact-match list
   if (allowedOrigins.includes(origin)) {
-    console.log('[CORS] Origin allowed:', origin);
     return callback(null, origin);
   }
 
-  // Local Expo web (8081), Metro, Vite, etc. — avoids preflight failing with no ACAO when NODE_ENV is production locally
   if (isLoopbackOrigin(origin)) {
-    console.log('[CORS] Allowing loopback origin:', origin);
     return callback(null, origin);
   }
 
-  console.warn('[CORS] ❌ Blocked origin:', origin, 'Allowed origins:', allowedOrigins);
   logger.warn('[CORS] Blocked origin', { origin, allowedOrigins });
   return callback(new Error('Not allowed by CORS'));
 };
@@ -120,18 +108,6 @@ app.options('*', cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
 }));
 
-// Security middleware
-// Configure Helmet with CSP that allows Apollo Sandbox in development
-// Log security configuration (using both console and logger)
-console.log('=== Security Configuration ===');
-console.log(`NODE_ENV: ${config.server.nodeEnv || 'undefined'}`);
-console.log(`isDevelopment: ${isDevelopment}`);
-console.log(`CSP enabled: ${!isDevelopment}`);
-logger.info('=== Security Configuration ===');
-logger.info(`NODE_ENV: ${config.server.nodeEnv || 'undefined'}`);
-logger.info(`isDevelopment: ${isDevelopment}`);
-logger.info(`CSP enabled: ${!isDevelopment}`);
-
 if (isDevelopment) {
   // In development, conditionally apply Helmet without CSP
   app.use(helmet({
@@ -146,8 +122,6 @@ if (isDevelopment) {
     next();
   });
   
-  console.log('CSP disabled in development mode - Apollo Sandbox should work');
-  logger.info('CSP disabled in development mode - Apollo Sandbox should work');
 } else {
   // In production, use strict CSP but allow cross-origin API access
   app.use(helmet({
@@ -167,24 +141,15 @@ if (isDevelopment) {
       },
     },
   }));
-  
-  console.log('CSP enabled in production mode with strict rules');
-  logger.info('CSP enabled in production mode with strict rules');
 }
+logger.info(
+  `[START] Helmet/CSP: ${isDevelopment ? 'CSP off (dev)' : 'CSP on (prod)'}`
+);
 
 // Body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Early request logging (catches all requests including OPTIONS preflight)
-app.use((req, res, next) => {
-  if (req.path === '/graphql' || req.method === 'OPTIONS') {
-    console.log('[REQUEST] Incoming:', req.method, req.path, 'Origin:', req.get('origin') || 'none');
-  }
-  next();
-});
-
-// Request logging
 app.use(requestLogger);
 
 // Rate limiting
@@ -232,7 +197,8 @@ const apolloServer = new ApolloServer({
   introspection: isDevelopment,
   plugins: isDevelopment ? [] : [ApolloServerPluginLandingPageDisabled()],
   formatError: (formattedError) => {
-    logger.error('GraphQL Error:', formattedError);
+    // Verbose: logger.debug / logger.error per GraphQL error (uncomment to debug)
+    // logger.error('GraphQL', formattedError.message);
     // Preserve AppError.code (e.g. AUTHENTICATION_ERROR) in extensions for the client
     const orig = formattedError.originalError;
     const code =

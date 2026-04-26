@@ -45,7 +45,7 @@ class PaymentService {
       { merge: true }
     );
 
-    logger.debug('Stored session metadata (Firestore)', { uniqueId });
+    // logger.debug('Stored session metadata (Firestore)', { uniqueId });
   }
 
   /**
@@ -73,7 +73,7 @@ class PaymentService {
       }
 
       if (data.metadata) {
-        logger.debug('Retrieved session metadata (Firestore)', { uniqueId });
+        // logger.debug('Retrieved session metadata (Firestore)', { uniqueId });
       } else {
         logger.warn('Session metadata doc missing metadata field', { uniqueId });
       }
@@ -119,14 +119,7 @@ class PaymentService {
     const uniqueId = `${userId}-${productId}-${Date.now()}`;
     const isRecurring = this.isRecurringType(productData.type);
 
-    logger.info('Creating checkout session', {
-      userId,
-      productId,
-      productType: productData.type,
-      amount: productData.price,
-      isRecurring,
-      uniqueId,
-    });
+    // logger.info('Creating checkout session', { userId, productId, uniqueId, isRecurring });
 
     // We store metadata in a structured UniqueID format since AdditionalText doesn't allow special chars
     // Format: userId|productId|productType|timestamp
@@ -167,12 +160,6 @@ class PaymentService {
       ...(options.customerPhone && { CustomerPhone: options.customerPhone }),
     };
 
-    logger.info('ZCredit CreateSession request', {
-      uniqueId,
-      callbackUrl: requestBody.CallBackUrl,
-      amount: productData.price,
-    });
-
     try {
       const response = await fetch(`${this.webCheckoutUrl}/CreateSession`, {
         method: 'POST',
@@ -184,11 +171,7 @@ class PaymentService {
 
       const responseData = await response.json();
 
-      logger.debug('ZCredit CreateSession raw response', {
-        statusCode: response.status,
-        hasError: responseData.HasError,
-        dataHasError: responseData.Data?.HasError,
-      });
+      // logger.debug('ZCredit CreateSession raw response', { statusCode: response.status, hasError: responseData.HasError });
 
       // Response structure: { HasError, Data: { HasError, ReturnCode, SessionId, SessionUrl, ... } }
       const data = responseData.Data || responseData;
@@ -207,11 +190,7 @@ class PaymentService {
         );
       }
 
-      logger.info('ZCredit CreateSession response', {
-        sessionId: data.SessionId,
-        hasSessionUrl: !!data.SessionUrl,
-        uniqueId,
-      });
+      // logger.info('ZCredit CreateSession ok', { sessionId: data.SessionId, uniqueId });
 
       // Store session metadata for callback processing
       await this.storeSessionMetadata(uniqueId, {
@@ -269,13 +248,7 @@ class PaymentService {
       ExpDate_MMYY,
     } = callbackData;
 
-    logger.info('Processing payment callback', {
-      sessionId: SessionId,
-      referenceNumber: ReferenceNumber,
-      hasToken: !!Token,
-      total: Total,
-      uniqueId: UniqueID,
-    });
+    // logger.info('Payment callback', { uniqueId: UniqueID, referenceNumber: ReferenceNumber });
 
     // Retrieve stored metadata using UniqueID
     let metadata = await this.getSessionMetadata(UniqueID);
@@ -314,12 +287,7 @@ class PaymentService {
       metadata: metadata || {},
     };
 
-    logger.info('Payment callback processed successfully', {
-      sessionId: SessionId,
-      userId: metadata?.userId,
-      productId: metadata?.productId,
-      tokenStored: metadata?.isRecurring && !!Token,
-    });
+    // logger.info('Payment callback done', { userId: metadata?.userId, productId: metadata?.productId });
 
     // Clean up stored metadata
     if (UniqueID) {
@@ -340,11 +308,7 @@ class PaymentService {
   async chargeToken(token, amount, transactionId, options = {}) {
     const uniqueId = `recurring-${transactionId}-${Date.now()}`;
 
-    logger.info('Charging token for recurring payment', {
-      transactionId,
-      amount,
-      uniqueId,
-    });
+    // logger.info('Recurring token charge', { transactionId, amount });
 
     const requestBody = {
       TerminalNumber: config.zcredit.terminalNumber,
@@ -390,11 +354,7 @@ class PaymentService {
         );
       }
 
-      logger.info('Token charge successful', {
-        transactionId,
-        referenceNumber: data.ReferenceNumber,
-        amount,
-      });
+      // logger.info('Token charge ok', { transactionId, referenceNumber: data.ReferenceNumber });
 
       return {
         success: true,
@@ -426,8 +386,6 @@ class PaymentService {
    * @returns {Promise<Object>} Token data
    */
   async getTokenData(token) {
-    logger.info('Fetching token data', { hasToken: !!token });
-
     const requestBody = {
       TerminalNumber: config.zcredit.terminalNumber,
       Password: config.zcredit.password,
@@ -471,8 +429,6 @@ class PaymentService {
    * @returns {Promise<Object>} Refund result
    */
   async refundTransaction(referenceNumber, amount = null) {
-    logger.info('Initiating refund', { referenceNumber, amount });
-
     const requestBody = {
       TerminalNumber: config.zcredit.terminalNumber,
       Password: config.zcredit.password,
@@ -503,10 +459,7 @@ class PaymentService {
         );
       }
 
-      logger.info('Refund successful', {
-        referenceNumber,
-        newReferenceNumber: data.ReferenceNumber,
-      });
+      // logger.info('Refund ok', { referenceNumber, newRef: data.ReferenceNumber });
 
       return {
         success: true,
@@ -534,8 +487,6 @@ class PaymentService {
    * @returns {Promise<Object>} Transaction status
    */
   async getTransactionStatus(referenceNumber) {
-    logger.info('Querying transaction status', { referenceNumber });
-
     const requestBody = {
       TerminalNumber: config.zcredit.terminalNumber,
       Password: config.zcredit.password,

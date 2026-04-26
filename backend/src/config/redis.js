@@ -51,18 +51,18 @@ export const getRedisClient = async () => {
     });
 
     redisClient.on('connect', () => {
-      logger.info('Redis Client Connected');
+      // logger.info('Redis connected');
       connectionFailed = false;
     });
 
     redisClient.on('ready', () => {
-      logger.info('Redis Client Ready');
+      // logger.info('Redis ready');
       connectionFailed = false;
       connectionAttemptInProgress = false;
     });
 
     redisClient.on('end', () => {
-      logger.info('Redis Client Connection Ended');
+      // logger.info('Redis connection ended');
       connectionAttemptInProgress = false;
     });
 

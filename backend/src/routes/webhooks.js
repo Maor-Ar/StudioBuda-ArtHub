@@ -16,15 +16,7 @@ const router = express.Router();
  * POST /api/payment/callback
  */
 router.post('/callback', async (req, res) => {
-  const startTime = Date.now();
-  
-  logger.info('Received ZCredit callback', {
-    hasToken: !!req.body.Token,
-    sessionId: req.body.SessionId,
-    uniqueId: req.body.UniqueID,
-    referenceNumber: req.body.ReferenceNumber,
-    total: req.body.Total,
-  });
+  // logger.info('ZCredit callback', { uniqueId: req.body?.UniqueID, sessionId: req.body?.SessionId });
 
   try {
     // Process the callback data
@@ -103,15 +95,7 @@ router.post('/callback', async (req, res) => {
     // Create the transaction
     const transaction = await transactionService.createTransaction(transactionData);
 
-    logger.info('Payment callback processed - transaction created', {
-      sessionId: paymentData.sessionId,
-      transactionId: transaction.id,
-      userId,
-      productType,
-      amount: transactionData.amount,
-      hasToken: !!transactionData.paymentToken,
-      processingTime: Date.now() - startTime,
-    });
+    // logger.info('Payment callback ok', { transactionId: transaction.id, uniqueId: paymentData.uniqueId });
 
     // Return success
     res.json({

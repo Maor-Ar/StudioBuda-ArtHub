@@ -10,8 +10,6 @@ export const paymentResolvers = {
     paymentStatus: async (_, { uniqueId }, context) => {
       await requireAuthenticated(context);
       
-      logger.info('Checking payment status', { uniqueId, userId: context.user.id });
-
       // Check if we have metadata stored (means session exists but not yet completed)
       const metadata = await paymentService.getSessionMetadata(uniqueId);
       
@@ -76,13 +74,6 @@ export const paymentResolvers = {
         }
       }
 
-      logger.info('Creating payment session via GraphQL', {
-        userId,
-        productId,
-        productType: serverProduct.type,
-        amount: serverProduct.price,
-      });
-
       const session = await paymentService.createCheckoutSession(
         userId,
         productId,
@@ -99,13 +90,6 @@ export const paymentResolvers = {
           customerPhone: context.user.phone || null,
         }
       );
-
-      logger.info('Payment session created via GraphQL', {
-        userId,
-        productId,
-        sessionId: session.sessionId,
-        isRecurring: session.isRecurring,
-      });
 
       return session;
     },

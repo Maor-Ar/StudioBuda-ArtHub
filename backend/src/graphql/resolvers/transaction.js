@@ -1,7 +1,6 @@
 import transactionService from '../../services/transactionService.js';
 import { requireManager, requireAuthenticated } from '../middleware/permissions.js';
 import { AuthorizationError, NotFoundError } from '../../utils/errors.js';
-import logger from '../../utils/logger.js';
 
 export const transactionResolvers = {
   Query: {
@@ -54,13 +53,6 @@ export const transactionResolvers = {
       if (!isOwner && !isManager) {
         throw new AuthorizationError('אין לך הרשאה לבטל מנוי זה');
       }
-
-      logger.info('Canceling subscription', {
-        transactionId: id,
-        userId: user.id,
-        isOwner,
-        isManager,
-      });
 
       const updatedTransaction = await transactionService.cancelSubscription(id, user.id);
       

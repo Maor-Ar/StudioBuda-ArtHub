@@ -11,12 +11,12 @@ import logger from '../utils/logger.js';
 class AuthService {
   async verifyToken(token) {
     try {
-      logger.info('[AUTH_DEBUG] verifyToken: token length=%s preview=%s', token?.length, token ? token.substring(0, 30) + '...' : 'null');
+      // logger.debug('[AUTH] verifyToken', { len: token?.length });
       const decodedToken = await auth.verifyIdToken(token);
-      logger.info('[AUTH_DEBUG] verifyToken: success, uid=', decodedToken?.uid, 'email=', decodedToken?.email);
+      // logger.debug('[AUTH] verifyToken ok', { uid: decodedToken?.uid });
       return decodedToken;
     } catch (error) {
-      logger.error('[AUTH_DEBUG] Token verification failed:', {
+      logger.error('Token verification failed:', {
         message: error.message,
         code: error.code,
         hint: 'Backend expects Firebase ID token. Google OAuth access token will fail here.',

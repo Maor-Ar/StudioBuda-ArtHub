@@ -4,9 +4,9 @@
 // Align with config/environment.js (4000). Cloud Run always sets PORT.
 const PORT = parseInt(process.env.PORT || '4000', 10);
 
-console.log('[INIT] Starting server...');
-console.log(`[INIT] PORT=${PORT}`);
-console.log(`[INIT] NODE_ENV=${process.env.NODE_ENV || 'undefined'}`);
+console.log(
+  `[INIT] Starting server (PORT=${PORT} NODE_ENV=${process.env.NODE_ENV || 'undefined'})`
+);
 
 // Import modules - wrap in try-catch to handle import errors
 let app, setupGraphQL, config, logger, closeRedisConnection;
@@ -27,7 +27,7 @@ try {
   const redisModule = await import('./config/redis.js');
   closeRedisConnection = redisModule.closeRedisConnection;
   
-  console.log('[INIT] Modules loaded successfully');
+  // [INIT] modules ok
   modulesLoadOk = true;
 } catch (importError) {
   console.error('[INIT] ❌ Error importing modules:', importError.message);
@@ -58,10 +58,8 @@ try {
 // START LISTENING IMMEDIATELY - This is critical for Cloud Run
 let server;
 try {
-  console.log(`[INIT] Starting server on port ${PORT}...`);
   server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[INIT] ✅ Server listening on 0.0.0.0:${PORT}`);
-    logger.info(`Server listening on 0.0.0.0:${PORT}`);
+    console.log(`[INIT] Listening on 0.0.0.0:${PORT}`);
   });
 } catch (listenError) {
   console.error('[INIT] ❌ Failed to start server:', listenError);
@@ -71,10 +69,8 @@ try {
 // Now initialize GraphQL and other features asynchronously
 (async () => {
   try {
-    console.log('[INIT] Setting up GraphQL...');
     await setupGraphQL();
-    logger.info('GraphQL endpoint ready at /graphql');
-    console.log('[INIT] ✅ GraphQL ready');
+    console.log('[INIT] GraphQL ready at /graphql');
   } catch (error) {
     logger.error('Failed to setup GraphQL:', error);
     console.error('[INIT] ❌ GraphQL setup failed:', error.message);
@@ -84,17 +80,11 @@ try {
 
 // Graceful shutdown
 const shutdown = async () => {
-  logger.info('Shutting down server...');
-  console.log('[SHUTDOWN] Shutting down...');
-  
+  console.warn('[SHUTDOWN] Graceful shutdown…');
+
   server.close(async () => {
-    logger.info('HTTP server closed');
-    console.log('[SHUTDOWN] HTTP server closed');
-    
     try {
       await closeRedisConnection();
-      logger.info('Redis connection closed');
-      console.log('[SHUTDOWN] Redis closed');
     } catch (error) {
       console.error('[SHUTDOWN] Error closing Redis:', error);
     }
