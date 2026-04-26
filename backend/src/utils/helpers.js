@@ -1,4 +1,5 @@
 import { MAX_EVENT_DATE_RANGE_DAYS } from '../config/constants.js';
+import { randomBytes } from 'crypto';
 
 /**
  * Generate recurring event instances for a date range
@@ -123,6 +124,6 @@ export const updateToCurrentMonth = (originalDate) => {
  * @returns {string}
  */
 export const generateResetToken = () => {
-  return crypto.randomBytes(32).toString('hex');
+  return randomBytes(32).toString('hex');
 };
 

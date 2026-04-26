@@ -313,11 +313,6 @@ const RegisterStep2Screen = ({ navigation, route }) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.linkButton}>
           <Text style={styles.linkText}>חזרה</Text>
         </TouchableOpacity>
-
-        {/* Home Indicator */}
-        <View style={styles.homeIndicator}>
-          <View style={styles.homeIndicatorBar} />
-        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -409,16 +404,6 @@ const styles = StyleSheet.create({
   linkText: {
     color: '#FFFFFF',
     fontSize: 14,
-  },
-  homeIndicator: {
-    marginTop: 30,
-    alignItems: 'center',
-  },
-  homeIndicatorBar: {
-    width: 134,
-    height: 5,
-    backgroundColor: '#000000',
-    borderRadius: 100,
   },
 });
 

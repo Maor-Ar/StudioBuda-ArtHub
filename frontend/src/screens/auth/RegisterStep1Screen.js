@@ -159,12 +159,6 @@ const RegisterStep1Screen = ({ navigation }) => {
         <View style={styles.separatorLine} />
       </View>
 
-      <RememberMeRow
-        value={rememberMe}
-        onValueChange={setRememberMe}
-        disabled={oauthLoading}
-      />
-
       {/* OAuth Buttons */}
       <View style={styles.oauthContainer}>
         {/* Google Button */}
@@ -187,6 +181,13 @@ const RegisterStep1Screen = ({ navigation }) => {
           <Text style={styles.facebookButtonText}>המשך עם פייסבוק</Text>
         </TouchableOpacity> */}
       </View>
+
+      <RememberMeRow
+        value={rememberMe}
+        onValueChange={setRememberMe}
+        disabled={oauthLoading}
+        containerStyle={styles.rememberMeBelowGoogle}
+      />
 
         {/* Footer Link */}
         <TouchableOpacity
@@ -307,6 +308,10 @@ const styles = StyleSheet.create({
   },
   oauthContainer: {
     width: '100%',
+  },
+  rememberMeBelowGoogle: {
+    marginTop: 10,
+    marginBottom: 0,
   },
   googleButton: {
     width: '100%',

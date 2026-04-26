@@ -1,10 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, ScrollView } from 'react-native';
+
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Dimensions,
+  ActivityIndicator,
+  ScrollView,
+  Modal,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
-import { LOGIN, LOGIN_WITH_OAUTH } from '../../services/graphql/mutations';
+import { LOGIN, LOGIN_WITH_OAUTH, FORGOT_PASSWORD } from '../../services/graphql/mutations';
 import authService from '../../services/authService';
 import { OAUTH_PROVIDERS, STORAGE_KEYS } from '../../utils/constants';
 import RememberMeRow from '../../components/RememberMeRow';
@@ -23,6 +34,9 @@ const LoginScreen = ({ navigation }) => {
   const [passwordError, setPasswordError] = useState('');
   const [oauthLoading, setOauthLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [forgotVisible, setForgotVisible] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  
   const { login } = useAuth();
 
   useEffect(() => {
@@ -74,6 +88,29 @@ const LoginScreen = ({ navigation }) => {
       showErrorToast(friendlyMessage);
     },
   });
+
+  const [forgotPasswordMutation, { loading: forgotLoading }] = useMutation(FORGOT_PASSWORD, {
+    onCompleted: () => {
+      setForgotVisible(false);
+      setForgotEmail('');
+      showSuccessToast('אם המייל קיים במערכת, נשלח קישור לאיפוס סיסמה');
+    },
+    onError: (error) => {
+      const friendlyMessage = getGraphQLErrorMessage(error);
+      showErrorToast(friendlyMessage);
+    },
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const resetToken = params.get('resetToken');
+    if (resetToken) {
+      navigation.navigate('ResetPassword', { token: resetToken });
+    }
+  }, [navigation]);
 
   /**
    * Handles email input change
@@ -180,6 +217,24 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
+  const openForgotPassword = () => {
+    setForgotEmail(email.trim().toLowerCase());
+    setForgotVisible(true);
+  };
+
+  const handleForgotPassword = async () => {
+    const normalizedEmail = forgotEmail.trim().toLowerCase();
+    const emailValidation = validateEmail(normalizedEmail);
+    if (!emailValidation.isValid) {
+      showErrorToast(emailValidation.error);
+      return;
+    }
+
+    await forgotPasswordMutation({
+      variables: { email: normalizedEmail },
+    });
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView 
@@ -221,12 +276,6 @@ const LoginScreen = ({ navigation }) => {
       />
       {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
 
-      <RememberMeRow
-        value={rememberMe}
-        onValueChange={setRememberMe}
-        disabled={loading || oauthLoading}
-      />
-
       {/* Login Button */}
       <TouchableOpacity
         style={[styles.loginButton, loading && styles.buttonDisabled]}
@@ -236,6 +285,10 @@ const LoginScreen = ({ navigation }) => {
         <Text style={styles.loginButtonText}>
           {loading ? 'נכנס...' : 'תכניסו אותי'}
         </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.forgotLink} onPress={openForgotPassword}>
+        <Text style={styles.forgotLinkText}>שכחתי סיסמה</Text>
       </TouchableOpacity>
 
       {/* Or Separator */}
@@ -268,6 +321,13 @@ const LoginScreen = ({ navigation }) => {
         </TouchableOpacity> */}
       </View>
 
+      <RememberMeRow
+        value={rememberMe}
+        onValueChange={setRememberMe}
+        disabled={loading || oauthLoading}
+        containerStyle={styles.rememberMeBelowGoogle}
+      />
+
         {/* Footer Link */}
         <TouchableOpacity
           style={styles.footerLink}
@@ -276,6 +336,48 @@ const LoginScreen = ({ navigation }) => {
           <Text style={styles.footerLinkText}>אין לך עדיין חשבון? הרשם כאן</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <Modal visible={forgotVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>איפוס סיסמה</Text>
+            <Text style={styles.modalSubtitle}>הזן/י אימייל לקבלת קישור איפוס</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={forgotEmail}
+              onChangeText={setForgotEmail}
+              placeholder="you@example.com"
+              placeholderTextColor="#7A5792"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              textAlign="right"
+            />
+            <TouchableOpacity
+              style={[styles.modalPrimaryBtn, forgotLoading && styles.buttonDisabled]}
+              onPress={handleForgotPassword}
+              disabled={forgotLoading}
+            >
+              <Text style={styles.modalPrimaryText}>{forgotLoading ? 'שולח...' : 'שלח קישור'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalSecondaryBtn}
+              onPress={() => setForgotVisible(false)}
+              disabled={forgotLoading}
+            >
+              <Text style={styles.modalSecondaryText}>ביטול</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalTextLink}
+              onPress={() => {
+                setForgotVisible(false);
+                navigation.navigate('ResetPassword');
+              }}
+            >
+              <Text style={styles.modalTextLinkText}>יש לי כבר קוד איפוס</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* OAuth Loading Overlay */}
       {oauthLoading && (
@@ -362,6 +464,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  forgotLink: {
+    marginTop: 10,
+    alignSelf: 'center',
+  },
+  forgotLinkText: {
+    color: '#FFE2ED',
+    fontSize: 13,
+    textDecorationLine: 'underline',
+  },
   separatorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -381,6 +492,10 @@ const styles = StyleSheet.create({
   },
   oauthContainer: {
     width: '100%',
+  },
+  rememberMeBelowGoogle: {
+    marginTop: 10,
+    marginBottom: 0,
   },
   googleButton: {
     width: '100%',
@@ -434,6 +549,72 @@ const styles = StyleSheet.create({
   footerLinkText: {
     color: '#FFFFFF',
     fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  modalBox: {
+    backgroundColor: '#FFD1E3',
+    borderRadius: 16,
+    padding: 16,
+  },
+  modalTitle: {
+    color: '#4E0D66',
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    color: '#5D3587',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 12,
+  },
+  modalInput: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DDB0E3',
+    color: '#4E0D66',
+    fontSize: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  modalPrimaryBtn: {
+    marginTop: 12,
+    backgroundColor: '#4E0D66',
+    borderRadius: 12,
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  modalPrimaryText: {
+    color: '#FFE2ED',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modalSecondaryBtn: {
+    marginTop: 8,
+    borderRadius: 12,
+    alignItems: 'center',
+    paddingVertical: 10,
+    backgroundColor: '#F3DCEF',
+  },
+  modalSecondaryText: {
+    color: '#5D3587',
+    fontSize: 14,
+  },
+  modalTextLink: {
+    alignSelf: 'center',
+    marginTop: 10,
+  },
+  modalTextLinkText: {
+    color: '#5D3587',
+    textDecorationLine: 'underline',
+    fontSize: 13,
   },
   loadingOverlay: {
     position: 'absolute',

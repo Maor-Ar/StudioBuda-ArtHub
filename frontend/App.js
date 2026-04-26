@@ -1,6 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, ActivityIndicator, Platform } from 'react-native';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  DefaultTheme,
+  createNavigationContainerRef,
+  CommonActions,
+} from '@react-navigation/native';
 import { ApolloProvider } from '@apollo/client';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -17,6 +22,8 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { toastConfig } from './src/utils/toast';
 import { showErrorToast } from './src/utils/toast';
 import { attachServiceWorkerUpdateFlow } from './src/utils/pwaUpdate';
+
+const navigationRef = createNavigationContainerRef();
 
 // Custom theme with dark purple background to prevent white flash
 const AppTheme = {
@@ -44,6 +51,56 @@ const ApolloAuthBridge = () => {
 
   return null;
 };
+
+// Web: /reset-password?token=... in email would otherwise show Home (no URL → screen mapping).
+function RootNavigation() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const [navReady, setNavReady] = useState(false);
+  const deepLinkAppliedRef = useRef(false);
+
+  useEffect(() => {
+    if (!navReady || isLoading) return;
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    if (deepLinkAppliedRef.current) return;
+    if (isAuthenticated) return;
+    if (!navigationRef.isReady()) return;
+
+    const path = (window.location.pathname || '').replace(/\/$/, '') || '/';
+    if (!path.includes('reset-password')) return;
+
+    const sp = new URLSearchParams(window.location.search);
+    const token = sp.get('token') || sp.get('resetToken');
+    if (!token) return;
+
+    deepLinkAppliedRef.current = true;
+    navigationRef.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [
+          {
+            name: 'Auth',
+            state: {
+              routes: [
+                {
+                  name: 'ResetPassword',
+                  params: { token, email: sp.get('email') || undefined },
+                },
+              ],
+              index: 0,
+            },
+          },
+        ],
+      })
+    );
+  }, [navReady, isLoading, isAuthenticated]);
+
+  return (
+    <NavigationContainer ref={navigationRef} theme={AppTheme} onReady={() => setNavReady(true)}>
+      <AppNavigator />
+      <StatusBar style="light" />
+    </NavigationContainer>
+  );
+}
 
 export default function App() {
   const [fontsLoaded] = useFonts({ MiriamLibre_400Regular });
@@ -123,10 +180,7 @@ export default function App() {
       <ApolloProvider client={client}>
         <AuthProvider>
           <ApolloAuthBridge />
-          <NavigationContainer theme={AppTheme}>
-            <AppNavigator />
-            <StatusBar style="light" />
-          </NavigationContainer>
+          <RootNavigation />
           <Toast config={toastConfig} />
         </AuthProvider>
       </ApolloProvider>

@@ -53,7 +53,12 @@ class AuthService {
     }
 
     const resetToken = generateResetToken();
-    const resetUrl = `${config.passwordReset.url}?token=${resetToken}`;
+    let resetUrl;
+    if (config.passwordReset.url) {
+      resetUrl = `${config.passwordReset.url}?token=${encodeURIComponent(resetToken)}&email=${encodeURIComponent(email)}`;
+    } else {
+      resetUrl = `${config.urls.frontend}?resetToken=${encodeURIComponent(resetToken)}&email=${encodeURIComponent(email)}`;
+    }
 
     // Store reset token in Firestore (with expiration)
     const expiresAt = new Date();

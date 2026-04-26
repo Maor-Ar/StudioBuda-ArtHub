@@ -1,6 +1,21 @@
 import dotenv from 'dotenv';
+import { loadGmailOAuthClientJson, buildGmailConfig } from './gmailFromEnv.js';
 
 dotenv.config();
+
+const gmailJson = loadGmailOAuthClientJson();
+const gmail = buildGmailConfig(gmailJson);
+const hasSendGridCreds = !!(
+  (process.env.EMAIL_API_KEY || '').trim() && (process.env.EMAIL_FROM_ADDRESS || '').trim()
+);
+const explicitEmailProvider = (process.env.EMAIL_SERVICE_PROVIDER || '').trim();
+const emailProvider = explicitEmailProvider
+  ? explicitEmailProvider
+  : hasSendGridCreds
+    ? 'sendgrid'
+    : gmail.isReady
+      ? 'gmail'
+      : 'sendgrid';
 
 const requiredEnvVars = [
   'FIREBASE_PROJECT_ID',
@@ -73,10 +88,12 @@ const config = {
     apiKey: process.env.GROW_API_KEY || '',
   },
   email: {
-    provider: process.env.EMAIL_SERVICE_PROVIDER || optionalEnvVars.EMAIL_SERVICE_PROVIDER,
+    provider: emailProvider,
+    providerExplicit: Boolean(explicitEmailProvider),
     apiKey: process.env.EMAIL_API_KEY || '',
     fromAddress: process.env.EMAIL_FROM_ADDRESS || '',
     fromName: process.env.EMAIL_FROM_NAME || 'StudioBuda',
+    gmail,
   },
   passwordReset: {
     url: process.env.PASSWORD_RESET_URL || '',

@@ -12,7 +12,8 @@
     "test:coverage": "jest --coverage",
     "seed:classes": "node scripts/seedWeeklyClasses.js",
     "seed:transactions": "node scripts/seedUserTransactions.js",
-    "clean:db": "node scripts/cleanDatabase.js"
+    "clean:db": "node scripts/cleanDatabase.js",
+    "gmail:refresh-token": "node scripts/gmail-get-refresh-token.mjs"
   },
   "keywords": [
     "graphql",
@@ -33,6 +34,7 @@
     "express-rate-limit": "^7.1.5",
     "firebase": "^12.7.0",
     "firebase-admin": "^12.0.0",
+    "googleapis": "^171.4.0",
     "graphql": "^16.8.1",
     "graphql-tag": "^2.12.6",
     "helmet": "^7.1.0",

@@ -30,7 +30,32 @@ export const authResolvers = {
           displayName: `${firstName} ${lastName}`,
         });
       } catch (error) {
-        throw new AuthenticationError('Failed to create user account');
+        const errorCode = error?.code || '';
+        logger.error('[AUTH_DEBUG] register: Firebase createUser failed', {
+          email,
+          code: errorCode,
+          message: error?.message,
+        });
+
+        // Recovery path: user may already exist in Firebase Auth while missing in Firestore.
+        if (errorCode === 'auth/email-already-exists') {
+          try {
+            firebaseUser = await auth.getUserByEmail(email);
+            logger.warn('[AUTH_DEBUG] register: using existing Firebase Auth user for Firestore sync', {
+              email,
+              firebaseUid: firebaseUser?.uid,
+            });
+          } catch (getUserError) {
+            logger.error('[AUTH_DEBUG] register: failed to fetch existing Firebase user', {
+              email,
+              code: getUserError?.code,
+              message: getUserError?.message,
+            });
+            throw new ValidationError('User with this email already exists', 'email');
+          }
+        } else {
+          throw new AuthenticationError('Failed to create user account');
+        }
       }
 
       // Hash password

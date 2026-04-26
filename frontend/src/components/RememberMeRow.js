@@ -5,7 +5,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
  * "Remember me" — when on, Firebase + app data persist (stay signed in across days).
  * When off, session-only: closing the app / browser (native: full quit) returns to login.
  */
-export default function RememberMeRow({ value, onValueChange, disabled = false }) {
+export default function RememberMeRow({ value, onValueChange, disabled = false, containerStyle }) {
   const toggle = () => {
     if (!disabled) {
       onValueChange(!value);
@@ -13,7 +13,7 @@ export default function RememberMeRow({ value, onValueChange, disabled = false }
   };
 
   return (
-    <View style={styles.centerWrap}>
+    <View style={[styles.centerWrap, containerStyle]}>
       <TouchableOpacity
         style={styles.row}
         onPress={toggle}
