@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isConfirmedStatus() {
+      return request.resource.data.status == 'confirmed';
+    }
+
+    function hasTrialSiteName() {
+      return request.resource.data.customerName is string
+        && request.resource.data.customerName.size() >= 10
+        && request.resource.data.customerName.size() <= 120
+        && request.resource.data.customerName.matches('.*אוטומטי שיעור נסיון.*');
+    }
+
+    function isValidManualCreate() {
+      return isConfirmedStatus()
+        && hasTrialSiteName()
+        && request.resource.data.eventId is string
+        && request.resource.data.eventId.size() > 0
+        && request.resource.data.eventId.size() < 128
+        && request.resource.data.keys().hasAll([
+          'customerName',
+          'eventId',
+          'occurrenceDate',
+          'date',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.occurrenceDate is timestamp
+        && request.resource.data.date is timestamp
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && (
+          !('source' in request.resource.data)
+          || request.resource.data.source == 'trial_site'
+        );
+    }
+
+    match /events/{eventId} {
+      allow read: if resource.data.isActive == true;
+      allow write: if false;
+    }
+
+    match /event_registrations/{registrationId} {
+      allow read: if resource.data.status == 'confirmed';
+      allow write: if false;
+    }
+
+    match /event_manual_registrations/{registrationId} {
+      allow read: if resource.data.status == 'confirmed';
+      allow create: if isValidManualCreate();
+      allow update, delete: if false;
+    }
+
+    match /event_cancellations/{cancellationId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Deny everything else from clients (Admin SDK bypasses rules)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

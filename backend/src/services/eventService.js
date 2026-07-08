@@ -198,21 +198,34 @@ class EventService {
     const dateObj = eventDate?.toDate ? eventDate.toDate() : new Date(eventDate);
     const dateKey = dateObj.toISOString().split('T')[0];
     
-    // Count confirmed registrations for this event and date
-    const snapshot = await db.collection('event_registrations')
-      .where('eventId', '==', eventId)
-      .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
-      .get();
+    // Count confirmed real + manual registrations for this event and date
+    const [snapshot, manualSnapshot] = await Promise.all([
+      db.collection('event_registrations')
+        .where('eventId', '==', eventId)
+        .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+        .get(),
+      db.collection('event_manual_registrations')
+        .where('eventId', '==', eventId)
+        .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+        .get(),
+    ]);
     
     let count = 0;
-    snapshot.docs.forEach(doc => {
-      const reg = doc.data();
-      const regDate = reg.date?.toDate ? reg.date.toDate() : new Date(reg.date || reg.occurrenceDate);
-      const regDateKey = regDate.toISOString().split('T')[0];
-      if (regDateKey === dateKey) {
-        count++;
-      }
-    });
+    const countMatchingDate = (docs) => {
+      docs.forEach((doc) => {
+        const reg = doc.data();
+        const regDate = reg.date?.toDate
+          ? reg.date.toDate()
+          : new Date(reg.date || reg.occurrenceDate);
+        const regDateKey = regDate.toISOString().split('T')[0];
+        if (regDateKey === dateKey) {
+          count++;
+        }
+      });
+    };
+
+    countMatchingDate(snapshot.docs);
+    countMatchingDate(manualSnapshot.docs);
     
     return count < event.maxRegistrations;
   }
