@@ -8,6 +8,43 @@ const shouldPersistAuthToDisk = async () => {
   return v !== '0' && v !== 'false';
 };
 
+const clearStoredAuthData = async () => {
+  try {
+    await AsyncStorage.multiRemove([
+      STORAGE_KEYS.AUTH_TOKEN,
+      STORAGE_KEYS.USER_DATA,
+      STORAGE_KEYS.USER_TRANSACTIONS,
+    ]);
+  } catch (e) {
+    /* ignore */
+  }
+};
+
+const validateSessionWithBackend = async () => {
+  const { default: apolloClient } = await import('../config/apollo');
+  const { gql } = await import('@apollo/client');
+
+  const SESSION_CHECK = gql`
+    query ValidateStoredSession {
+      myRegistrations {
+        id
+      }
+    }
+  `;
+
+  try {
+    await apolloClient.query({
+      query: SESSION_CHECK,
+      fetchPolicy: 'network-only',
+      context: { skipAuthFailureHandler: true },
+    });
+    return true;
+  } catch (error) {
+    console.warn('[AUTH] Stored session validation failed:', error?.message);
+    return false;
+  }
+};
+
 // Import Firebase (static import for better bundler support)
 let firebaseApp = null;
 let firebaseAuth = null;
@@ -100,68 +137,67 @@ export const AuthProvider = ({ children }) => {
 
   const loadStoredAuth = async () => {
     try {
-      if (!(await shouldPersistAuthToDisk())) {
-        try {
-          await AsyncStorage.multiRemove([
-            STORAGE_KEYS.AUTH_TOKEN,
-            STORAGE_KEYS.USER_DATA,
-            STORAGE_KEYS.USER_TRANSACTIONS,
-          ]);
-        } catch (e) {
-          /* ignore */
-        }
+      const rememberMe = await shouldPersistAuthToDisk();
+
+      if (!rememberMe) {
+        await clearStoredAuthData();
         return;
       }
 
-      const storedToken = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
       const storedUser = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
       const storedTransactions = await AsyncStorage.getItem(STORAGE_KEYS.USER_TRANSACTIONS);
 
-      if (storedToken && storedUser) {
-        // Validate that the stored token is an ID token (not a custom token)
-        // Custom tokens can't be verified by Firebase Auth client, so if we can't
-        // get a current user, it's likely a custom token and should be cleared
-        // Try to validate token with Firebase, but don't fail if Firebase isn't available
-        try {
-          await initializeFirebase();
-          if (firebaseAuth) {
-            const currentUser = firebaseAuth.currentUser;
-            
-            // If we have a Firebase user, get a fresh ID token
-            if (currentUser) {
-              try {
-                const freshToken = await currentUser.getIdToken();
-                
-                // Load user data with fresh token
-                setToken(freshToken);
-                setUser(JSON.parse(storedUser));
-                if (storedTransactions) {
-                  setTransactions(JSON.parse(storedTransactions));
-                }
-                
-                // Update stored token with fresh ID token
-                await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, freshToken);
-                return; // Successfully loaded with Firebase
-              } catch (tokenError) {
-                console.warn('Failed to get fresh token, using stored token:', tokenError);
-              }
-            }
-          }
-        } catch (firebaseError) {
-          // Firebase not available or failed - continue with stored token
-          console.warn('Firebase validation failed, using stored token:', firebaseError.message);
-        }
-        
-        // Fallback: Use stored token (might be custom token, but will work for now)
-        // The backend will handle validation
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-        if (storedTransactions) {
-          setTransactions(JSON.parse(storedTransactions));
-        }
+      if (!storedUser) {
+        await clearStoredAuthData();
+        return;
       }
+
+      const { waitForFirebaseAuthReady } = await import('../config/firebaseAuth');
+      await initializeFirebase();
+
+      if (!firebaseAuth) {
+        await clearStoredAuthData();
+        return;
+      }
+
+      const firebaseUser = await waitForFirebaseAuthReady(firebaseAuth);
+      if (!firebaseUser) {
+        console.warn('[AUTH] Remember-me enabled but Firebase session is missing — clearing stale local session');
+        await clearStoredAuthData();
+        return;
+      }
+
+      const freshToken = await firebaseUser.getIdToken(true);
+      if (!freshToken || freshToken.length < 100) {
+        await clearStoredAuthData();
+        return;
+      }
+
+      await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, freshToken);
+
+      const sessionValid = await validateSessionWithBackend();
+      if (!sessionValid) {
+        try {
+          const firebaseAuthModule = await safeImport('firebase/auth');
+          await firebaseAuthModule.signOut(firebaseAuth);
+        } catch (signOutError) {
+          console.warn('[AUTH] Firebase sign out after failed validation:', signOutError?.message);
+        }
+        await clearStoredAuthData();
+        return;
+      }
+
+      setToken(freshToken);
+      setUser(JSON.parse(storedUser));
+      if (storedTransactions) {
+        setTransactions(JSON.parse(storedTransactions));
+      }
+
+      const { default: apolloClient } = await import('../config/apollo');
+      await apolloClient.clearStore();
     } catch (error) {
-      console.error('Failed to load stored auth:', error);
+      console.error('Failed to restore stored auth:', error);
+      await clearStoredAuthData();
     } finally {
       setIsLoading(false);
     }
@@ -286,9 +322,10 @@ export const AuthProvider = ({ children }) => {
       firebaseAuth = null;
       
       // Clear stored data (keep REMEMBER_ME so next login can reuse the same choice)
-      await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-      await AsyncStorage.removeItem(STORAGE_KEYS.USER_DATA);
-      await AsyncStorage.removeItem(STORAGE_KEYS.USER_TRANSACTIONS);
+      await clearStoredAuthData();
+
+      const { default: apolloClient } = await import('../config/apollo');
+      await apolloClient.clearStore();
 
       // Clear state
       setToken(null);

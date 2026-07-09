@@ -8,6 +8,7 @@ import {
   inMemoryPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
+  authStateReady,
 } from 'firebase/auth';
 import { firebaseConfig } from './firebase';
 import { STORAGE_KEYS } from '../utils/constants';
@@ -117,4 +118,17 @@ export async function ensureFirebase() {
 export async function getFirebaseAuth() {
   const { auth: a } = await ensureFirebase();
   return a;
+}
+
+/**
+ * Wait until Firebase has loaded persisted auth state (required on cold start).
+ */
+export async function waitForFirebaseAuthReady(authInstance, timeoutMs = 10000) {
+  const readyPromise = authStateReady(authInstance);
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Firebase auth ready timeout')), timeoutMs);
+  });
+
+  await Promise.race([readyPromise, timeoutPromise]);
+  return authInstance.currentUser;
 }

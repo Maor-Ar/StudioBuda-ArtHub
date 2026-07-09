@@ -202,7 +202,11 @@ const loadingLink = new ApolloLink((operation, forward) => {
   });
 });
 
-const errorLink = onError(({ graphQLErrors, networkError }) => {
+const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
+  if (operation?.getContext?.().skipAuthFailureHandler) {
+    return;
+  }
+
   const hasAuthGraphQLError = Array.isArray(graphQLErrors) && graphQLErrors.some(isAuthLikeGraphQLError);
 
   const networkStatusCode = networkError?.statusCode || networkError?.status;
