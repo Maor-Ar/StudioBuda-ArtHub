@@ -242,12 +242,14 @@ const client = new ApolloClient({
   }),
   defaultOptions: {
     watchQuery: {
-      fetchPolicy: 'cache-and-network',
+      fetchPolicy: 'cache-first',
       errorPolicy: 'all',
+      refetchOnWindowFocus: false,
     },
     query: {
-      fetchPolicy: 'network-only',
+      fetchPolicy: 'cache-first',
       errorPolicy: 'all',
+      refetchOnWindowFocus: false,
     },
     mutate: {
       errorPolicy: 'all',

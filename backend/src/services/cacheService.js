@@ -101,6 +101,10 @@ class CacheService {
   getUserRegistrationsKey(userId) {
     return `user:${userId}:registrations:future`;
   }
+
+  getDashboardMetricsKey() {
+    return 'dashboard:metrics';
+  }
 }
 
 export default new CacheService();

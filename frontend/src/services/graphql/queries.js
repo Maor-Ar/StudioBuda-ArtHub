@@ -255,8 +255,8 @@ export const GET_ALL_PRODUCTS = gql`
 `;
 
 export const GET_ADMIN_DASHBOARD_METRICS = gql`
-  query GetAdminDashboardMetrics {
-    adminDashboardMetrics {
+  query GetAdminDashboardMetrics($forceRefresh: Boolean) {
+    adminDashboardMetrics(forceRefresh: $forceRefresh) {
       activeSubscriptions
       activePunchCards
       subscriptionJoinLeaveByMonth {

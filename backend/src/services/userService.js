@@ -87,6 +87,27 @@ class UserService {
     return { id: doc.id, ...doc.data() };
   }
 
+  async getUsersByIds(userIds) {
+    const map = new Map();
+    if (!userIds?.length) {
+      return map;
+    }
+
+    const uniqueIds = [...new Set(userIds.filter(Boolean))];
+    await Promise.all(
+      uniqueIds.map(async (userId) => {
+        try {
+          const user = await this.getUserById(userId);
+          map.set(userId, user);
+        } catch {
+          // Skip missing users
+        }
+      })
+    );
+
+    return map;
+  }
+
   async updateUser(userId, data) {
     const updateData = {
       ...data,

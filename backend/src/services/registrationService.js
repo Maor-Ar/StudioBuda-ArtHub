@@ -1,5 +1,5 @@
-import { db } from '../config/firebase.js';
-import { EVENT_TYPES, TRANSACTION_TYPES, REGISTRATION_STATUS } from '../config/constants.js';
+import admin, { db } from '../config/firebase.js';
+import { CACHE_TTL, EVENT_TYPES, TRANSACTION_TYPES, REGISTRATION_STATUS } from '../config/constants.js';
 import { NotFoundError, ConflictError, ValidationError } from '../utils/errors.js';
 import eventService from './eventService.js';
 import transactionService from './transactionService.js';
@@ -9,6 +9,8 @@ const DUMMY_USER_ID = 'DummyUser';
 const DUMMY_TRANSACTION_ID = 'DUMMY_RESERVATION';
 const MANUAL_REGISTRATIONS_COLLECTION = 'event_manual_registrations';
 const MANUAL_REGISTRATION_ID_PREFIX = 'manual:';
+const OCCURRENCE_COUNTS_COLLECTION = 'occurrence_counts';
+const FieldValue = admin.firestore.FieldValue;
 
 class RegistrationService {
   resolveEventOccurrence(eventId) {
@@ -38,8 +40,127 @@ class RegistrationService {
   }
 
   getDateKey(dateValue) {
+    if (!dateValue) {
+      return null;
+    }
     const dateObj = dateValue?.toDate ? dateValue.toDate() : new Date(dateValue);
+    if (Number.isNaN(dateObj.getTime())) {
+      return null;
+    }
     return dateObj.toISOString().split('T')[0];
+  }
+
+  getOccurrenceCountDocId(eventId, dateKey) {
+    return `${eventId}_${dateKey}`;
+  }
+
+  async adjustOccurrenceCount(eventId, dateKey, delta) {
+    if (!eventId || !dateKey || !delta) {
+      return;
+    }
+
+    const ref = db.collection(OCCURRENCE_COUNTS_COLLECTION).doc(this.getOccurrenceCountDocId(eventId, dateKey));
+    await ref.set(
+      {
+        eventId,
+        dateKey,
+        count: FieldValue.increment(delta),
+        updatedAt: new Date(),
+      },
+      { merge: true }
+    );
+  }
+
+  async setOccurrenceCount(eventId, dateKey, count) {
+    if (!eventId || !dateKey) {
+      return;
+    }
+
+    await db.collection(OCCURRENCE_COUNTS_COLLECTION).doc(this.getOccurrenceCountDocId(eventId, dateKey)).set(
+      {
+        eventId,
+        dateKey,
+        count: Math.max(0, count),
+        updatedAt: new Date(),
+      },
+      { merge: true }
+    );
+  }
+
+  async getOccurrenceCount(eventId, dateKey) {
+    const doc = await db
+      .collection(OCCURRENCE_COUNTS_COLLECTION)
+      .doc(this.getOccurrenceCountDocId(eventId, dateKey))
+      .get();
+
+    if (doc.exists) {
+      return doc.data().count || 0;
+    }
+
+    const fallbackCount = await this.countRegistrationsForOccurrenceFallback(eventId, dateKey);
+    await this.setOccurrenceCount(eventId, dateKey, fallbackCount);
+    return fallbackCount;
+  }
+
+  async countRegistrationsForOccurrenceFallback(eventId, dateKey) {
+    const [snapshot, manualSnapshot] = await Promise.all([
+      db.collection('event_registrations')
+        .where('eventId', '==', eventId)
+        .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+        .get(),
+      db.collection(MANUAL_REGISTRATIONS_COLLECTION)
+        .where('eventId', '==', eventId)
+        .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+        .get(),
+    ]);
+
+    const matchesDateKey = (reg) => {
+      const regDateKey = reg.dateKey || this.getDateKey(reg.date || reg.occurrenceDate);
+      return regDateKey === dateKey;
+    };
+
+    let count = 0;
+    snapshot.docs.forEach((doc) => {
+      if (matchesDateKey(doc.data())) {
+        count += 1;
+      }
+    });
+    manualSnapshot.docs.forEach((doc) => {
+      if (matchesDateKey(doc.data())) {
+        count += 1;
+      }
+    });
+
+    return count;
+  }
+
+  async getCancellationsForOccurrences(occurrenceKeys) {
+    const map = new Map();
+    if (!occurrenceKeys?.length) {
+      return map;
+    }
+
+    const uniqueDocIds = [
+      ...new Set(occurrenceKeys.map(({ eventId, dateKey }) => `${eventId}_${dateKey}`)),
+    ];
+
+    for (let i = 0; i < uniqueDocIds.length; i += 100) {
+      const chunkIds = uniqueDocIds.slice(i, i + 100);
+      const chunkRefs = chunkIds.map((docId) => db.collection('event_cancellations').doc(docId));
+      const snapshots = await db.getAll(...chunkRefs);
+      snapshots.forEach((doc, idx) => {
+        map.set(chunkIds[idx], doc.exists ? doc.data() : null);
+      });
+    }
+
+    return map;
+  }
+
+  getRegistrationDateKey(registration) {
+    if (registration?.dateKey) {
+      return registration.dateKey;
+    }
+    return this.getDateKey(registration?.date || registration?.occurrenceDate);
   }
 
   getEventEndDateTime(dateValue, startTime, durationMinutes) {
@@ -234,12 +355,14 @@ class RegistrationService {
       eventId: actualEventId, // Use base event ID (not virtual instance ID)
       occurrenceDate: eventDateObj,
       date: eventDateObj, // Add date field for easier grouping
+      dateKey,
       registrationDate: now,
       status: REGISTRATION_STATUS.CONFIRMED,
       createdAt: now,
     };
 
     const docRef = await db.collection('event_registrations').add(registrationDoc);
+    await this.adjustOccurrenceCount(actualEventId, dateKey, 1);
 
     // Note: registeredCount is now calculated on-the-fly from registrations
     // No need to update the base event's registeredCount field
@@ -315,12 +438,14 @@ class RegistrationService {
       eventId: actualEventId,
       occurrenceDate: eventDateObj,
       date: eventDateObj,
+      dateKey,
       status: REGISTRATION_STATUS.CONFIRMED,
       createdAt: now,
       updatedAt: now,
     };
 
     const docRef = await db.collection(MANUAL_REGISTRATIONS_COLLECTION).add(manualRegistrationDoc);
+    await this.adjustOccurrenceCount(actualEventId, dateKey, 1);
 
     await cacheService.delPattern('events:*');
 
@@ -352,6 +477,9 @@ class RegistrationService {
       status: REGISTRATION_STATUS.CANCELLED,
       updatedAt: new Date(),
     });
+
+    const dateKey = this.getRegistrationDateKey(manualRegistration);
+    await this.adjustOccurrenceCount(manualRegistration.eventId, dateKey, -1);
 
     await cacheService.delPattern('events:*');
 
@@ -425,6 +553,9 @@ class RegistrationService {
       updatedAt: new Date(),
     });
 
+    const dateKey = this.getRegistrationDateKey(registrationToCancel);
+    await this.adjustOccurrenceCount(actualEventId, dateKey, -1);
+
     await cacheService.delPattern('events:*');
 
     return {
@@ -448,25 +579,25 @@ class RegistrationService {
 
     const targetDateKey = this.getDateKey(eventDate);
 
-    const snapshot = await db.collection('event_registrations')
-      .where('eventId', '==', actualEventId)
-      .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
-      .get();
+    const matchesTargetDate = (registration) => {
+      const regDateKey = registration.dateKey || this.getDateKey(registration.date || registration.occurrenceDate);
+      return regDateKey === targetDateKey;
+    };
 
-    const manualSnapshot = await db.collection(MANUAL_REGISTRATIONS_COLLECTION)
-      .where('eventId', '==', actualEventId)
-      .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
-      .get();
+    const [snapshot, manualSnapshot] = await Promise.all([
+      db.collection('event_registrations')
+        .where('eventId', '==', actualEventId)
+        .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+        .get(),
+      db.collection(MANUAL_REGISTRATIONS_COLLECTION)
+        .where('eventId', '==', actualEventId)
+        .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
+        .get(),
+    ]);
 
     const standardRegistrations = snapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() }))
-      .filter(registration => {
-        const regDateValue = registration.date || registration.occurrenceDate;
-        if (!regDateValue) {
-          return false;
-        }
-        return this.getDateKey(regDateValue) === targetDateKey;
-      })
+      .filter(matchesTargetDate)
       .map((registration) => ({
         ...registration,
         isManual: false,
@@ -476,13 +607,7 @@ class RegistrationService {
 
     const manualRegistrations = manualSnapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() }))
-      .filter(registration => {
-        const regDateValue = registration.date || registration.occurrenceDate;
-        if (!regDateValue) {
-          return false;
-        }
-        return this.getDateKey(regDateValue) === targetDateKey;
-      })
+      .filter(matchesTargetDate)
       .map((registration) => ({
         id: `${MANUAL_REGISTRATION_ID_PREFIX}${registration.id}`,
         manualRegistrationId: registration.id,
@@ -526,6 +651,9 @@ class RegistrationService {
       status: REGISTRATION_STATUS.CANCELLED,
       updatedAt: new Date(),
     });
+
+    const dateKey = this.getRegistrationDateKey(registration);
+    await this.adjustOccurrenceCount(registration.eventId, dateKey, -1);
 
     // Refund only real transactions (dummy reservations have no real transaction to refund)
     if (
@@ -674,6 +802,8 @@ class RegistrationService {
       });
     }
 
+    await this.setOccurrenceCount(actualEventId, dateKey, 0);
+
     // Invalidate caches so the UI reflects cancellation.
     for (const userId of affectedUserIds) {
       await cacheService.invalidateUserCache(userId);
@@ -784,6 +914,8 @@ class RegistrationService {
       });
     }
 
+    await this.setOccurrenceCount(actualEventId, dateKey, 0);
+
     for (const userId of affectedUserIds) {
       await cacheService.invalidateUserCache(userId);
     }
@@ -839,6 +971,9 @@ class RegistrationService {
       updatedAt: new Date(),
     });
 
+    const dateKey = this.getRegistrationDateKey(registration);
+    await this.adjustOccurrenceCount(registration.eventId, dateKey, -1);
+
     // Note: registeredCount is now calculated on-the-fly from registrations
     // No need to update the base event's registeredCount field
 
@@ -868,6 +1003,12 @@ class RegistrationService {
   }
 
   async getUserRegistrations(userId, futureOnly = true) {
+    const cacheKey = cacheService.getUserRegistrationsKey(userId);
+    const cached = await cacheService.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     // "myRegistrations" should return active registrations only.
     const snapshot = await db.collection('event_registrations')
       .where('userId', '==', userId)
@@ -891,6 +1032,7 @@ class RegistrationService {
       });
     }
 
+    await cacheService.set(cacheKey, registrations, CACHE_TTL.REGISTRATIONS_FUTURE);
     return registrations;
   }
 
@@ -992,49 +1134,64 @@ class RegistrationService {
   }
 
   /**
-   * Count registrations for events by eventId and date
-   * Returns a map: { "eventId:date": count }
+   * Read occurrence registration counts from counter docs.
+   * occurrenceKeys: [{ eventId, dateKey }]
+   * Returns map: { "eventId:dateKey": count }
    */
-  async countRegistrationsByEventAndDate(eventIds, dates) {
-    if (!eventIds || eventIds.length === 0) {
+  async countRegistrationsByEventAndDate(occurrenceKeys) {
+    if (!occurrenceKeys || occurrenceKeys.length === 0) {
       return {};
     }
 
-    // Get all real + manual registrations for these events
-    const [snapshot, manualSnapshot] = await Promise.all([
-      db.collection('event_registrations')
-        .where('eventId', 'in', eventIds)
-        .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
-        .get(),
-      db.collection(MANUAL_REGISTRATIONS_COLLECTION)
-        .where('eventId', 'in', eventIds)
-        .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
-        .get(),
-    ]);
+    const uniqueKeys = [];
+    const seen = new Set();
+    for (const key of occurrenceKeys) {
+      if (!key?.eventId || !key?.dateKey) {
+        continue;
+      }
+      const mapKey = `${key.eventId}:${key.dateKey}`;
+      if (!seen.has(mapKey)) {
+        seen.add(mapKey);
+        uniqueKeys.push({ eventId: key.eventId, dateKey: key.dateKey });
+      }
+    }
+
+    if (uniqueKeys.length === 0) {
+      return {};
+    }
 
     const counts = {};
+    const missingKeys = [];
 
-    snapshot.docs.forEach(doc => {
-      const reg = doc.data();
-      // Use occurrenceDate as primary field (it identifies the specific event occurrence)
-      const dateField = reg.occurrenceDate || reg.date;
-      const regDate = dateField?.toDate ? dateField.toDate() : new Date(dateField);
+    for (let i = 0; i < uniqueKeys.length; i += 100) {
+      const chunkKeys = uniqueKeys.slice(i, i + 100);
+      const chunkRefs = chunkKeys.map(({ eventId, dateKey }) =>
+        db.collection(OCCURRENCE_COUNTS_COLLECTION).doc(this.getOccurrenceCountDocId(eventId, dateKey))
+      );
+      const snapshots = await db.getAll(...chunkRefs);
 
-      // Format date as YYYY-MM-DD for consistent grouping
-      const dateKey = regDate.toISOString().split('T')[0];
-      const key = `${reg.eventId}:${dateKey}`;
+      snapshots.forEach((doc, idx) => {
+        const { eventId, dateKey } = chunkKeys[idx];
+        const mapKey = `${eventId}:${dateKey}`;
+        if (doc.exists) {
+          counts[mapKey] = doc.data().count || 0;
+        } else {
+          counts[mapKey] = null;
+          missingKeys.push({ eventId, dateKey });
+        }
+      });
+    }
 
-      counts[key] = (counts[key] || 0) + 1;
-    });
-
-    manualSnapshot.docs.forEach(doc => {
-      const reg = doc.data();
-      const dateField = reg.occurrenceDate || reg.date;
-      const regDate = dateField?.toDate ? dateField.toDate() : new Date(dateField);
-      const dateKey = regDate.toISOString().split('T')[0];
-      const key = `${reg.eventId}:${dateKey}`;
-      counts[key] = (counts[key] || 0) + 1;
-    });
+    if (missingKeys.length > 0) {
+      await Promise.all(
+        missingKeys.map(async ({ eventId, dateKey }) => {
+          const fallbackCount = await this.countRegistrationsForOccurrenceFallback(eventId, dateKey);
+          const mapKey = `${eventId}:${dateKey}`;
+          counts[mapKey] = fallbackCount;
+          await this.setOccurrenceCount(eventId, dateKey, fallbackCount);
+        })
+      );
+    }
 
     return counts;
   }

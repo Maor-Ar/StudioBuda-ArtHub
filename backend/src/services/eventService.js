@@ -1,5 +1,5 @@
 import { db } from '../config/firebase.js';
-import { EVENT_TYPES, REGISTRATION_STATUS } from '../config/constants.js';
+import { EVENT_TYPES, CACHE_TTL } from '../config/constants.js';
 import { NotFoundError, ValidationError } from '../utils/errors.js';
 import {
   validateEventType,
@@ -138,6 +138,16 @@ class EventService {
   }
 
   async getEvents(filters = {}, dateRange = null) {
+    const filtersKey = filters?.eventType ? `:type:${filters.eventType}` : '';
+    const rangeKey = dateRange?.startDate && dateRange?.endDate
+      ? `${dateRange.startDate}_${dateRange.endDate}`
+      : 'all';
+    const cacheKey = cacheService.getEventsKey(`${rangeKey}${filtersKey}`);
+    const cached = await cacheService.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     let query = db.collection('events').where('isActive', '==', true);
 
     // Apply filters
@@ -187,46 +197,46 @@ class EventService {
       return dateA - dateB;
     });
 
+    await cacheService.set(cacheKey, events, CACHE_TTL.EVENTS_ACTIVE);
     return events;
+  }
+
+  async getEventsByIds(eventIds) {
+    const map = new Map();
+    if (!eventIds?.length) {
+      return map;
+    }
+
+    const uniqueIds = [...new Set(eventIds)];
+    await Promise.all(
+      uniqueIds.map(async (eventId) => {
+        try {
+          const event = await this.getEvent(eventId);
+          map.set(eventId, event);
+        } catch {
+          // Skip missing events
+        }
+      })
+    );
+
+    return map;
   }
 
   async checkEventCapacity(eventId, occurrenceDate = null) {
     const event = await this.getEvent(eventId);
-    
-    // Calculate registeredCount on-the-fly for the specific date
+
     const eventDate = occurrenceDate || event.date;
     const dateObj = eventDate?.toDate ? eventDate.toDate() : new Date(eventDate);
     const dateKey = dateObj.toISOString().split('T')[0];
-    
-    // Count confirmed real + manual registrations for this event and date
-    const [snapshot, manualSnapshot] = await Promise.all([
-      db.collection('event_registrations')
-        .where('eventId', '==', eventId)
-        .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
-        .get(),
-      db.collection('event_manual_registrations')
-        .where('eventId', '==', eventId)
-        .where('status', '==', REGISTRATION_STATUS.CONFIRMED)
-        .get(),
-    ]);
-    
-    let count = 0;
-    const countMatchingDate = (docs) => {
-      docs.forEach((doc) => {
-        const reg = doc.data();
-        const regDate = reg.date?.toDate
-          ? reg.date.toDate()
-          : new Date(reg.date || reg.occurrenceDate);
-        const regDateKey = regDate.toISOString().split('T')[0];
-        if (regDateKey === dateKey) {
-          count++;
-        }
-      });
-    };
 
-    countMatchingDate(snapshot.docs);
-    countMatchingDate(manualSnapshot.docs);
-    
+    const countDoc = await db.collection('occurrence_counts').doc(`${eventId}_${dateKey}`).get();
+    let count = countDoc.exists ? (countDoc.data().count || 0) : null;
+
+    if (count === null) {
+      const registrationService = (await import('./registrationService.js')).default;
+      count = await registrationService.getOccurrenceCount(eventId, dateKey);
+    }
+
     return count < event.maxRegistrations;
   }
 }

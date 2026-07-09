@@ -107,7 +107,7 @@ export const typeDefs = gql`
     allEvents: [Event!]!
     products: [Product!]!
     allProducts: [Product!]!
-    adminDashboardMetrics: AdminDashboardMetrics!
+    adminDashboardMetrics(forceRefresh: Boolean): AdminDashboardMetrics!
   }
 
   type Mutation {

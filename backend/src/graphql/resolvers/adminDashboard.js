@@ -3,9 +3,9 @@ import { requireManager } from '../middleware/permissions.js';
 
 export const adminDashboardResolvers = {
   Query: {
-    adminDashboardMetrics: async (_, __, context) => {
+    adminDashboardMetrics: async (_, { forceRefresh = false }, context) => {
       await requireManager(context);
-      return adminDashboardService.getDashboardMetrics();
+      return adminDashboardService.getDashboardMetrics({ forceRefresh });
     },
   },
 };

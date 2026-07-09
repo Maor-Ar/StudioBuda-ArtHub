@@ -1,5 +1,6 @@
 import { db } from '../config/firebase.js';
-import { TRANSACTION_TYPES } from '../config/constants.js';
+import { TRANSACTION_TYPES, CACHE_TTL } from '../config/constants.js';
+import cacheService from './cacheService.js';
 
 const MONTH_LABELS_HE = [
   'ינואר',
@@ -80,7 +81,22 @@ const isInRange = (date, start, end) =>
   !!date && date.getTime() >= start.getTime() && date.getTime() <= end.getTime();
 
 class AdminDashboardService {
-  async getDashboardMetrics() {
+  async getDashboardMetrics({ forceRefresh = false } = {}) {
+    const cacheKey = cacheService.getDashboardMetricsKey();
+
+    if (!forceRefresh) {
+      const cached = await cacheService.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
+    const metrics = await this.computeDashboardMetrics();
+    await cacheService.set(cacheKey, metrics, CACHE_TTL.DASHBOARD_METRICS);
+    return metrics;
+  }
+
+  async computeDashboardMetrics() {
     const [transactionsSnap, registrationsSnap, manualRegistrationsSnap, eventsSnap, cancellationsSnap] = await Promise.all([
       db.collection('transactions').get(),
       db.collection('event_registrations').where('status', '==', 'confirmed').get(),

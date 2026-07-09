@@ -176,33 +176,12 @@ const CalendarScreen = () => {
     }
   }, [registrationsData]);
 
-  // Registration mutation
   const [registerForEvent, { loading: registering }] = useMutation(REGISTER_FOR_EVENT, {
-    refetchQueries: [
-      { query: GET_MY_REGISTRATIONS },
-      // Note: GET_EVENTS is refetched manually via refetchEvents() to clear our custom cache
-    ],
-    awaitRefetchQueries: true, // Wait for refetch queries to complete
     onCompleted: async (mutationData) => {
       console.log('[REGISTRATION] ✅ Registration mutation completed successfully');
       console.log('[REGISTRATION] Response data:', mutationData);
       try {
-        // Clear cache for the current week to force fresh data
-        console.log('[REGISTRATION] Clearing cache for date range...');
-        clearEventsCacheForRange(dateRange);
-        
-        // Refetch events and registrations to get updated data from DB
-        console.log('[REGISTRATION] Refetching events and registrations...');
-        const [eventsResult, registrationsResult] = await Promise.all([refetchEvents(), refetchRegistrations()]);
-        await refreshMyTransactions();
-        console.log('[REGISTRATION] ✅ Events and registrations refetched successfully');
-        console.log('[REGISTRATION] 📊 Events result:', eventsResult);
-        console.log('[REGISTRATION] 📊 Events data:', eventsResult?.data);
-        console.log('[REGISTRATION] 📊 Events list:', eventsResult?.data?.events);
-        console.log('[REGISTRATION] 📊 Registrations result:', registrationsResult);
-        console.log('[REGISTRATION] 📊 Registrations data:', registrationsResult?.data);
-        console.log('[REGISTRATION] 📊 My registrations:', registrationsResult?.data?.myRegistrations);
-        
+        await refreshCalendarData({ includeTransactions: true });
         // Show success message
         showSuccessToast('נרשמת בהצלחה לשיעור!');
         
@@ -237,14 +216,9 @@ const CalendarScreen = () => {
 
   // Cancel registration mutation
   const [cancelRegistration, { loading: cancelling }] = useMutation(CANCEL_REGISTRATION, {
-    refetchQueries: [{ query: GET_MY_REGISTRATIONS }],
     onCompleted: async () => {
       try {
-        // Clear cache and refetch events
-        clearEventsCacheForRange(dateRange);
-        await refetchEvents();
-        await refetchRegistrations();
-        await refreshMyTransactions();
+        await refreshCalendarData({ includeTransactions: true });
         showSuccessToast('הרישום בוטל בהצלחה');
       } catch (error) {
         console.error('[CANCELLATION] Error refetching after cancellation:', error);
@@ -265,8 +239,7 @@ const CalendarScreen = () => {
   const [adminReserveSpot, { loading: reservingSpot }] = useMutation(ADMIN_RESERVE_SPOT, {
     onCompleted: async () => {
       try {
-        clearEventsCacheForRange(dateRange);
-        await refetchEvents();
+        await refreshCalendarData();
         showSuccessToast('המקום שוריין בהצלחה');
       } catch (error) {
         console.error('[ADMIN RESERVE] Error refetching after reserve:', error);
@@ -284,13 +257,7 @@ const CalendarScreen = () => {
     {
       onCompleted: async () => {
         try {
-          clearEventsCacheForRange(dateRange);
-          await Promise.all([
-            refetchEvents(),
-            refetchRegistrations(),
-            refetchEventRegistrations(),
-          ]);
-          await refreshMyTransactions();
+          await refreshCalendarData({ includeEventRegs: true });
           showSuccessToast('האירוע בוטל לתאריך הנבחר');
         } catch (error) {
           console.error('[ADMIN CANCEL EVENT OCCURRENCE] Error refetching:', error);
@@ -309,13 +276,7 @@ const CalendarScreen = () => {
     {
       onCompleted: async () => {
         try {
-          clearEventsCacheForRange(dateRange);
-          await Promise.all([
-            refetchEvents(),
-            refetchRegistrations(),
-            refetchEventRegistrations(),
-          ]);
-          await refreshMyTransactions();
+          await refreshCalendarData({ includeEventRegs: true });
           showSuccessToast('האירוע הופעל מחדש לתאריך הנבחר');
         } catch (error) {
           console.error('[ADMIN REENABLE EVENT OCCURRENCE] Error refetching:', error);
@@ -336,19 +297,25 @@ const CalendarScreen = () => {
   } = useQuery(GET_EVENT_REGISTRATIONS, {
     variables: { eventId: selectedEvent?.id || '' },
     skip: !isAdmin || !selectedEvent || !modalVisible,
-    fetchPolicy: 'network-only',
+    fetchPolicy: 'cache-first',
   });
+
+  const refreshCalendarData = async ({ includeTransactions = false, includeEventRegs = false } = {}) => {
+    clearEventsCacheForRange(dateRange);
+    const tasks = [refetchEvents(), refetchRegistrations()];
+    if (includeEventRegs) {
+      tasks.push(refetchEventRegistrations());
+    }
+    await Promise.all(tasks);
+    if (includeTransactions) {
+      await refreshMyTransactions();
+    }
+  };
 
   const [adminCancelRegistration] = useMutation(ADMIN_CANCEL_REGISTRATION, {
     onCompleted: async () => {
       try {
-        clearEventsCacheForRange(dateRange);
-        await Promise.all([
-          refetchEvents(),
-          refetchRegistrations(),
-          refetchEventRegistrations(),
-        ]);
-        await refreshMyTransactions();
+        await refreshCalendarData({ includeEventRegs: true });
         showSuccessToast('הרישום הוסר בהצלחה');
       } catch (error) {
         console.error('[ADMIN CANCEL REGISTRATION] Error refetching after removal:', error);

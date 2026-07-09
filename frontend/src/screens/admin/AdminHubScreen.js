@@ -67,8 +67,9 @@ const HELP_TEXTS = {
 
 const AdminHubScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { data, loading, error } = useQuery(GET_ADMIN_DASHBOARD_METRICS, {
+  const { data, loading, error, refetch } = useQuery(GET_ADMIN_DASHBOARD_METRICS, {
     fetchPolicy: 'network-only',
+    variables: { forceRefresh: false },
   });
   const metrics = data?.adminDashboardMetrics;
   const showDashboardLoading = useShouldShowLocalLoader(loading && !metrics);
@@ -118,7 +119,16 @@ const AdminHubScreen = ({ navigation }) => {
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>דשבורד ביצועים</Text>
+        <View style={styles.dashboardHeaderRow}>
+          <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>דשבורד ביצועים</Text>
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={() => refetch({ forceRefresh: true })}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.refreshButtonText}>רענון</Text>
+          </TouchableOpacity>
+        </View>
         {loading && !metrics ? (
           showDashboardLoading ? (
           <ActivityIndicator size="large" color="#FFD1E3" style={{ marginVertical: 20 }} />
@@ -323,6 +333,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'right',
     marginBottom: 12,
+  },
+  dashboardHeaderRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  refreshButton: {
+    borderWidth: 1,
+    borderColor: '#FFD1E3',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  refreshButtonText: {
+    color: '#FFD1E3',
+    fontSize: 13,
+    fontWeight: '600',
   },
   dashboardContent: {
     gap: 14,

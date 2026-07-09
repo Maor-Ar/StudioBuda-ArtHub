@@ -40,6 +40,7 @@ export const CACHE_TTL = {
   EVENTS_ACTIVE: 900, // 15 minutes
   TRANSACTIONS_ACTIVE: 300, // 5 minutes
   REGISTRATIONS_FUTURE: 600, // 10 minutes
+  DASHBOARD_METRICS: 900, // 15 minutes
 };
 
 // Date range limits

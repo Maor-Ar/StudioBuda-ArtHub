@@ -1,19 +1,78 @@
 import registrationService from '../../services/registrationService.js';
 import eventService from '../../services/eventService.js';
 import userService from '../../services/userService.js';
-import { db } from '../../config/firebase.js';
 import { requireAdmin, requireAuthenticated } from '../middleware/permissions.js';
-import logger from '../../utils/logger.js';
+
+const enrichRegistrationsWithEvents = async (registrations) => {
+  if (!registrations.length) {
+    return registrations;
+  }
+
+  const registrationsWithDateKeys = registrations.map((reg) => ({
+    reg,
+    dateKey: registrationService.getRegistrationDateKey(reg),
+  }));
+
+  const occurrenceKeys = registrationsWithDateKeys
+    .filter(({ dateKey }) => dateKey)
+    .map(({ reg, dateKey }) => ({
+      eventId: reg.eventId,
+      dateKey,
+    }));
+
+  const uniqueEventIds = [...new Set(registrations.map((reg) => reg.eventId))];
+  const [eventsMap, registrationCounts, cancellations] = await Promise.all([
+    eventService.getEventsByIds(uniqueEventIds),
+    registrationService.countRegistrationsByEventAndDate(occurrenceKeys),
+    registrationService.getCancellationsForOccurrences(occurrenceKeys),
+  ]);
+
+  return registrationsWithDateKeys.map(({ reg, dateKey }) => {
+    if (!dateKey) {
+      return { ...reg, _enrichedEvent: null };
+    }
+
+    const event = eventsMap.get(reg.eventId);
+    const countKey = `${reg.eventId}:${dateKey}`;
+    const cancellation = cancellations.get(`${reg.eventId}_${dateKey}`);
+
+    return {
+      ...reg,
+      _enrichedEvent: event
+        ? {
+            ...event,
+            registeredCount: registrationCounts[countKey] || 0,
+            isCancelled: cancellation != null && cancellation.isActive !== false,
+            cancellationReason: cancellation?.reason || null,
+          }
+        : null,
+    };
+  });
+};
 
 export const registrationResolvers = {
   Query: {
     myRegistrations: async (_, __, context) => {
       const user = await requireAuthenticated(context);
-      return await registrationService.getUserRegistrations(user.id, true);
+      const registrations = await registrationService.getUserRegistrations(user.id, true);
+      return enrichRegistrationsWithEvents(registrations);
     },
     eventRegistrations: async (_, { eventId }, context) => {
       await requireAdmin(context);
-      return await registrationService.getRegistrationsForEventOccurrence(eventId);
+      const registrations = await registrationService.getRegistrationsForEventOccurrence(eventId);
+      const userIds = [
+        ...new Set(
+          registrations
+            .filter((reg) => !reg.isManual && reg.userId && reg.userId !== 'DummyUser')
+            .map((reg) => reg.userId)
+        ),
+      ];
+      const usersMap = await userService.getUsersByIds(userIds);
+
+      return registrations.map((reg) => ({
+        ...reg,
+        _user: reg.isManual ? null : usersMap.get(reg.userId) || null,
+      }));
     },
   },
 
@@ -60,50 +119,42 @@ export const registrationResolvers = {
 
   EventRegistration: {
     user: async (registration) => {
+      if (registration._user !== undefined) {
+        return registration._user;
+      }
       if (registration.isManual || registration.userId === 'DummyUser') {
         return null;
       }
       return await userService.getUserById(registration.userId);
     },
     event: async (registration) => {
+      if (registration._enrichedEvent) {
+        return registration._enrichedEvent;
+      }
+
       const event = await eventService.getEvent(registration.eventId);
-      
-      // Calculate registeredCount for the specific occurrence date
-      // Get the registration's occurrence date
-      const regDate = registration.date || registration.occurrenceDate;
-      if (!regDate) {
-        // If no date, return event without count (shouldn't happen for recurring events)
+      const dateKey = registrationService.getRegistrationDateKey(registration);
+      if (!dateKey) {
         return {
           ...event,
+          registeredCount: 0,
           isCancelled: false,
           cancellationReason: null,
         };
       }
-      
-      // Convert to Date object if needed
-      const dateObj = regDate?.toDate ? regDate.toDate() : new Date(regDate);
-      const dateKey = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD format
-      
-      // Count registrations for this event on this specific date
-      const registrationCounts = await registrationService.countRegistrationsByEventAndDate(
-        [registration.eventId],
-        []
-      );
-      
-      const countKey = `${registration.eventId}:${dateKey}`;
-      const perDateCount = registrationCounts[countKey] || 0;
+      const registrationCounts = await registrationService.countRegistrationsByEventAndDate([
+        { eventId: registration.eventId, dateKey },
+      ]);
+      const cancellations = await registrationService.getCancellationsForOccurrences([
+        { eventId: registration.eventId, dateKey },
+      ]);
+      const cancellation = cancellations.get(`${registration.eventId}_${dateKey}`);
 
-      const cancellationDocId = `${registration.eventId}_${dateKey}`;
-      const cancellationDoc = await db.collection('event_cancellations').doc(cancellationDocId).get();
-      const isCancelled = cancellationDoc.exists === true && cancellationDoc.data()?.isActive !== false;
-      const cancellationReason = cancellationDoc.exists ? cancellationDoc.data().reason : null;
-
-      // Attach the calculated registeredCount and cancellation info to the event (for UI)
       return {
         ...event,
-        registeredCount: perDateCount,
-        isCancelled,
-        cancellationReason,
+        registeredCount: registrationCounts[`${registration.eventId}:${dateKey}`] || 0,
+        isCancelled: cancellation != null && cancellation.isActive !== false,
+        cancellationReason: cancellation?.reason || null,
       };
     },
     occurrenceDate: (registration) => {
@@ -113,14 +164,12 @@ export const registrationResolvers = {
       return new Date(registration.occurrenceDate || registration.registrationDate).toISOString();
     },
     date: (registration) => {
-      // Use date field if available, otherwise fallback to occurrenceDate
       if (registration.date?.toDate) {
         return registration.date.toDate().toISOString();
       }
       if (registration.date) {
         return new Date(registration.date).toISOString();
       }
-      // Fallback to occurrenceDate
       if (registration.occurrenceDate?.toDate) {
         return registration.occurrenceDate.toDate().toISOString();
       }
@@ -149,4 +198,3 @@ export const registrationResolvers = {
     },
   },
 };
-
