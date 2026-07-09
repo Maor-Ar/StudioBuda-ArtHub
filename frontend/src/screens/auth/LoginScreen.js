@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
-  ActivityIndicator,
   ScrollView,
   Modal,
 } from 'react-native';
@@ -378,16 +377,6 @@ const LoginScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
-
-      {/* OAuth Loading Overlay */}
-      {oauthLoading && (
-        <View style={styles.loadingOverlay}>
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#AB5FBD" />
-            <Text style={styles.loadingText}>מתחבר...</Text>
-          </View>
-        </View>
-      )}
     </View>
   );
 };
@@ -615,28 +604,6 @@ const styles = StyleSheet.create({
     color: '#5D3587',
     textDecorationLine: 'underline',
     fontSize: 13,
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingContainer: {
-    backgroundColor: '#FFFFFF',
-    padding: 30,
-    borderRadius: 20,
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 15,
-    fontSize: 16,
-    color: '#4E0D66',
-    fontWeight: '600',
   },
 });
 

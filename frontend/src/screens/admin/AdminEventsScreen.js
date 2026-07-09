@@ -8,6 +8,7 @@ import { useQuery, useMutation } from '@apollo/client';
 import { GET_ALL_EVENTS } from '../../services/graphql/queries';
 import { CREATE_EVENT, UPDATE_EVENT, DELETE_EVENT } from '../../services/graphql/mutations';
 import { EVENT_TYPES } from '../../utils/constants';
+import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 
 const EVENT_TYPE_LABELS = {
   [EVENT_TYPES.SUBSCRIPTION_ONLY]: 'מנויים בלבד',
@@ -52,6 +53,9 @@ const AdminEventsScreen = ({ navigation }) => {
     onCompleted: () => refetch(),
     onError: (e) => showAlert('שגיאה', e.message),
   });
+
+  const showListLoading = useShouldShowLocalLoader(loading);
+  const showSaveSpinner = useShouldShowLocalLoader(creating || updating);
 
   const showAlert = (title, msg) => {
     if (Platform.OS === 'web') { window.alert(`${title}: ${msg}`); }
@@ -158,7 +162,9 @@ const AdminEventsScreen = ({ navigation }) => {
 
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
         {loading ? (
+          showListLoading ? (
           <ActivityIndicator size="large" color="#AB5FBD" style={{ marginTop: 40 }} />
+          ) : null
         ) : events.length === 0 ? (
           <Text style={styles.emptyText}>אין אירועים</Text>
         ) : (
@@ -253,7 +259,7 @@ const AdminEventsScreen = ({ navigation }) => {
 
               <View style={styles.modalActions}>
                 <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={creating || updating}>
-                  {(creating || updating) ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>שמור</Text>}
+                  {showSaveSpinner ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>שמור</Text>}
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.cancelFormBtn} onPress={() => { setModalVisible(false); resetForm(); }}>
                   <Text style={styles.cancelFormBtnText}>ביטול</Text>

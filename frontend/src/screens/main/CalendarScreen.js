@@ -17,6 +17,7 @@ import EventDetailModal from '../../components/EventDetailModal';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
 import { getGraphQLErrorMessage } from '../../utils/errorMessages';
 import { useAuth } from '../../context/AuthContext';
+import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 import { USER_ROLES } from '../../utils/constants';
 import LeftArrow from '../../assets/icons/LeftArrow.svg';
 import RightArrow from '../../assets/icons/RightArrow.svg';
@@ -153,6 +154,8 @@ const CalendarScreen = () => {
 
   // Fetch user registrations
   const { data: registrationsData, loading: registrationsLoading, refetch: refetchRegistrations } = useQuery(GET_MY_REGISTRATIONS);
+  const showEventsLoading = useShouldShowLocalLoader(loading);
+  const showRegistrationsLoading = useShouldShowLocalLoader(registrationsLoading);
   
   // Log registrations data changes
   useEffect(() => {
@@ -859,10 +862,12 @@ const CalendarScreen = () => {
           {selectedTab === 'הרישומים שלי' ? (
             // Show registered events
             registrationsLoading ? (
+              showRegistrationsLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#AB5FBD" />
                 <Text style={styles.loadingText}>טוען רישומים...</Text>
               </View>
+              ) : null
             ) : futureRegisteredEvents.length > 0 ? (
               futureRegisteredEvents.map((event) => (
                 <EventCard
@@ -885,10 +890,12 @@ const CalendarScreen = () => {
           ) : (
             // Show calendar events
             loading ? (
+              showEventsLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#AB5FBD" />
                 <Text style={styles.loadingText}>טוען אירועים...</Text>
               </View>
+              ) : null
             ) : eventsForSelectedDate.length > 0 ? (
               eventsForSelectedDate
                 .filter((event) => {

@@ -9,6 +9,7 @@ import ProductCard from '../../components/ProductCard';
 import PaymentModal from '../../components/PaymentModal';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { getGraphQLErrorMessage } from '../../utils/errorMessages';
+import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 
 const ProductsScreen = () => {
   const insets = useSafeAreaInsets();
@@ -25,6 +26,7 @@ const ProductsScreen = () => {
     skip: !user,
     fetchPolicy: 'network-only',
   });
+  const showProductsLoading = useShouldShowLocalLoader(productsLoading);
 
   const { refetch: refetchTransactions } = useQuery(GET_MY_TRANSACTIONS, {
     skip: true,
@@ -132,7 +134,9 @@ const ProductsScreen = () => {
           {!user ? (
             <Text style={styles.errorText}>יש להתחבר כדי לצפות במוצרים ולבצע רכישה.</Text>
           ) : productsLoading ? (
+            showProductsLoading ? (
             <ActivityIndicator size="large" color="#FFD1E3" style={{ marginTop: 24 }} />
+            ) : null
           ) : productsError ? (
             <Text style={styles.errorText}>לא ניתן לטעון מוצרים. נסו שוב מאוחר יותר.</Text>
           ) : (

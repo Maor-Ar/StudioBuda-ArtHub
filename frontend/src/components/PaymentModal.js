@@ -10,6 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useShouldShowLocalLoader } from '../context/LoadingContext';
 
 // Conditionally import WebView only for native platforms
 let WebView = null;
@@ -45,6 +46,7 @@ const PaymentModal = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const webViewRef = useRef(null);
+  const showWebViewLoading = useShouldShowLocalLoader(loading);
 
   // Security message in Hebrew
   const securityMessage = isRecurring
@@ -233,7 +235,7 @@ const PaymentModal = ({
             </View>
           )}
 
-          {loading && (
+          {loading && showWebViewLoading && (
             <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color="#4E0D66" />
               <Text style={styles.loadingText}>טוען עמוד תשלום...</Text>

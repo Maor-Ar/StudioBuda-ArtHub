@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, useWindowDimensions, Platform } from 'react-native';
 import RenderHTML from 'react-native-render-html';
 import { TRANSACTION_TYPES } from '../utils/constants';
+import { useShouldShowLocalLoader } from '../context/LoadingContext';
 
 const getProductTypeLabel = (type) => {
   switch (type) {
@@ -37,6 +38,7 @@ const getFeatures = (product) => {
 const ProductCard = ({ product, onPurchase, isPurchasing = false }) => {
   const [showTerms, setShowTerms] = useState(false);
   const { width } = useWindowDimensions();
+  const showPurchaseSpinner = useShouldShowLocalLoader(isPurchasing);
   const contentWidth = Math.max(0, width - 40 - 48);
 
   const features = useMemo(() => getFeatures(product), [product]);
@@ -87,7 +89,7 @@ const ProductCard = ({ product, onPurchase, isPurchasing = false }) => {
         onPress={onPurchase}
         disabled={isPurchasing}
       >
-        {isPurchasing ? (
+        {showPurchaseSpinner ? (
           <ActivityIndicator size="small" color="#FFFFFF" />
         ) : (
           <Text style={styles.purchaseButtonText}>רכישה</Text>

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
+import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 import { GET_ME, GET_MY_REGISTRATIONS, GET_MY_TRANSACTIONS, GET_PRODUCTS } from '../../services/graphql/queries';
 import TextModal from '../../components/TextModal';
 
@@ -107,6 +108,10 @@ const ProfileScreen = () => {
       }
     },
   });
+
+  const showUserLoading = useShouldShowLocalLoader(userLoading);
+  const showTransactionsLoading = useShouldShowLocalLoader(transactionsLoading);
+  const showRegistrationsLoading = useShouldShowLocalLoader(registrationsLoading);
 
   const { data: catalogData } = useQuery(GET_PRODUCTS, {
     skip: !user,
@@ -219,7 +224,7 @@ const ProfileScreen = () => {
     }
   };
 
-  if (userLoading) {
+  if (showUserLoading) {
     return (
       <View style={[styles.container, styles.centered, { paddingTop: insets.top }]}>
         <ActivityIndicator size="large" color="#FFD1E3" />
@@ -273,7 +278,9 @@ const ProfileScreen = () => {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>מנויים וכרטיסיות פעילים</Text>
               {transactionsLoading ? (
+                showTransactionsLoading ? (
                 <ActivityIndicator size="small" color="#FFD1E3" />
+                ) : null
               ) : activeTransactions.length > 0 ? (
                 activeTransactions.map(transaction => (
                   <View key={transaction.id} style={styles.card}>
@@ -341,7 +348,9 @@ const ProfileScreen = () => {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>הרשמות קרובות</Text>
               {registrationsLoading ? (
+                showRegistrationsLoading ? (
                 <ActivityIndicator size="small" color="#FFD1E3" />
+                ) : null
               ) : futureRegistrations.length > 0 ? (
                 futureRegistrations.map(registration => (
                   <View key={registration.id} style={styles.card}>

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, TextInput 
 import UserHeadIcon from '../assets/icons/user-head.svg';
 import UsersFourIcon from '../assets/icons/users-four.svg';
 import LeftArrow from '../assets/icons/LeftArrow.svg';
+import { useShouldShowLocalLoader } from '../context/LoadingContext';
 
 const EventDetailModal = ({
   event,
@@ -33,6 +34,7 @@ const EventDetailModal = ({
   const [adminCancelReason, setAdminCancelReason] = useState('');
   const [manualNameModalVisible, setManualNameModalVisible] = useState(false);
   const [manualCustomerName, setManualCustomerName] = useState('');
+  const showRegistrationsLoading = useShouldShowLocalLoader(registrationsLoading);
 
   useEffect(() => {
     if (!visible) {
@@ -153,9 +155,7 @@ const EventDetailModal = ({
                 onPress={onCancel}
                 disabled={disabled}
               >
-                <Text style={styles.cancelButtonText}>
-                  {disabled ? 'מבטל...' : 'ביטול הרשמה'}
-                </Text>
+                <Text style={styles.cancelButtonText}>ביטול הרשמה</Text>
               </TouchableOpacity>
             ) : isFull ? (
               <View style={styles.fullButton}>
@@ -167,9 +167,7 @@ const EventDetailModal = ({
                 onPress={onRegister}
                 disabled={disabled}
               >
-                <Text style={styles.registerButtonText}>
-                  {disabled ? 'נרשם...' : 'תרשמו אותי'}
-                </Text>
+                <Text style={styles.registerButtonText}>תרשמו אותי</Text>
               </TouchableOpacity>
             )}
 
@@ -236,7 +234,9 @@ const EventDetailModal = ({
               <View style={styles.registrationsContainer}>
                 <Text style={styles.registrationsTitle}>נרשמים לאירוע</Text>
                 {registrationsLoading ? (
+                  showRegistrationsLoading ? (
                   <Text style={styles.registrationsLoadingText}>טוען רשימת נרשמים...</Text>
+                  ) : null
                 ) : registrations.length === 0 ? (
                   <Text style={styles.emptyRegistrationsText}>אין נרשמים כרגע</Text>
                 ) : (

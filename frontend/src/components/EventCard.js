@@ -98,9 +98,7 @@ const EventCard = ({
           onPress={onCancel}
           disabled={disabled}
         >
-          <Text style={styles.cancelButtonText}>
-            {disabled ? 'מבטל...' : 'ביטול הרשמה'}
-          </Text>
+          <Text style={styles.cancelButtonText}>ביטול הרשמה</Text>
         </TouchableOpacity>
       ) : isFull ? (
         <View style={styles.fullButton}>
@@ -112,9 +110,7 @@ const EventCard = ({
           onPress={onRegister}
           disabled={disabled}
         >
-          <Text style={styles.registerButtonText}>
-            {disabled ? 'נרשם...' : 'תרשמו אותי'}
-          </Text>
+          <Text style={styles.registerButtonText}>תרשמו אותי</Text>
         </TouchableOpacity>
       )}
     </TouchableOpacity>

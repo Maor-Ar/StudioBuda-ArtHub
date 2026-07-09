@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Dimensions, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Dimensions, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
@@ -197,16 +197,6 @@ const RegisterStep1Screen = ({ navigation }) => {
           <Text style={styles.footerLinkText}>כבר יש לך חשבון? היכנס</Text>
         </TouchableOpacity>
       </ScrollView>
-
-      {/* OAuth Loading Overlay */}
-      {oauthLoading && (
-        <View style={styles.loadingOverlay}>
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#AB5FBD" />
-            <Text style={styles.loadingText}>מתחבר...</Text>
-          </View>
-        </View>
-      )}
     </View>
   );
 };
@@ -365,28 +355,6 @@ const styles = StyleSheet.create({
   footerLinkText: {
     color: '#FFFFFF',
     fontSize: 14,
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingContainer: {
-    backgroundColor: '#FFFFFF',
-    padding: 30,
-    borderRadius: 20,
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 15,
-    fontSize: 16,
-    color: '#4E0D66',
-    fontWeight: '600',
   },
 });
 

@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_ALL_TRANSACTIONS, GET_ALL_USERS } from '../../services/graphql/queries';
 import { UPDATE_TRANSACTION, RENEW_SUBSCRIPTION, CANCEL_SUBSCRIPTION } from '../../services/graphql/mutations';
+import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 
 const TYPE_LABELS = { subscription: 'מנוי', punch_card: 'כרטיסייה', trial_lesson: 'שיעור ניסיון' };
 
@@ -34,6 +35,11 @@ const AdminTransactionsScreen = ({ navigation }) => {
     onCompleted: () => { refetch(); setSelectedTx(null); },
     onError: (e) => showAlert('שגיאה', e.message),
   });
+
+  const showListLoading = useShouldShowLocalLoader(loading);
+  const showUpdatingTxSpinner = useShouldShowLocalLoader(updatingTx);
+  const showRenewingSpinner = useShouldShowLocalLoader(renewing);
+  const showCancellingSpinner = useShouldShowLocalLoader(cancelling);
 
   const showAlert = (title, msg) => {
     Platform.OS === 'web' ? window.alert(`${title}: ${msg}`) : Alert.alert(title, msg);
@@ -178,7 +184,9 @@ const AdminTransactionsScreen = ({ navigation }) => {
 
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent} nestedScrollEnabled={true}>
         {loading ? (
+          showListLoading ? (
           <ActivityIndicator size="large" color="#AB5FBD" style={{ marginTop: 40 }} />
+          ) : null
         ) : transactions.length === 0 ? (
           <Text style={styles.emptyText}>אין עסקאות</Text>
         ) : (
@@ -303,15 +311,15 @@ const AdminTransactionsScreen = ({ navigation }) => {
                     onPress={handleSaveTransaction}
                     disabled={updatingTx}
                   >
-                    {updatingTx ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.btnText}>שמור שינויים</Text>}
+                    {showUpdatingTxSpinner ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.btnText}>שמור שינויים</Text>}
                   </TouchableOpacity>
                   {effectiveIsActive && selectedTx.transactionType === 'subscription' && (
                     <>
                       <TouchableOpacity style={styles.renewBtn} onPress={() => renewSubscription({ variables: { id: selectedTx.id } })} disabled={renewing}>
-                        {renewing ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.btnText}>חדש מנוי</Text>}
+                        {showRenewingSpinner ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.btnText}>חדש מנוי</Text>}
                       </TouchableOpacity>
                       <TouchableOpacity style={styles.cancelSubBtn} onPress={() => cancelSubscription({ variables: { id: selectedTx.id } })} disabled={cancelling}>
-                        {cancelling ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.btnText}>בטל מנוי</Text>}
+                        {showCancellingSpinner ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.btnText}>בטל מנוי</Text>}
                       </TouchableOpacity>
                     </>
                   )}

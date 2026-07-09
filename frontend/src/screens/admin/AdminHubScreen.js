@@ -7,6 +7,7 @@ import KpiCard from '../../components/admin-dashboard/KpiCard';
 import BarChartCard from '../../components/admin-dashboard/BarChartCard';
 import PieChartCard from '../../components/admin-dashboard/PieChartCard';
 import LineChartCard from '../../components/admin-dashboard/LineChartCard';
+import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 
 const SECTIONS = [
   {
@@ -70,6 +71,7 @@ const AdminHubScreen = ({ navigation }) => {
     fetchPolicy: 'network-only',
   });
   const metrics = data?.adminDashboardMetrics;
+  const showDashboardLoading = useShouldShowLocalLoader(loading && !metrics);
 
   const formatDecimal = (value) => Number(value || 0).toFixed(1);
   const classColorPalette = ['#AB5FBD', '#42A5F5', '#FFA726', '#66BB6A', '#B0A0B8', '#EF5350', '#26C6DA'];
@@ -118,7 +120,9 @@ const AdminHubScreen = ({ navigation }) => {
 
         <Text style={styles.sectionTitle}>דשבורד ביצועים</Text>
         {loading && !metrics ? (
+          showDashboardLoading ? (
           <ActivityIndicator size="large" color="#FFD1E3" style={{ marginVertical: 20 }} />
+          ) : null
         ) : null}
         {error && !metrics ? (
           <Text style={styles.errorText}>לא הצלחנו לטעון נתוני דשבורד כרגע</Text>

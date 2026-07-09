@@ -1,4 +1,4 @@
-import { ApolloClient, InMemoryCache, createHttpLink, from } from '@apollo/client';
+import { ApolloClient, InMemoryCache, createHttpLink, from, ApolloLink, Observable } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,6 +9,16 @@ let isAuthFailureHandling = false;
 
 export const setApolloAuthFailureHandler = (handler) => {
   authFailureHandler = handler;
+};
+
+let loadingChangeHandler = null;
+
+export const setApolloLoadingHandler = (handler) => {
+  loadingChangeHandler = handler;
+};
+
+const notifyLoadingChange = (payload) => {
+  loadingChangeHandler?.(payload);
 };
 
 const invokeAuthFailureHandler = async () => {
@@ -161,6 +171,37 @@ const isAuthLikeGraphQLError = (err) => {
   );
 };
 
+const loadingLink = new ApolloLink((operation, forward) => {
+  const operationName = operation.operationName || 'Unknown';
+  notifyLoadingChange({ delta: 1, operationName });
+  return new Observable((observer) => {
+    let ended = false;
+    const end = () => {
+      if (!ended) {
+        ended = true;
+        notifyLoadingChange({ delta: -1, operationName });
+      }
+    };
+
+    const subscription = forward(operation).subscribe({
+      next: (result) => observer.next(result),
+      error: (error) => {
+        end();
+        observer.error(error);
+      },
+      complete: () => {
+        end();
+        observer.complete();
+      },
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      end();
+    };
+  });
+});
+
 const errorLink = onError(({ graphQLErrors, networkError }) => {
   const hasAuthGraphQLError = Array.isArray(graphQLErrors) && graphQLErrors.some(isAuthLikeGraphQLError);
 
@@ -175,7 +216,7 @@ const errorLink = onError(({ graphQLErrors, networkError }) => {
 
 // Create Apollo Client
 const client = new ApolloClient({
-  link: from([errorLink, authLink, httpLink]),
+  link: from([errorLink, loadingLink, authLink, httpLink]),
   cache: new InMemoryCache({
     typePolicies: {
       Query: {

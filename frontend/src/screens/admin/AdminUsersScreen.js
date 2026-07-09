@@ -20,6 +20,7 @@ import { useAuth } from '../../context/AuthContext';
 import { USER_ROLES, OAUTH_PROVIDERS } from '../../utils/constants';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { getGraphQLErrorMessage } from '../../utils/errorMessages';
+import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 
 const ROLE_LABELS = { user: 'משתמש', manager: 'מנהל/ת', admin: 'אדמין' };
 const ROLE_COLORS = { user: '#B0A0B8', manager: '#AB5FBD', admin: '#4E0D66' };
@@ -70,6 +71,10 @@ const AdminUsersScreen = ({ navigation }) => {
     },
     onError: (e) => showErrorToast(getGraphQLErrorMessage(e)),
   });
+
+  const showListLoading = useShouldShowLocalLoader(loading);
+  const showSaveUserSpinner = useShouldShowLocalLoader(savingUser);
+  const showSaveTxSpinner = useShouldShowLocalLoader(savingTx);
 
   const users = useMemo(() => {
     const list = data?.users || [];
@@ -234,10 +239,16 @@ const AdminUsersScreen = ({ navigation }) => {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.listOuter}>
         {loading ? (
+          showListLoading ? (
           <>
             {listHeader}
             <ActivityIndicator size="large" color="#AB5FBD" style={{ marginTop: 40 }} />
           </>
+          ) : (
+            <>
+              {listHeader}
+            </>
+          )
         ) : (
           <FlatList
             data={users}
@@ -347,7 +358,7 @@ const AdminUsersScreen = ({ navigation }) => {
                   </TouchableOpacity>
 
                   <TouchableOpacity style={styles.primaryBtn} onPress={saveUser} disabled={savingUser}>
-                    {savingUser ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryBtnText}>שמור</Text>}
+                    {showSaveUserSpinner ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryBtnText}>שמור</Text>}
                   </TouchableOpacity>
 
                   <TouchableOpacity style={styles.secondaryBtn} onPress={openPurchaseModal}>
@@ -424,7 +435,7 @@ const AdminUsersScreen = ({ navigation }) => {
               textAlignVertical="top"
             />
             <TouchableOpacity style={styles.primaryBtn} onPress={submitPurchase} disabled={savingTx}>
-              {savingTx ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryBtnText}>שמור רכישה</Text>}
+              {showSaveTxSpinner ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryBtnText}>שמור רכישה</Text>}
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.secondaryBtn}

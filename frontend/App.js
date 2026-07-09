@@ -22,6 +22,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { toastConfig } from './src/utils/toast';
 import { showErrorToast } from './src/utils/toast';
 import { attachServiceWorkerUpdateFlow } from './src/utils/pwaUpdate';
+import { LoadingProvider } from './src/context/LoadingContext';
 
 const navigationRef = createNavigationContainerRef();
 
@@ -178,11 +179,13 @@ export default function App() {
   return (
     <SafeAreaProvider style={{ backgroundColor: '#5D3587' }}>
       <ApolloProvider client={client}>
-        <AuthProvider>
-          <ApolloAuthBridge />
-          <RootNavigation />
-          <Toast config={toastConfig} />
-        </AuthProvider>
+        <LoadingProvider>
+          <AuthProvider>
+            <ApolloAuthBridge />
+            <RootNavigation />
+            <Toast config={toastConfig} />
+          </AuthProvider>
+        </LoadingProvider>
       </ApolloProvider>
     </SafeAreaProvider>
   );

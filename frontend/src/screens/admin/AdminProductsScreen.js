@@ -16,6 +16,7 @@ import { useQuery, useMutation } from '@apollo/client';
 import { GET_ALL_PRODUCTS } from '../../services/graphql/queries';
 import { CREATE_PRODUCT, UPDATE_PRODUCT, DELETE_PRODUCT } from '../../services/graphql/mutations';
 import { TRANSACTION_TYPES } from '../../utils/constants';
+import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 
 const TYPE_LABELS = {
   [TRANSACTION_TYPES.SUBSCRIPTION]: 'מנוי',
@@ -68,6 +69,9 @@ const AdminProductsScreen = ({ navigation }) => {
     onCompleted: () => refetch(),
     onError: (e) => Alert.alert('שגיאה', e.message),
   });
+
+  const showListLoading = useShouldShowLocalLoader(loading);
+  const showSaveSpinner = useShouldShowLocalLoader(creating || updating);
 
   const resetForm = useCallback(() => {
     setForm(EMPTY_FORM);
@@ -209,7 +213,9 @@ const AdminProductsScreen = ({ navigation }) => {
 
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
         {loading ? (
+          showListLoading ? (
           <ActivityIndicator size="large" color="#AB5FBD" style={{ marginTop: 40 }} />
+          ) : null
         ) : products.length === 0 ? (
           <Text style={styles.emptyText}>אין מוצרים</Text>
         ) : (
@@ -364,7 +370,7 @@ const AdminProductsScreen = ({ navigation }) => {
 
               <View style={styles.modalActions}>
                 <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={creating || updating}>
-                  {creating || updating ? (
+                  {showSaveSpinner ? (
                     <ActivityIndicator color="#FFF" />
                   ) : (
                     <Text style={styles.saveBtnText}>שמור</Text>
