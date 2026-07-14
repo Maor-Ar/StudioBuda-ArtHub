@@ -12,17 +12,25 @@ service cloud.firestore {
         && request.resource.data.customerName.matches('.*אוטומטי שיעור נסיון.*');
     }
 
+    function isValidDateKey(value) {
+      return value is string
+        && value.size() == 10
+        && value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
     function isValidManualCreate() {
       return isConfirmedStatus()
         && hasTrialSiteName()
         && request.resource.data.eventId is string
         && request.resource.data.eventId.size() > 0
         && request.resource.data.eventId.size() < 128
+        && isValidDateKey(request.resource.data.dateKey)
         && request.resource.data.keys().hasAll([
           'customerName',
           'eventId',
           'occurrenceDate',
           'date',
+          'dateKey',
           'status',
           'createdAt',
           'updatedAt'
@@ -35,6 +43,33 @@ service cloud.firestore {
           !('source' in request.resource.data)
           || request.resource.data.source == 'trial_site'
         );
+    }
+
+    function isValidOccurrenceCountShape(countId) {
+      return request.resource.data.keys().hasAll(['eventId', 'dateKey', 'count', 'updatedAt'])
+        && request.resource.data.eventId is string
+        && request.resource.data.eventId.size() > 0
+        && request.resource.data.eventId.size() < 128
+        && isValidDateKey(request.resource.data.dateKey)
+        && request.resource.data.count is int
+        && request.resource.data.count >= 0
+        && request.resource.data.count <= 50
+        && request.resource.data.updatedAt is timestamp
+        && countId == request.resource.data.eventId + '_' + request.resource.data.dateKey;
+    }
+
+    // Trial site may seed/heal a missing counter to the real confirmed total,
+    // or create the first count (=1) for an empty occurrence.
+    function isValidOccurrenceCountCreate(countId) {
+      return isValidOccurrenceCountShape(countId);
+    }
+
+    // After a trial reservation: allow raising the counter (+1 or heal jump), never lowering it.
+    function isValidOccurrenceCountIncrement(countId) {
+      return isValidOccurrenceCountShape(countId)
+        && request.resource.data.eventId == resource.data.eventId
+        && request.resource.data.dateKey == resource.data.dateKey
+        && request.resource.data.count > resource.data.count;
     }
 
     match /events/{eventId} {
@@ -56,6 +91,15 @@ service cloud.firestore {
     match /event_cancellations/{cancellationId} {
       allow read: if true;
       allow write: if false;
+    }
+
+    // Per-occurrence registration counter used by ArtHub capacity checks.
+    // Trial site must read + bump this when creating a manual trial reservation.
+    match /occurrence_counts/{countId} {
+      allow read: if true;
+      allow create: if isValidOccurrenceCountCreate(countId);
+      allow update: if isValidOccurrenceCountIncrement(countId);
+      allow delete: if false;
     }
 
     // Deny everything else from clients (Admin SDK bypasses rules)
