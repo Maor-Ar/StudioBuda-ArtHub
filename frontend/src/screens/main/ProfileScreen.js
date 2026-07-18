@@ -6,6 +6,14 @@ import { useAuth } from '../../context/AuthContext';
 import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 import { GET_ME, GET_MY_REGISTRATIONS, GET_MY_TRANSACTIONS, GET_PRODUCTS } from '../../services/graphql/queries';
 import TextModal from '../../components/TextModal';
+import TooltipIcon from '../../components/admin-dashboard/TooltipIcon';
+
+const ENTRIES_HELP = {
+  subscription:
+    'הכניסות שנוצלו ונותרו כוללות גם שיעורים שנרשמת אליהם ועדיין לא התקיימו. ביטול הרשמה בזמן מחזיר את הכניסה למכסה החודשית.',
+  punch_card:
+    'הכניסות שנותרו בכרטיסייה מחושבות אחרי ניכוי שיעורים שנרשמת אליהם, גם אם עדיין לא התקיימו. ביטול הרשמה בזמן מחזיר את הכניסה לכרטיסייה.',
+};
 
 // Terms of Service and Cancellation Policy content
 const TERMS_CONTENT = `1. מבוא
@@ -284,9 +292,18 @@ const ProfileScreen = () => {
               ) : activeTransactions.length > 0 ? (
                 activeTransactions.map(transaction => (
                   <View key={transaction.id} style={styles.card}>
-                    <Text style={styles.cardTitle}>
-                      {getProductName(transaction)}
-                    </Text>
+                    <View style={styles.cardTitleRow}>
+                      {ENTRIES_HELP[transaction.transactionType] ? (
+                        <TooltipIcon
+                          text={ENTRIES_HELP[transaction.transactionType]}
+                          color="#5D3587"
+                          maxWidth={300}
+                        />
+                      ) : null}
+                      <Text style={styles.cardTitle}>
+                        {getProductName(transaction)}
+                      </Text>
+                    </View>
                     
                     {/* Subscription details */}
                     {transaction.transactionType === 'subscription' && (
@@ -521,12 +538,19 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 10,
   },
+  cardTitleRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 6,
+    marginBottom: 8,
+  },
   cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 8,
     color: '#4E0D66', // Dark purple
     textAlign: 'right',
+    flexShrink: 1,
   },
   cardText: {
     fontSize: 14,

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Modal, Dimensions, Platform } from 'react-native';
 
-const TooltipIcon = ({ text, label = 'ⓘ', maxWidth = 280 }) => {
+const TooltipIcon = ({ text, label = 'ⓘ', maxWidth = 280, color = '#D4B8E0', bubbleMaxWidth }) => {
   const isWeb = Platform.OS === 'web';
   const triggerRef = useRef(null);
   const hoverTimerRef = useRef(null);
@@ -18,9 +18,9 @@ const TooltipIcon = ({ text, label = 'ⓘ', maxWidth = 280 }) => {
 
   const openTooltip = () => {
     const win = Dimensions.get('window');
-    const desiredWidth = Math.min(320, Math.max(220, Number(maxWidth) || 280));
+    const desiredWidth = Math.min(320, Math.max(220, Number(bubbleMaxWidth || maxWidth) || 280));
     const margin = 12;
-    const estimatedHeight = 96;
+    const estimatedHeight = 120;
 
     const measure = () => {
       if (!triggerRef.current?.measureInWindow) {
@@ -108,7 +108,7 @@ const TooltipIcon = ({ text, label = 'ⓘ', maxWidth = 280 }) => {
         }}
         style={styles.trigger}
       >
-        <Text style={styles.triggerText}>{label}</Text>
+        <Text style={[styles.triggerText, { color }]}>{label}</Text>
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         {isWeb && openMode === 'hover' ? (
@@ -141,8 +141,8 @@ const styles = StyleSheet.create({
     zIndex: 3,
   },
   triggerText: {
-    color: '#D4B8E0',
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '600',
   },
   bubble: {
     position: 'absolute',
