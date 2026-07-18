@@ -20,7 +20,7 @@ if (!fs.existsSync(indexPath)) {
 
 let html = fs.readFileSync(indexPath, 'utf8');
 
-html = html.replace(/<html\b[^>]*>/i, '<html lang="he" dir="rtl">');
+html = html.replace(/<html\b[^>]*>/i, '<html lang="he">');
 html = html.replace(/<title>[^<]*<\/title>/i, `<title>${TITLE}</title>`);
 
 const seoBlock = `

@@ -111,8 +111,10 @@ export default function App() {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       document.documentElement.style.backgroundColor = '#5D3587';
       document.body.style.backgroundColor = '#5D3587';
+      // lang only — do NOT set dir="rtl" on <html>. RN Web lays out in LTR
+      // coordinates; document RTL flips the shell and overflows the viewport.
       document.documentElement.lang = 'he';
-      document.documentElement.dir = 'rtl';
+      document.documentElement.dir = 'ltr';
       document.title = 'ArtHub | סטודיו בודה';
 
       const ensureMeta = (name, content) => {
