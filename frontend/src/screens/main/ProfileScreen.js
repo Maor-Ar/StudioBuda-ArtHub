@@ -7,6 +7,7 @@ import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 import { GET_ME, GET_MY_REGISTRATIONS, GET_MY_TRANSACTIONS, GET_PRODUCTS } from '../../services/graphql/queries';
 import TextModal from '../../components/TextModal';
 import TooltipIcon from '../../components/admin-dashboard/TooltipIcon';
+import { MAIN_SITE_URL } from '../../utils/constants';
 
 const ENTRIES_HELP = {
   subscription:
@@ -392,8 +393,15 @@ const ProfileScreen = () => {
           </>
         )}
 
-        {/* Legal Links Section */}
+        {/* Main site + legal links */}
         <View style={styles.legalSection}>
+          <TouchableOpacity
+            style={styles.legalLink}
+            onPress={() => Linking.openURL(MAIN_SITE_URL)}
+          >
+            <Text style={styles.legalLinkText}>לאתר סטודיו בודה</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity 
             style={styles.legalLink}
             onPress={() => setTermsModalVisible(true)}

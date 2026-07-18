@@ -1,7 +1,7 @@
 {
   "name": "StudioBuda ArtHub",
   "short_name": "StudioBuda",
-  "description": "StudioBuda ArtHub web app",
+  "description": "ArtHub של סטודיו בודה — הרשמה לשיעורים, יומן אישי וניהול כניסות",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

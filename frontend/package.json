@@ -10,7 +10,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "web:build": "expo export --platform web && node scripts/stamp-sw-version.js",
+    "web:build": "expo export --platform web && node scripts/stamp-sw-version.js && node scripts/inject-seo-meta.js",
     "stamp:sw": "node scripts/stamp-sw-version.js",
     "build:apk": "eas build --platform android --profile preview"
   },

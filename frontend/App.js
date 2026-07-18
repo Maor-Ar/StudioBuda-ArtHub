@@ -23,6 +23,7 @@ import { toastConfig } from './src/utils/toast';
 import { showErrorToast } from './src/utils/toast';
 import { attachServiceWorkerUpdateFlow } from './src/utils/pwaUpdate';
 import { LoadingProvider } from './src/context/LoadingContext';
+import { ARTHUB_SITE_URL } from './src/utils/constants';
 
 const navigationRef = createNavigationContainerRef();
 
@@ -110,12 +111,25 @@ export default function App() {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       document.documentElement.style.backgroundColor = '#5D3587';
       document.body.style.backgroundColor = '#5D3587';
+      document.documentElement.lang = 'he';
+      document.documentElement.dir = 'rtl';
+      document.title = 'ArtHub | סטודיו בודה';
 
       const ensureMeta = (name, content) => {
         let meta = document.querySelector(`meta[name="${name}"]`);
         if (!meta) {
           meta = document.createElement('meta');
           meta.name = name;
+          document.head.appendChild(meta);
+        }
+        meta.content = content;
+      };
+
+      const ensurePropertyMeta = (property, content) => {
+        let meta = document.querySelector(`meta[property="${property}"]`);
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.setAttribute('property', property);
           document.head.appendChild(meta);
         }
         meta.content = content;
@@ -131,11 +145,23 @@ export default function App() {
         link.href = href;
       };
 
+      const description =
+        'ArtHub של סטודיו בודה — הרשמה לשיעורים, יומן אישי וניהול כניסות. חלק מאתר סטודיו בודה.';
+
       ensureMeta('theme-color', '#5D3587');
+      ensureMeta('description', description);
+      ensureMeta('robots', 'index,follow');
       ensureMeta('apple-mobile-web-app-capable', 'yes');
       ensureMeta('apple-mobile-web-app-status-bar-style', 'default');
       ensureMeta('apple-mobile-web-app-title', 'StudioBuda');
       ensureMeta('mobile-web-app-capable', 'yes');
+      ensurePropertyMeta('og:type', 'website');
+      ensurePropertyMeta('og:locale', 'he_IL');
+      ensurePropertyMeta('og:site_name', 'StudioBuda ArtHub');
+      ensurePropertyMeta('og:title', 'ArtHub | סטודיו בודה');
+      ensurePropertyMeta('og:description', description);
+      ensurePropertyMeta('og:url', `${ARTHUB_SITE_URL}/`);
+      ensureLink('canonical', `${ARTHUB_SITE_URL}/`);
       ensureLink('manifest', '/manifest.json');
       ensureLink('apple-touch-icon', '/icons/apple-touch-icon.png');
     }

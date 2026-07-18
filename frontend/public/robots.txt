@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://arthub.studiobuda.co.il/sitemap.xml

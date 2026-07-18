@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "StudioBuda ArtHub",
+    "name": "ArtHub | סטודיו בודה",
     "slug": "studiobuda-arthub",
     "version": "1.0.0",
+    "description": "ArtHub של סטודיו בודה — הרשמה לשיעורים, יומן אישי וניהול כניסות",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "studiobuda-arthub",
