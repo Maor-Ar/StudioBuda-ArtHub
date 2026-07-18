@@ -6,37 +6,54 @@ import Toast from 'react-native-toast-message';
 
 let updateToastShown = false;
 let pendingReload = false;
+let pendingRegistration = null;
+let toastRetryTimer = null;
 
 function showUpdateToast(registration) {
+  if (!registration) return;
+  pendingRegistration = registration;
   if (updateToastShown) return;
-  updateToastShown = true;
 
-  Toast.show({
-    type: 'info',
-    text1: 'גרסה חדשה זמינה',
-    text2: 'לחצו כאן לעדכון האפליקציה',
-    position: 'top',
-    visibilityTime: 120000,
-    autoHide: false,
-    topOffset: 60,
-    text1Style: {
-      fontSize: 16,
-      fontWeight: '600',
-      textAlign: 'right',
-      writingDirection: 'rtl',
-    },
-    text2Style: {
-      fontSize: 14,
-      textAlign: 'right',
-      writingDirection: 'rtl',
-    },
-    onPress: () => {
-      const waiting = registration.waiting;
-      if (!waiting) return;
-      pendingReload = true;
-      waiting.postMessage({ type: 'SKIP_WAITING' });
-    },
-  });
+  // Toast may not be mounted yet (fonts / first paint). Retry briefly.
+  const tryShow = () => {
+    if (updateToastShown || !pendingRegistration) return;
+
+    updateToastShown = true;
+    if (toastRetryTimer) {
+      clearTimeout(toastRetryTimer);
+      toastRetryTimer = null;
+    }
+
+    Toast.show({
+      type: 'info',
+      text1: 'גרסה חדשה זמינה',
+      text2: 'לחצו כאן לעדכון האפליקציה',
+      position: 'top',
+      visibilityTime: 120000,
+      autoHide: false,
+      topOffset: 60,
+      text1Style: {
+        fontSize: 16,
+        fontWeight: '600',
+        textAlign: 'right',
+        writingDirection: 'rtl',
+      },
+      text2Style: {
+        fontSize: 14,
+        textAlign: 'right',
+        writingDirection: 'rtl',
+      },
+      onPress: () => {
+        const waiting = pendingRegistration?.waiting;
+        if (!waiting) return;
+        pendingReload = true;
+        waiting.postMessage({ type: 'SKIP_WAITING' });
+      },
+    });
+  };
+
+  // First attempt after shell has time to mount <Toast />
+  toastRetryTimer = setTimeout(tryShow, 1200);
 }
 
 function onNewWorkerInstalled(registration) {
@@ -63,6 +80,16 @@ export function attachServiceWorkerUpdateFlow(registration) {
     showUpdateToast(registration);
   }
 
+  // Installing right now (register() often starts an update before listeners attach).
+  if (registration.installing) {
+    const installing = registration.installing;
+    installing.addEventListener('statechange', () => {
+      if (installing.state === 'installed') {
+        onNewWorkerInstalled(registration);
+      }
+    });
+  }
+
   registration.addEventListener('updatefound', () => {
     const newWorker = registration.installing;
     if (!newWorker) return;
@@ -72,5 +99,19 @@ export function attachServiceWorkerUpdateFlow(registration) {
         onNewWorkerInstalled(registration);
       }
     });
+  });
+
+  const checkForUpdates = () => {
+    registration.update().catch(() => {});
+  };
+
+  // Force a check now — don't wait for the browser's periodic poll.
+  checkForUpdates();
+
+  window.addEventListener('focus', checkForUpdates);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      checkForUpdates();
+    }
   });
 }

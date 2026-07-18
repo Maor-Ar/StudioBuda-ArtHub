@@ -177,6 +177,9 @@ export default function App() {
         try {
           const registration = await navigator.serviceWorker.register('/sw.js', {
             scope: '/',
+            // GitHub Pages serves sw.js with max-age=600; without this the browser
+            // may keep the old worker script and never detect deploys.
+            updateViaCache: 'none',
           });
           console.log('[PWA] Service worker registered');
           attachServiceWorkerUpdateFlow(registration);
