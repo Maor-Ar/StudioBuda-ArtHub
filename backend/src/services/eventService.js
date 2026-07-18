@@ -229,13 +229,8 @@ class EventService {
     const dateObj = eventDate?.toDate ? eventDate.toDate() : new Date(eventDate);
     const dateKey = dateObj.toISOString().split('T')[0];
 
-    const countDoc = await db.collection('occurrence_counts').doc(`${eventId}_${dateKey}`).get();
-    let count = countDoc.exists ? (countDoc.data().count || 0) : null;
-
-    if (count === null) {
-      const registrationService = (await import('./registrationService.js')).default;
-      count = await registrationService.getOccurrenceCount(eventId, dateKey);
-    }
+    const registrationService = (await import('./registrationService.js')).default;
+    const count = await registrationService.getOccurrenceCount(eventId, dateKey);
 
     return count < event.maxRegistrations;
   }

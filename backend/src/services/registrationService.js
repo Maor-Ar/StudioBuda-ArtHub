@@ -60,6 +60,26 @@ class RegistrationService {
     }
 
     const ref = db.collection(OCCURRENCE_COUNTS_COLLECTION).doc(this.getOccurrenceCountDocId(eventId, dateKey));
+
+    // Decrements must stay non-negative and be serialized with reserves.
+    if (delta < 0) {
+      await db.runTransaction(async (transaction) => {
+        const snap = await transaction.get(ref);
+        const current = snap.exists ? (snap.data().count || 0) : 0;
+        transaction.set(
+          ref,
+          {
+            eventId,
+            dateKey,
+            count: Math.max(0, current + delta),
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
+      });
+      return;
+    }
+
     await ref.set(
       {
         eventId,
@@ -100,6 +120,67 @@ class RegistrationService {
     const fallbackCount = await this.countRegistrationsForOccurrenceFallback(eventId, dateKey);
     await this.setOccurrenceCount(eventId, dateKey, fallbackCount);
     return fallbackCount;
+  }
+
+  /**
+   * Atomically reserve a seat and create a registration document.
+   * Either both succeed or neither does — no overbooking window.
+   */
+  async createRegistrationWithReservedSlot({
+    collectionName,
+    registrationDoc,
+    eventId,
+    dateKey,
+    maxRegistrations,
+  }) {
+    if (!eventId || !dateKey || !Number.isFinite(Number(maxRegistrations))) {
+      throw new ValidationError('Invalid capacity reservation parameters', 'eventId');
+    }
+
+    const max = Number(maxRegistrations);
+    await this.getOccurrenceCount(eventId, dateKey);
+
+    const countRef = db
+      .collection(OCCURRENCE_COUNTS_COLLECTION)
+      .doc(this.getOccurrenceCountDocId(eventId, dateKey));
+    const registrationRef = db.collection(collectionName).doc();
+
+    try {
+      await db.runTransaction(async (transaction) => {
+        const snap = await transaction.get(countRef);
+        const count = snap.exists ? (snap.data().count || 0) : 0;
+
+        if (count >= max) {
+          throw new ConflictError('Event is at full capacity', 'eventId');
+        }
+
+        transaction.set(
+          countRef,
+          {
+            eventId,
+            dateKey,
+            count: count + 1,
+            updatedAt: new Date(),
+          },
+          { merge: true }
+        );
+        transaction.set(registrationRef, registrationDoc);
+      });
+    } catch (error) {
+      if (error instanceof ConflictError) {
+        throw error;
+      }
+      if (error?.message === 'Event is at full capacity') {
+        throw new ConflictError('Event is at full capacity', 'eventId');
+      }
+      throw error;
+    }
+
+    return registrationRef;
+  }
+
+  async releaseOccurrenceSlot(eventId, dateKey) {
+    await this.adjustOccurrenceCount(eventId, dateKey, -1);
   }
 
   async countRegistrationsForOccurrenceFallback(eventId, dateKey) {
@@ -238,7 +319,7 @@ class RegistrationService {
     // Block registration after occurrence end time has passed.
     this.ensureEventHasNotEnded(eventDate, event);
 
-    // Check capacity for this specific date (use actualEventId - the base event ID)
+    // Fast-fail capacity check (authoritative reserve happens just before write).
     if (!(await eventService.checkEventCapacity(actualEventId, eventDate))) {
       throw new ConflictError('Event is at full capacity', 'eventId');
     }
@@ -361,19 +442,40 @@ class RegistrationService {
       createdAt: now,
     };
 
-    const docRef = await db.collection('event_registrations').add(registrationDoc);
-    await this.adjustOccurrenceCount(actualEventId, dateKey, 1);
+    // Atomic seat reservation + registration create (no concurrent overbooking window).
+    const docRef = await this.createRegistrationWithReservedSlot({
+      collectionName: 'event_registrations',
+      registrationDoc,
+      eventId: actualEventId,
+      dateKey,
+      maxRegistrations: event.maxRegistrations,
+    });
 
     // Note: registeredCount is now calculated on-the-fly from registrations
     // No need to update the base event's registeredCount field
 
     // Update transaction - use subscription entry or punch card entry
     if (transactionId) {
-      const transaction = await transactionService.getTransactionById(transactionId);
-      if (transaction.transactionType === TRANSACTION_TYPES.SUBSCRIPTION) {
-        await transactionService.useSubscriptionEntry(transactionId);
-      } else if (transaction.transactionType === TRANSACTION_TYPES.PUNCH_CARD) {
-        await transactionService.usePunchCardEntry(transactionId);
+      try {
+        const transaction = await transactionService.getTransactionById(transactionId);
+        if (transaction.transactionType === TRANSACTION_TYPES.SUBSCRIPTION) {
+          await transactionService.useSubscriptionEntry(transactionId);
+        } else if (transaction.transactionType === TRANSACTION_TYPES.PUNCH_CARD) {
+          await transactionService.usePunchCardEntry(transactionId);
+        }
+      } catch (error) {
+        // Roll back registration + seat if billing the entry fails after the seat was taken.
+        try {
+          await docRef.update({
+            status: REGISTRATION_STATUS.CANCELLED,
+            updatedAt: new Date(),
+            cancelReason: 'transaction_entry_failed',
+          });
+          await this.releaseOccurrenceSlot(actualEventId, dateKey);
+        } catch (rollbackError) {
+          console.error('[REGISTRATION] Failed to roll back after transaction entry error:', rollbackError);
+        }
+        throw error;
       }
     }
 
@@ -444,8 +546,13 @@ class RegistrationService {
       updatedAt: now,
     };
 
-    const docRef = await db.collection(MANUAL_REGISTRATIONS_COLLECTION).add(manualRegistrationDoc);
-    await this.adjustOccurrenceCount(actualEventId, dateKey, 1);
+    const docRef = await this.createRegistrationWithReservedSlot({
+      collectionName: MANUAL_REGISTRATIONS_COLLECTION,
+      registrationDoc: manualRegistrationDoc,
+      eventId: actualEventId,
+      dateKey,
+      maxRegistrations: event.maxRegistrations,
+    });
 
     await cacheService.delPattern('events:*');
 
