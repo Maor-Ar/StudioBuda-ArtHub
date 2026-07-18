@@ -177,14 +177,19 @@ export default function App() {
     ) {
       const registerServiceWorker = async () => {
         try {
-          const registration = await navigator.serviceWorker.register('/sw.js', {
+          // Baked in at export time (CI sets EXPO_PUBLIC_BUILD_ID=github.sha).
+          // Query param makes each deploy a distinct SW script URL so Fastly's
+          // max-age=600 on /sw.js cannot keep serving the previous worker.
+          const buildId = String(process.env.EXPO_PUBLIC_BUILD_ID || '')
+            .replace(/[^a-zA-Z0-9]/g, '')
+            .slice(0, 12);
+          const swUrl = buildId ? `/sw.js?v=${buildId}` : '/sw.js';
+          const registration = await navigator.serviceWorker.register(swUrl, {
             scope: '/',
-            // GitHub Pages serves sw.js with max-age=600; without this the browser
-            // may keep the old worker script and never detect deploys.
             updateViaCache: 'none',
           });
-          console.log('[PWA] Service worker registered');
-          attachServiceWorkerUpdateFlow(registration);
+          console.log('[PWA] Service worker registered', swUrl);
+          attachServiceWorkerUpdateFlow(registration, { buildId });
         } catch (error) {
           console.warn('[PWA] Service worker registration failed:', error);
         }

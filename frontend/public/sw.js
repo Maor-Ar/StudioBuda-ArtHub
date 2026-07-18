@@ -35,6 +35,15 @@ self.addEventListener('fetch', (event) => {
   const isSameOrigin = requestUrl.origin === self.location.origin;
   if (!isSameOrigin) return;
 
+  // Never cache the worker script or build-id probe — both must hit the network.
+  if (
+    requestUrl.pathname === '/sw.js' ||
+    requestUrl.pathname === '/build-id.txt'
+  ) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   const isNavigate =
     event.request.mode === 'navigate' ||
     requestUrl.pathname === '/' ||

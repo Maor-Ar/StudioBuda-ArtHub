@@ -1,6 +1,7 @@
 /**
  * PWA: prompt when a new service worker is ready; user taps → skipWaiting → reload.
- * Only runs on web when Service Worker API is available.
+ * Also polls /build-id.txt with a cache-busting query so GitHub Pages/Fastly
+ * max-age=600 cannot hide a new deploy behind a cached /sw.js.
  */
 import Toast from 'react-native-toast-message';
 
@@ -10,11 +11,14 @@ let pendingRegistration = null;
 let toastRetryTimer = null;
 
 function showUpdateToast(registration) {
-  if (!registration) return;
-  pendingRegistration = registration;
+  if (registration) {
+    pendingRegistration = registration;
+  } else if (!pendingRegistration?.waiting) {
+    // Deploy detected via build-id.txt without a waiting worker — reload on tap.
+    pendingRegistration = { waiting: null, forceReload: true };
+  }
   if (updateToastShown) return;
 
-  // Toast may not be mounted yet (fonts / first paint). Retry briefly.
   const tryShow = () => {
     if (updateToastShown || !pendingRegistration) return;
 
@@ -45,29 +49,56 @@ function showUpdateToast(registration) {
       },
       onPress: () => {
         const waiting = pendingRegistration?.waiting;
-        if (!waiting) return;
-        pendingReload = true;
-        waiting.postMessage({ type: 'SKIP_WAITING' });
+        if (waiting) {
+          pendingReload = true;
+          waiting.postMessage({ type: 'SKIP_WAITING' });
+          return;
+        }
+        // build-id mismatch (or waiting worker already gone): hard reload.
+        window.location.reload();
       },
     });
   };
 
-  // First attempt after shell has time to mount <Toast />
   toastRetryTimer = setTimeout(tryShow, 1200);
 }
 
 function onNewWorkerInstalled(registration) {
-  // Only show if an older version is already controlling the page (real update).
   if (navigator.serviceWorker.controller) {
     showUpdateToast(registration);
   }
 }
 
+async function probeRemoteBuildId(localBuildId) {
+  if (!localBuildId || typeof fetch === 'undefined') return;
+
+  try {
+    // Query string forces a CDN miss; cache:'no-store' skips the browser HTTP cache.
+    const res = await fetch(`/build-id.txt?t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { Pragma: 'no-cache', 'Cache-Control': 'no-cache' },
+    });
+    if (!res.ok) return;
+    const remoteId = (await res.text()).trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+    if (remoteId && remoteId !== localBuildId) {
+      console.log(`[PWA] New deploy detected (${localBuildId} → ${remoteId})`);
+      showUpdateToast(null);
+    }
+  } catch {
+    // Offline / first paint — ignore.
+  }
+}
+
 /**
  * @param {ServiceWorkerRegistration} registration
+ * @param {{ buildId?: string }} [options]
  */
-export function attachServiceWorkerUpdateFlow(registration) {
+export function attachServiceWorkerUpdateFlow(registration, options = {}) {
   if (typeof window === 'undefined' || !registration) return;
+
+  const localBuildId = String(options.buildId || '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .slice(0, 12);
 
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (pendingReload) {
@@ -75,12 +106,10 @@ export function attachServiceWorkerUpdateFlow(registration) {
     }
   });
 
-  // Update already downloaded and waiting (e.g. user had tab in background).
   if (registration.waiting && navigator.serviceWorker.controller) {
     showUpdateToast(registration);
   }
 
-  // Installing right now (register() often starts an update before listeners attach).
   if (registration.installing) {
     const installing = registration.installing;
     installing.addEventListener('statechange', () => {
@@ -103,9 +132,9 @@ export function attachServiceWorkerUpdateFlow(registration) {
 
   const checkForUpdates = () => {
     registration.update().catch(() => {});
+    probeRemoteBuildId(localBuildId);
   };
 
-  // Force a check now — don't wait for the browser's periodic poll.
   checkForUpdates();
 
   window.addEventListener('focus', checkForUpdates);

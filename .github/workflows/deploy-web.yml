@@ -23,6 +23,9 @@ jobs:
     environment: github-pages
     env:
       CNAME_SUBDOMAIN: arthub.studiobuda.co.il
+      # Same id for Metro bundle, SW stamp, and verify (must be set BEFORE export).
+      PWA_BUILD_ID: ${{ github.sha }}
+      EXPO_PUBLIC_BUILD_ID: ${{ github.sha }}
 
     steps:
       - name: Checkout
@@ -44,21 +47,25 @@ jobs:
         run: npx expo export --platform web
         env:
           CI: true
+          PWA_BUILD_ID: ${{ env.PWA_BUILD_ID }}
+          EXPO_PUBLIC_BUILD_ID: ${{ env.EXPO_PUBLIC_BUILD_ID }}
 
       - name: Stamp service worker cache version
         working-directory: frontend
         run: node scripts/stamp-sw-version.js
         env:
-          PWA_BUILD_ID: ${{ github.sha }}
+          PWA_BUILD_ID: ${{ env.PWA_BUILD_ID }}
+
+      - name: Inject SEO meta into index.html
+        working-directory: frontend
+        run: node scripts/inject-seo-meta.js
 
       # Prove the deployed SW is not the repo placeholder (public/sw.js stays "vdev").
       - name: Verify stamped service worker version
         working-directory: frontend
-        run: |
-          CACHE_LINE=$(grep -E "const CACHE_NAME = " dist/sw.js | head -n 1)
-          echo "Deployed service worker cache: $CACHE_LINE"
-          echo "$CACHE_LINE" | grep -q "studiobuda-pwa-v${GITHUB_SHA:0:12}"
-          echo "$CACHE_LINE" | grep -vq "studiobuda-pwa-vdev"
+        run: node scripts/verify-sw-version.js
+        env:
+          PWA_BUILD_ID: ${{ env.PWA_BUILD_ID }}
 
       # GitHub Pages has no file at /reset-password; serving 404.html (same as the SPA
       # shell) lets the app load and React Router can read the path + query.
@@ -66,6 +73,8 @@ jobs:
         working-directory: frontend/dist
         run: |
           test -f index.html
+          test -f sw.js
+          test -f build-id.txt
           cp index.html 404.html
           touch .nojekyll
 
