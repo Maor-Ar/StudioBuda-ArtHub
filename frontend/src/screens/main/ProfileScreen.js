@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
@@ -7,7 +7,8 @@ import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 import { GET_ME, GET_MY_REGISTRATIONS, GET_MY_TRANSACTIONS, GET_PRODUCTS } from '../../services/graphql/queries';
 import TextModal from '../../components/TextModal';
 import TooltipIcon from '../../components/admin-dashboard/TooltipIcon';
-import { MAIN_SITE_URL } from '../../utils/constants';
+import GoogleMapsIcon from '../../assets/icons/GoogleMaps.svg';
+import { MAIN_SITE_URL, STUDIO_LOCATION, STUDIO_MAPS_URL } from '../../utils/constants';
 
 const ENTRIES_HELP = {
   subscription:
@@ -212,24 +213,10 @@ const ProfileScreen = () => {
   };
 
   const openStudioAddress = async () => {
-    const address = 'תל חי 39 כפר סבא';
-    const encoded = encodeURIComponent(address);
-
-    const appUrl =
-      Platform.OS === 'ios'
-        ? `maps://?q=${encoded}`
-        : Platform.OS === 'android'
-        ? `geo:0,0?q=${encoded}`
-        : `https://www.google.com/maps/search/?api=1&query=${encoded}`;
-
-    const webFallback = `https://www.google.com/maps/search/?api=1&query=${encoded}`;
-
     try {
-      const canOpenApp = await Linking.canOpenURL(appUrl);
-      await Linking.openURL(canOpenApp ? appUrl : webFallback);
+      await Linking.openURL(STUDIO_MAPS_URL);
     } catch (error) {
-      // Final fallback to browser map search if deep link fails.
-      await Linking.openURL(webFallback);
+      console.warn('[PROFILE] Failed to open studio maps link:', error);
     }
   };
 
@@ -430,8 +417,12 @@ const ProfileScreen = () => {
           <TouchableOpacity
             style={styles.contactItem}
             onPress={openStudioAddress}
+            activeOpacity={0.7}
           >
-            <Text style={styles.contactValue}>תל חי 39 כפר סבא, קומה 1  </Text>
+            <View style={styles.addressValueRow}>
+              <GoogleMapsIcon width={18} height={18} style={styles.mapsIcon} />
+              <Text style={styles.contactAddressValue}>{STUDIO_LOCATION}</Text>
+            </View>
             <Text style={styles.contactLabel}>כתובת הסטודיו: </Text>
           </TouchableOpacity>
         </View>
@@ -753,6 +744,21 @@ const styles = StyleSheet.create({
     color: '#4E0D66',
     fontWeight: '600',
     textAlign: 'right',
+  },
+  addressValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  mapsIcon: {
+    marginTop: 1,
+  },
+  contactAddressValue: {
+    fontSize: 15,
+    color: '#000000',
+    fontWeight: '600',
+    textAlign: 'right',
+    textDecorationLine: 'underline',
   },
 });
 

@@ -139,6 +139,7 @@ export const USER_ROLES = {
 // Studio location (used for maps + calendar invites)
 export const STUDIO_LOCATION = 'תל חי 39 כפר סבא, קומה 1';
 export const STUDIO_NAME = 'סטודיו בודה';
+export const STUDIO_MAPS_URL = 'https://maps.app.goo.gl/aU4spL5PmkdGcJG4A';
 export const MAIN_SITE_URL = 'https://www.studiobuda.co.il';
 export const ARTHUB_SITE_URL = 'https://arthub.studiobuda.co.il';
 
