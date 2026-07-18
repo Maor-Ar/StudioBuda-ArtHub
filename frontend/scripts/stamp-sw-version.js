@@ -2,6 +2,9 @@
  * Stamps the PWA service worker cache name with a unique build id.
  * Run after `expo export` so dist/sw.js is updated for deploy.
  *
+ * Important: public/sw.js in git stays as a placeholder (`studiobuda-pwa-vdev`).
+ * Only the built artifact under dist/ is stamped — that is what GitHub Pages serves.
+ *
  * Build id sources (first match wins):
  *   PWA_BUILD_ID, GITHUB_SHA, or current timestamp
  */

@@ -1,3 +1,4 @@
+// Placeholder only — CI stamps this in dist/sw.js after export (do not bump manually).
 const CACHE_NAME = 'studiobuda-pwa-vdev';
 const OFFLINE_URLS = ['/', '/manifest.json'];
 

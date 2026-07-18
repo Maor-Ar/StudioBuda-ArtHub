@@ -51,6 +51,15 @@ jobs:
         env:
           PWA_BUILD_ID: ${{ github.sha }}
 
+      # Prove the deployed SW is not the repo placeholder (public/sw.js stays "vdev").
+      - name: Verify stamped service worker version
+        working-directory: frontend
+        run: |
+          CACHE_LINE=$(grep -E "const CACHE_NAME = " dist/sw.js | head -n 1)
+          echo "Deployed service worker cache: $CACHE_LINE"
+          echo "$CACHE_LINE" | grep -q "studiobuda-pwa-v${GITHUB_SHA:0:12}"
+          echo "$CACHE_LINE" | grep -vq "studiobuda-pwa-vdev"
+
       # GitHub Pages has no file at /reset-password; serving 404.html (same as the SPA
       # shell) lets the app load and React Router can read the path + query.
       - name: GitHub Pages SPA fallback (client-side routes)
