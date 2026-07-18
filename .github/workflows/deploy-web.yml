@@ -45,6 +45,12 @@ jobs:
         env:
           CI: true
 
+      - name: Stamp service worker cache version
+        working-directory: frontend
+        run: node scripts/stamp-sw-version.js
+        env:
+          PWA_BUILD_ID: ${{ github.sha }}
+
       # GitHub Pages has no file at /reset-password; serving 404.html (same as the SPA
       # shell) lets the app load and React Router can read the path + query.
       - name: GitHub Pages SPA fallback (client-side routes)
