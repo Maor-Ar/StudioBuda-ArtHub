@@ -72,6 +72,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 6,
     textAlign: 'right',
+    lineHeight: 18,
   },
 });
 

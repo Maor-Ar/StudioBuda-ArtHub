@@ -52,7 +52,7 @@ const HELP_TEXTS = {
   registrationByType:
     'המדד מחושב לפי רישומים ב-30 הימים האחרונים (לא רכישות). לכל רישום משויך סוג העסקה ששימשה אותו: מנוי, כרטיסיה, שיעור ניסיון או חד פעמי.',
   avgStudents:
-    'החישוב לפי מופעי שיעורים בפועל ב-30 הימים האחרונים (לפי תאריך שיעור), לא כולל מופעים שבוטלו.',
+    'הממוצע הכללי מחושב לפי כל מופעי השיעורים בפועל ב-30 הימים האחרונים (לפי תאריך שיעור), כולל כל סוגי השיעורים (למשל בוטניקה). מופעים שבוטלו לא נכללים. מתחת מוצג ממוצע לכל שם שיעור בנפרד.',
   classDistribution:
     'החישוב דינמי לפי שם השיעור בפועל. שמות ארוכים מוצגים בקיצור (2 מילים), ובלחיצה/hover רואים את השם המלא.',
   averageTenure:
@@ -85,10 +85,9 @@ const AdminHubScreen = ({ navigation }) => {
     color: classColorPalette[index % classColorPalette.length],
   }));
 
-  const avgByClassTop3 = (metrics?.averageStudentsByClassLastMonth || [])
-    .slice(0, 3)
+  const avgByClassLines = (metrics?.averageStudentsByClassLastMonth || [])
     .map((item) => `${item.shortLabel || item.fullLabel}: ${formatDecimal(item.avgStudents)}`)
-    .join(' | ');
+    .join('\n');
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -212,7 +211,7 @@ const AdminHubScreen = ({ navigation }) => {
               title="ממוצע תלמידים לשיעור (30 ימים אחרונים)"
               value={Number(metrics.averageStudentsLastMonth.overall || 0)}
               decimals={1}
-              subtitle={avgByClassTop3 || 'אין מספיק נתונים לפי סוג שיעור'}
+              subtitle={avgByClassLines || 'אין מספיק נתונים לפי שיעור'}
               infoText={HELP_TEXTS.avgStudents}
             />
 

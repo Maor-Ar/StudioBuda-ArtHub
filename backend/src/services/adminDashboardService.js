@@ -294,7 +294,7 @@ class AdminDashboardService {
       occurrenceByClass.set(fullLabel, entry);
     });
 
-    const classDistributionByClassLastMonth = [...occurrenceByClass.values()]
+    const classMetricsLastMonth = [...occurrenceByClass.values()]
       .map((item) => ({
         key: item.fullLabel,
         fullLabel: item.fullLabel,
@@ -302,23 +302,33 @@ class AdminDashboardService {
         registrationsCount: item.registrationsCount,
         occurrencesCount: item.occurrencesCount,
         avgStudents: average(item.occurrenceSizes),
-      }))
-      .sort((a, b) => b.registrationsCount - a.registrationsCount);
+      }));
 
+    // Pie chart: largest registration volume first.
+    const classDistributionByClassLastMonth = [...classMetricsLastMonth].sort(
+      (a, b) => b.registrationsCount - a.registrationsCount
+    );
+
+    // Average-by-class card: all classes, stable Hebrew name order (same grouping as the pie).
+    const averageStudentsByClassLastMonth = [...classMetricsLastMonth].sort((a, b) =>
+      a.fullLabel.localeCompare(b.fullLabel, 'he')
+    );
+
+    // Overall = mean of every occurrence size in the window (all classes, including בוטניקה).
     const averageStudentsLastMonth = {
       overall: average(allOccurrenceAverages),
       drawing: average(
-        classDistributionByClassLastMonth
+        classMetricsLastMonth
           .filter((item) => item.fullLabel.includes('רישום') || item.fullLabel.includes('ציור'))
           .map((item) => item.avgStudents)
       ),
       color: average(
-        classDistributionByClassLastMonth
+        classMetricsLastMonth
           .filter((item) => item.fullLabel.includes('צבע'))
           .map((item) => item.avgStudents)
       ),
       challenges: average(
-        classDistributionByClassLastMonth
+        classMetricsLastMonth
           .filter((item) => item.fullLabel.includes('אתגר'))
           .map((item) => item.avgStudents)
       ),
@@ -457,7 +467,7 @@ class AdminDashboardService {
       averageStudentsLastMonth,
       classTypeDistributionLastMonth,
       classDistributionByClassLastMonth,
-      averageStudentsByClassLastMonth: classDistributionByClassLastMonth,
+      averageStudentsByClassLastMonth,
       averageTenure,
       subscriptionRetention,
       punchCardReturnRate,
