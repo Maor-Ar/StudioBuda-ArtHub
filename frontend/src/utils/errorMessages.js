@@ -72,6 +72,16 @@ export const getGraphQLErrorMessage = (error) => {
   }
 
   // Domain-specific registration / purchase errors
+  if (
+    lowerMessage.includes('monthly entry limit') ||
+    errorMessage.includes('נגמרו לך הכניסות')
+  ) {
+    // Backend usually already returns the full Hebrew message with renewal date.
+    if (/[\u0590-\u05FF]/.test(errorMessage)) {
+      return errorMessage;
+    }
+    return 'נגמרו לך הכניסות החודש';
+  }
   if (lowerMessage.includes('active subscription') || lowerMessage.includes('punch card')) {
     return 'כדי להירשם לשיעור צריך מנוי פעיל או כרטיסייה עם כניסות שנותרו.';
   }

@@ -120,6 +120,72 @@ export const updateToCurrentMonth = (originalDate) => {
 };
 
 /**
+ * Start of the current subscription billing period.
+ * @param {Object} transaction
+ * @returns {Date|null}
+ */
+export const getSubscriptionPeriodStart = (transaction) => {
+  const raw =
+    transaction?.lastRenewalDate ||
+    transaction?.lastPaymentDate ||
+    transaction?.purchaseDate;
+
+  if (!raw) return null;
+
+  const date = raw?.toDate ? raw.toDate() : new Date(raw);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+};
+
+/**
+ * When monthly entries reset (end of current billing period = period start + 1 month).
+ * @param {Object} transaction
+ * @returns {Date|null}
+ */
+export const getSubscriptionEntriesRenewalDate = (transaction) => {
+  const periodStart = getSubscriptionPeriodStart(transaction);
+  if (!periodStart) return null;
+
+  const renewalDate = new Date(periodStart);
+  renewalDate.setMonth(renewalDate.getMonth() + 1);
+  return renewalDate;
+};
+
+/**
+ * Format a date for Hebrew UI, e.g. "15 באוגוסט 2026".
+ * @param {Date} date
+ * @returns {string}
+ */
+export const formatHebrewDate = (date) => {
+  if (!date || Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('he-IL', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+};
+
+/**
+ * User-facing Hebrew message when monthly subscription entries are exhausted.
+ * Uses the soonest renewal among the given subscriptions.
+ * @param {Array} subscriptions
+ * @returns {string}
+ */
+export const buildMonthlyEntriesExhaustedMessage = (subscriptions = []) => {
+  const renewalDates = subscriptions
+    .map((sub) => getSubscriptionEntriesRenewalDate(sub))
+    .filter(Boolean)
+    .sort((a, b) => a.getTime() - b.getTime());
+
+  const nextRenewal = renewalDates[0];
+  if (nextRenewal) {
+    return `נגמרו לך הכניסות החודש. הכניסות יתחדשו ב־${formatHebrewDate(nextRenewal)}`;
+  }
+
+  return 'נגמרו לך הכניסות החודש';
+};
+
+/**
  * Generate password reset token
  * @returns {string}
  */

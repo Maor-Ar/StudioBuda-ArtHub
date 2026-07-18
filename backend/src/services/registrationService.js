@@ -1,6 +1,7 @@
 import admin, { db } from '../config/firebase.js';
 import { CACHE_TTL, EVENT_TYPES, TRANSACTION_TYPES, REGISTRATION_STATUS } from '../config/constants.js';
 import { NotFoundError, ConflictError, ValidationError } from '../utils/errors.js';
+import { buildMonthlyEntriesExhaustedMessage } from '../utils/helpers.js';
 import eventService from './eventService.js';
 import transactionService from './transactionService.js';
 import cacheService from './cacheService.js';
@@ -395,7 +396,7 @@ class RegistrationService {
           transactionId = punchCard.id;
         } else if (subscriptions.length > 0) {
           throw new ConflictError(
-            'Subscription monthly entry limit reached',
+            buildMonthlyEntriesExhaustedMessage(subscriptions),
             'transactionId'
           );
         } else {
@@ -1233,7 +1234,10 @@ class RegistrationService {
       }
       const hasCapacity = subscription.entriesUsedThisMonth < subscription.monthlyEntries;
       if (!hasCapacity) {
-        throw new ConflictError('Subscription monthly entry limit reached', 'transactionId');
+        throw new ConflictError(
+          buildMonthlyEntriesExhaustedMessage([subscription]),
+          'transactionId'
+        );
       }
     }
 
