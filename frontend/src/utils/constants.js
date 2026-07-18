@@ -136,6 +136,10 @@ export const USER_ROLES = {
   ADMIN: 'admin',
 };
 
+// Studio location (used for maps + calendar invites)
+export const STUDIO_LOCATION = 'תל חי 39 כפר סבא, קומה 1';
+export const STUDIO_NAME = 'סטודיו בודה';
+
 // OAuth Providers
 export const OAUTH_PROVIDERS = {
   FACEBOOK: 'facebook',

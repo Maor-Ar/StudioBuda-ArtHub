@@ -14,6 +14,7 @@ import {
 import { GET_MY_REGISTRATIONS, GET_EVENT_REGISTRATIONS, GET_MY_TRANSACTIONS } from '../../services/graphql/queries';
 import EventCard from '../../components/EventCard';
 import EventDetailModal from '../../components/EventDetailModal';
+import AddToCalendarModal from '../../components/AddToCalendarModal';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
 import { getGraphQLErrorMessage } from '../../utils/errorMessages';
 import { useAuth } from '../../context/AuthContext';
@@ -88,6 +89,9 @@ const CalendarScreen = () => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [removingRegistrationId, setRemovingRegistrationId] = useState(null);
+  const [calendarModalEvent, setCalendarModalEvent] = useState(null);
+  const [calendarModalMode, setCalendarModalMode] = useState('success');
+  const pendingRegisterEventRef = useRef(null);
   const didAutoSwitchInitialDateRef = useRef(false);
 
   // Initialize with current date
@@ -180,23 +184,32 @@ const CalendarScreen = () => {
     onCompleted: async (mutationData) => {
       console.log('[REGISTRATION] ✅ Registration mutation completed successfully');
       console.log('[REGISTRATION] Response data:', mutationData);
+      const registeredEvent = pendingRegisterEventRef.current;
+      pendingRegisterEventRef.current = null;
       try {
         await refreshCalendarData({ includeTransactions: true });
-        // Show success message
-        showSuccessToast('נרשמת בהצלחה לשיעור!');
-        
-        // Close modal if open
         if (modalVisible) {
           setModalVisible(false);
           setSelectedEvent(null);
         }
+        if (registeredEvent) {
+          setCalendarModalMode('success');
+          setCalendarModalEvent(registeredEvent);
+        } else {
+          showSuccessToast('נרשמת בהצלחה לשיעור!');
+        }
       } catch (refetchError) {
         console.error('[REGISTRATION] ❌ Error refetching events after registration:', refetchError);
-        // Still show success since registration was successful
-        showSuccessToast('נרשמת בהצלחה לשיעור!');
+        if (registeredEvent) {
+          setCalendarModalMode('success');
+          setCalendarModalEvent(registeredEvent);
+        } else {
+          showSuccessToast('נרשמת בהצלחה לשיעור!');
+        }
       }
     },
     onError: (error) => {
+      pendingRegisterEventRef.current = null;
       console.error('[REGISTRATION] ❌ Registration mutation failed');
       console.error('[REGISTRATION] Error object:', error);
       console.error('[REGISTRATION] GraphQL errors:', error.graphQLErrors);
@@ -610,8 +623,12 @@ const CalendarScreen = () => {
     setSelectedDateObj(date);
   };
 
-  const handleRegister = async (eventId) => {
+  const handleRegister = async (event) => {
+    const eventId = typeof event === 'string' ? event : event?.id;
+    if (!eventId) return;
+
     console.log('[REGISTRATION] 🎫 Starting registration for event:', eventId);
+    pendingRegisterEventRef.current = typeof event === 'string' ? { id: eventId } : event;
     try {
       console.log('[REGISTRATION] Calling registerForEvent mutation...');
       await registerForEvent({
@@ -632,6 +649,11 @@ const CalendarScreen = () => {
         stack: error.stack
       });
     }
+  };
+
+  const openAddToCalendar = (event) => {
+    setCalendarModalMode('add');
+    setCalendarModalEvent(event);
   };
 
   const handleCancelRegistration = async (registrationId) => {
@@ -840,8 +862,9 @@ const CalendarScreen = () => {
                 <EventCard
                   key={`${event.id}-${event.occurrenceDate}`}
                   event={event}
-                  onRegister={() => handleRegister(event.id)}
+                  onRegister={() => handleRegister(event)}
                   onCancel={!event.isCancelled ? () => handleCancelRegistration(event.registrationId) : undefined}
+                  onAddToCalendar={!event.isCancelled ? () => openAddToCalendar(event) : undefined}
                   onPress={() => handleEventPress(event)}
                   isRegistered={!event.isCancelled}
                   isFull={false}
@@ -904,8 +927,9 @@ const CalendarScreen = () => {
                     <EventCard
                       key={event.id}
                       event={event}
-                      onRegister={() => handleRegister(event.id)}
+                      onRegister={() => handleRegister(event)}
                       onCancel={registration ? () => handleCancelRegistration(registration.id) : undefined}
+                      onAddToCalendar={isRegistered && !event.isCancelled ? () => openAddToCalendar(event) : undefined}
                       onPress={() => handleEventPress(event)}
                       isRegistered={isRegistered}
                       isFull={isFull}
@@ -932,10 +956,15 @@ const CalendarScreen = () => {
               onClose={handleCloseModal}
               onRegister={() => {
                 if (selectedEvent) {
-                  handleRegister(selectedEvent.id);
+                  handleRegister(selectedEvent);
                 }
               }}
               onCancel={selectedEventRegistration ? () => handleCancelRegistration(selectedEventRegistration.id) : undefined}
+              onAddToCalendar={
+                selectedEventRegistration && !selectedEvent?.isCancelled
+                  ? () => openAddToCalendar(selectedEvent)
+                  : undefined
+              }
               isRegistered={!!selectedEventRegistration}
               isFull={selectedEvent.availableSpots === 0}
               disabled={registering || cancelling || selectedEvent?.isCancelled}
@@ -979,6 +1008,13 @@ const CalendarScreen = () => {
             />
           );
         })()}
+
+        <AddToCalendarModal
+          visible={!!calendarModalEvent}
+          event={calendarModalEvent}
+          mode={calendarModalMode}
+          onClose={() => setCalendarModalEvent(null)}
+        />
     </View>
   );
 };

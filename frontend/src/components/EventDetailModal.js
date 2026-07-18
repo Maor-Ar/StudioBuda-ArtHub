@@ -11,6 +11,7 @@ const EventDetailModal = ({
   onClose,
   onRegister,
   onCancel,
+  onAddToCalendar,
   isRegistered,
   isFull = false,
   disabled = false,
@@ -150,13 +151,24 @@ const EventDetailModal = ({
                 <Text style={styles.pastButtonText}>הרשמה סגורה</Text>
               </View>
             ) : isRegistered ? (
-              <TouchableOpacity 
-                style={[styles.cancelButton, disabled && styles.cancelButtonDisabled]} 
-                onPress={onCancel}
-                disabled={disabled}
-              >
-                <Text style={styles.cancelButtonText}>ביטול הרשמה</Text>
-              </TouchableOpacity>
+              <>
+                {typeof onAddToCalendar === 'function' ? (
+                  <TouchableOpacity
+                    style={styles.calendarButton}
+                    onPress={onAddToCalendar}
+                    disabled={disabled}
+                  >
+                    <Text style={styles.calendarButtonText}>הוסף ליומן האישי</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity 
+                  style={[styles.cancelButton, disabled && styles.cancelButtonDisabled]} 
+                  onPress={onCancel}
+                  disabled={disabled}
+                >
+                  <Text style={styles.cancelButtonText}>ביטול הרשמה</Text>
+                </TouchableOpacity>
+              </>
             ) : isFull ? (
               <View style={styles.fullButton}>
                 <Text style={styles.fullButtonText}>השיעור מלא</Text>
@@ -467,12 +479,30 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 12,
     shadowColor: '#4E0D66',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 4,
+  },
+  calendarButton: {
+    width: '100%',
+    height: 50,
+    backgroundColor: 'rgba(255, 209, 227, 0.16)',
+    borderRadius: 25,
+    borderWidth: 1.5,
+    borderColor: '#FFD1E3',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  calendarButtonText: {
+    color: '#FFD1E3',
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    writingDirection: 'rtl',
   },
   cancelButtonDisabled: {
     opacity: 0.6,

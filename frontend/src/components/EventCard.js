@@ -7,6 +7,7 @@ const EventCard = ({
   event,
   onRegister,
   onCancel,
+  onAddToCalendar,
   isRegistered,
   isFull = false,
   onPress,
@@ -45,10 +46,16 @@ const EventCard = ({
 
   const isCardCancelled = event?.isCancelled ?? isCancelled;
   const cardCancellationReason = event?.cancellationReason ?? cancellationReason;
+  const showRegisteredActions = !isCardCancelled && !isPast && isRegistered;
+  const showCalendarButton = showRegisteredActions && typeof onAddToCalendar === 'function';
 
   return (
     <TouchableOpacity 
-      style={[styles.card, isCardCancelled && styles.cardCancelled]} 
+      style={[
+        styles.card,
+        isCardCancelled && styles.cardCancelled,
+        showCalendarButton && styles.cardWithCalendar,
+      ]} 
       onPress={onPress}
       activeOpacity={0.8}
     >
@@ -93,13 +100,30 @@ const EventCard = ({
           <Text style={styles.pastButtonText}>הרשמה סגורה</Text>
         </View>
       ) : isRegistered ? (
-        <TouchableOpacity 
-          style={[styles.cancelButton, disabled && styles.cancelButtonDisabled]} 
-          onPress={onCancel}
-          disabled={disabled}
-        >
-          <Text style={styles.cancelButtonText}>ביטול הרשמה</Text>
-        </TouchableOpacity>
+        <View style={styles.registeredActions}>
+          {showCalendarButton ? (
+            <TouchableOpacity
+              style={styles.calendarButton}
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                onAddToCalendar();
+              }}
+              disabled={disabled}
+            >
+              <Text style={styles.calendarButtonText}>הוסף ליומן</Text>
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity 
+            style={[styles.cancelButton, !showCalendarButton && styles.cancelButtonAbsolute, disabled && styles.cancelButtonDisabled]} 
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              onCancel?.();
+            }}
+            disabled={disabled}
+          >
+            <Text style={styles.cancelButtonText}>ביטול הרשמה</Text>
+          </TouchableOpacity>
+        </View>
       ) : isFull ? (
         <View style={styles.fullButton}>
           <Text style={styles.fullButtonText}>השיעור מלא</Text>
@@ -133,6 +157,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
     paddingBottom: 55, // Space for button at bottom
+  },
+  cardWithCalendar: {
+    paddingBottom: 92,
   },
   cardCancelled: {
     backgroundColor: '#D9D9D9',
@@ -210,15 +237,17 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   cancelButton: {
-    position: 'absolute',
-    bottom: 15,
-    left: 15,
-    right: 15,
     height: 31,
     backgroundColor: '#4E0D66', // Dark purple background
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  cancelButtonAbsolute: {
+    position: 'absolute',
+    bottom: 15,
+    left: 15,
+    right: 15,
   },
   cancelButtonText: {
     color: '#FFD1E3', // Pink text
@@ -227,6 +256,27 @@ const styles = StyleSheet.create({
   },
   cancelButtonDisabled: {
     opacity: 0.6,
+  },
+  registeredActions: {
+    position: 'absolute',
+    bottom: 15,
+    left: 15,
+    right: 15,
+    gap: 8,
+  },
+  calendarButton: {
+    height: 31,
+    backgroundColor: 'rgba(78, 13, 102, 0.12)',
+    borderWidth: 1.5,
+    borderColor: '#4E0D66',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  calendarButtonText: {
+    color: '#4E0D66',
+    fontSize: 14,
+    fontWeight: '600',
   },
   fullButton: {
     position: 'absolute',
