@@ -22,6 +22,14 @@ REDIS_PASSWORD=
 GROW_API_URL=https://api.grow.com
 GROW_API_KEY=your-grow-api-key
 
+# Hyp Pay (hosted payment page)
+HYP_API_URL=https://pay.hyp.co.il/p/
+HYP_MASOF=your-hyp-terminal-number
+HYP_KEY=your-hyp-api-key
+HYP_PASSP=your-hyp-api-password
+BACKEND_URL=http://localhost:4000
+FRONTEND_URL=http://localhost:8081
+
 # Email Service Configuration (Optional)
 EMAIL_SERVICE_PROVIDER=sendgrid
 EMAIL_API_KEY=your-email-api-key

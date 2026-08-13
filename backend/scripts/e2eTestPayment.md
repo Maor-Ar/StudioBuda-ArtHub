@@ -1,187 +1,132 @@
-# End-to-End Payment Testing Guide
+# End-to-End Payment Testing Guide (Hyp Pay)
 
-## Prerequisites
+## Production / staging test (recommended)
+
+Local iframe → `localhost` is blocked by Chrome. Test on the live site instead.
+
+1. Deploy backend (Cloud Build) and frontend (GitHub Pages) with the Hyp Pay changes.
+2. Cloud Run project `budastudio-arthub` must have secrets `HYP_MASOF`, `HYP_KEY`, `HYP_PASSP` (wired in `cloudbuild.yaml`).
+3. Hyp Portal → Settings → Payment Page and API → success URL:
+   `https://studiobuda-backend-873405578260.me-west1.run.app/api/payment/success`
+4. Open `https://arthub.studiobuda.co.il`, buy with the test card below, confirm Profile/Firestore get the transaction.
+
+## Prerequisites (local)
 
 1. Backend running: `cd backend && npm run dev` (port 4000)
 2. Frontend running: `cd frontend && npm start` (expo)
 3. A test user account in the system
+4. `HYP_MASOF`, `HYP_KEY`, `HYP_PASSP` set in `backend/.env`
+   - `PassP` is the **API password** from Hyp Portal → Settings → Payment Page and API, not the portal login password
+   - If session creation returns Hyp `CCode=902`, the KEY/PassP do not match this terminal
+5. Hyp Portal success URL: `{BACKEND_URL}/api/payment/success`
+6. In Hyp Portal → Settings → Payment Page and API, hide street/city/zip fields (Hyp Pay has no API flag to hide address inputs)
+7. Confirm the terminal is test-only before using non-trivial amounts
 
-## ZCredit Test Cards
+## Hyp Pay Test Cards
 
-### Primary Test Card (Recommended)
+Keep test amounts around 10 ILS.
+
+### Success
 
 | Field | Value |
 |-------|-------|
-| Card Number | 590000144 |
-| Expiry | 03/22 |
-| CVV | 686 |
-| ID (תעודת זהות) | 890108566 |
-| Card Type | ישראכרט (Isracard) |
+| Card Number | 5253360311315452 |
+| Expiry | 12/29 |
+| CVV | 493 |
+| ID (תעודת זהות) | 890108558 |
 
-### Additional Test Cards
+### Failure
 
-| Card Number | CVV | Expiry | Result |
-|-------------|-----|--------|--------|
-| 4557564320040077 | Any 3 digits | Any future date | Success |
-| 4557564320040085 | Any 3 digits | Any future date | Declined |
-| 4557564320040093 | Any 3 digits | Any future date | Card blocked |
+| Field | Value |
+|-------|-------|
+| Card Number | 4580458045804580 |
+| Expiry | Any valid date |
+| CVV | 123 |
+| ID | Any |
 
 ## Test 1: Purchase Punch Card (One-time Payment)
 
 1. Open the app and log in with a test user
 2. Navigate to the "רכישות" (Products) screen
-3. Find a punch card product (e.g., "כרטיסייה 5 כניסות")
+3. Find a punch card product
 4. Click "רכוש" (Purchase)
 5. Verify:
    - [ ] Payment modal appears with security message
-   - [ ] ZCredit checkout page loads in iframe
-   - [ ] Security message shows: "פרטי התשלום שלך לא נשמרים אצלנו"
-6. Enter test card details:
-   - Card: 590000144
-   - Expiry: 03/22
-   - CVV: 686
-   - ID: 890108566
+   - [ ] Hyp Pay checkout page loads in iframe
+   - [ ] Security message mentions Hyp
+6. Enter the success test card
 7. Complete payment
 8. Verify:
-   - [ ] Success toast appears
-   - [ ] Modal closes automatically
-   - [ ] Transaction appears in Profile > "מנויים וכרטיסיות פעילים"
-   - [ ] Entries count shows correctly
+   - [ ] Our success view appears (iframe closes)
+   - [ ] Continue navigates to Calendar
+   - [ ] Profile / context shows the new purchase
+   - [ ] Firestore `transactions` has `hypTransactionId` and `hypOrderId`
 
-## Test 2: Purchase Subscription (Recurring Payment)
+## Test 2: Purchase Subscription (Hyp-managed HK)
 
-1. Navigate to "רכישות" screen
-2. Find a subscription product (e.g., "מנוי 4 כניסות בחודש")
+1. Navigate to "רכישות"
+2. Find a subscription product
 3. Click "רכוש"
-4. Verify:
-   - [ ] Security message mentions MAX: "החיובים החודשיים יבוצעו דרך MAX"
-5. Enter test card details:
-   - Card: 590000144
-   - Expiry: 03/22
-   - CVV: 686
-   - ID: 890108566
+4. Verify the security message mentions monthly Hyp charges
+5. Enter the success test card
 6. Complete payment
 7. Verify:
    - [ ] Success toast appears
    - [ ] Transaction appears in Profile
-   - [ ] Shows "תוקף עד: [date +30 days]"
-   - [ ] Shows card info (last 4 digits)
+   - [ ] Firestore row has `hypHkId`
    - [ ] "ביטול מנוי" button appears
 
 ## Test 3: Cancel Subscription
 
-1. Navigate to Profile screen
+1. Navigate to Profile
 2. Find an active subscription
-3. Click "ביטול מנוי"
+3. Click "ביטול מנוי" and confirm
 4. Verify:
-   - [ ] Warning popup appears with Hebrew text
-   - [ ] Shows access end date
-   - [ ] Has "ביטול" and "אישור הביטול" buttons
-5. Click "אישור הביטול"
-6. Verify:
    - [ ] Success toast appears
-   - [ ] Subscription no longer shows cancel button
-   - [ ] (Optional) Transaction marked as inactive in database
+   - [ ] Hyp HK agreement is terminated (`HKStatus`)
+   - [ ] Transaction `isActive` is false
 
 ## Test 4: Payment Failure
 
-1. Navigate to "רכישות" screen
-2. Select any product
-3. Enter declined card: 4557564320040085 (or enter invalid details)
-4. Attempt payment
-5. Verify:
-   - [ ] Error message appears
-   - [ ] User can close modal and retry
-   - [ ] No transaction created
+1. Purchase any product
+2. Enter the failure test card
+3. Verify:
+   - [ ] Error stays on Hyp page (or failure redirect)
+   - [ ] No Firestore transaction created
 
-## Test 5: Recurring Payment Script (Dry Run)
+## Test 5: Signature verification
+
+```bash
+cd backend
+node scripts/testPaymentService.js
+```
+
+Verify:
+- [ ] One-shot and subscription `APISign` return a `pay.hyp.co.il` URL
+- [ ] Tampered VERIFY is rejected
+
+```bash
+node scripts/testWebhook.js
+```
+
+(Requires the API server.) Tampered success/webhook must not create a transaction.
+
+## Test 6: Entry-reset fallback (no charges)
 
 ```bash
 cd backend
 DRY_RUN=true node scripts/processRecurringPayments.js
 ```
 
-Verify:
-- [ ] Script runs without errors
-- [ ] Lists active subscriptions
-- [ ] Shows "WOULD CHARGE" for due subscriptions
-- [ ] Correctly calculates days since payment
+## GraphQL
 
-## Backend Verification
-
-### Check ZCredit Admin Panel
-1. Go to: https://pci.zcredit.co.il/webcontrol/login.aspx
-2. Login with: zctest24 / TEST2025
-3. Verify transactions appear in the transaction list
-
-### Check Database (Firestore)
-1. Open Firebase Console
-2. Navigate to Firestore > transactions
-3. Verify new transaction has:
-   - [ ] `zcreditReferenceNumber` set
-   - [ ] `lastPaymentDate` set
-   - [ ] `paymentToken` set (for subscriptions only)
-   - [ ] `cardLast4` set
-   - [ ] `cardBrand` set
-   - [ ] `isActive` = true
-
-## Troubleshooting
-
-### Payment modal shows "WebView לא נתמך בפלטפורמה זו"
-- Ensure react-native-webview is installed: `npm install react-native-webview`
-- Rebuild the native app: `expo prebuild && expo run:ios` (or android)
-
-### Callback not received
-- Check backend logs for callback attempts
-- Verify callback URL is accessible from internet (use ngrok if testing locally)
-- Check ZCredit admin panel for transaction status
-
-### Session metadata not found
-- Redis may not be running (OK - falls back gracefully)
-- Session may have expired (1 hour TTL)
-
-## GraphQL Playground Tests
-
-### Create Payment Session
 ```graphql
 mutation {
-  createPaymentSession(
-    productId: "punch-card-5"
-    product: {
-      id: "punch-card-5"
-      name: "כרטיסייה 5 כניסות"
-      type: "punch_card"
-      price: 425
-      totalEntries: 5
-    }
-  ) {
+  createPaymentSession(productId: "your-product-id") {
     sessionId
     sessionUrl
     uniqueId
     isRecurring
-  }
-}
-```
-
-### Check Payment Status
-```graphql
-query {
-  paymentStatus(uniqueId: "user-123-punch-card-5-1234567890") {
-    status
-    transactionId
-    message
-  }
-}
-```
-
-### Cancel Subscription
-```graphql
-mutation {
-  cancelSubscription(id: "transaction-id-here") {
-    id
-    isActive
-    lastPaymentDate
-    accessEndsDate
   }
 }
 ```

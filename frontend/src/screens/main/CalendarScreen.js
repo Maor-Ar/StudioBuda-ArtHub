@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApolloClient, useMutation, useQuery } from '@apollo/client';
+import { useFocusEffect } from '@react-navigation/native';
 import { useCachedEvents, clearEventsCacheForRange } from '../../hooks/useCachedEvents';
 import {
   REGISTER_FOR_EVENT,
@@ -98,7 +99,7 @@ const CalendarScreen = () => {
   const today = new Date();
   const [selectedDateObj, setSelectedDateObj] = useState(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
 
-  const refreshMyTransactions = async () => {
+  const refreshMyTransactions = useCallback(async () => {
     try {
       const { data: txData } = await apolloClient.query({
         query: GET_MY_TRANSACTIONS,
@@ -110,7 +111,13 @@ const CalendarScreen = () => {
     } catch (txError) {
       console.warn('[TRANSACTIONS] Failed to refresh user transactions:', txError);
     }
-  };
+  }, [apolloClient, updateTransactions]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshMyTransactions();
+    }, [refreshMyTransactions])
+  );
 
   // Calculate date range for the current week
   const dateRange = useMemo(() => {

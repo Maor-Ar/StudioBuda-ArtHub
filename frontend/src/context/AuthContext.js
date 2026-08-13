@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { STORAGE_KEYS } from '../utils/constants';
@@ -364,21 +364,21 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const updateUser = (userData) => {
-    const updatedUser = { ...user, ...userData };
-    setUser(updatedUser);
-    
-    (async () => {
-      if (await shouldPersistAuthToDisk()) {
-        AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser))
-          .catch((error) => console.error('Failed to update stored user:', error));
-      }
-    })();
-  };
+  const updateUser = useCallback((userData) => {
+    setUser((prev) => {
+      const updatedUser = { ...prev, ...userData };
+      (async () => {
+        if (await shouldPersistAuthToDisk()) {
+          AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser))
+            .catch((error) => console.error('Failed to update stored user:', error));
+        }
+      })();
+      return updatedUser;
+    });
+  }, []);
 
-  const updateTransactions = (newTransactions) => {
-    // Filter only active transactions
-    const filteredTransactions = newTransactions.filter(t => t.isActive);
+  const updateTransactions = useCallback((newTransactions) => {
+    const filteredTransactions = newTransactions.filter((t) => t.isActive);
     setTransactions(filteredTransactions);
 
     (async () => {
@@ -387,7 +387,7 @@ export const AuthProvider = ({ children }) => {
           .catch((error) => console.error('Failed to update stored transactions:', error));
       }
     })();
-  };
+  }, []);
 
   const value = {
     user,

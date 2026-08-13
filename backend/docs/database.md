@@ -53,10 +53,10 @@ Art studio events/classes.
 **Note**: Recurring events are stored as single documents. Instances generated on-the-fly.
 
 ### payment_sessions (temporary)
-Short-lived metadata for the ZCredit checkout flow. **Required** — do not remove in favor of only `transactions`.
+Short-lived metadata for the Hyp Pay checkout flow. **Required** — do not remove in favor of only `transactions`.
 
-- Written when we create a checkout session (before the user pays). Contains: `userId`, `productId`, `productType`, `amount`, `monthlyEntries`, `totalEntries`, `sessionId`, etc.
-- When ZCredit calls our callback after payment, it only sends `UniqueID` + gateway fields (no userId/productId). We look up this doc by `UniqueID` to know which user/product to create the transaction for.
+- Written when we create a checkout session (before the user pays). Contains: `userId`, `productId`, `productType`, `amount`, `monthlyEntries`, `totalEntries`, etc.
+- When Hyp redirects or sends a webhook after payment, it sends `Order` + gateway fields (no userId/productId). We look up this doc by `Order` to know which user/product to create the transaction for.
 - After creating the transaction we delete the doc. Documents expire after 1 hour if not used.
 - **transactions** = permanent purchase records. **payment_sessions** = temporary bridge between “session created” and “payment completed”.
 
@@ -74,10 +74,18 @@ User transactions (subscriptions, punch cards, trial lessons).
 - `entriesUsedThisMonth`: number (subscription only)
 - `totalEntries`: number | null (punch card only)
 - `entriesRemaining`: number | null (punch card only)
-- `invoiceId`: string (from Grow)
+- `invoiceId`: string (Hyp transaction Id, or legacy reference)
 - `amount`: number
 - `createdAt`: timestamp
 - `updatedAt`: timestamp
+- `hypTransactionId`: string | null
+- `hypHkId`: string | null (Hyp-managed recurring agreement id)
+- `hypOrderId`: string | null (checkout Order / uniqueId)
+- `zcreditReferenceNumber`: string | null (legacy)
+- `paymentToken`: string | null (legacy)
+- `cardLast4`: string | null
+- `cardBrand`: string | null
+- `lastPaymentDate`: timestamp
 
 **Indexes Required**:
 - `userId` + `isActive` (for active transactions query)

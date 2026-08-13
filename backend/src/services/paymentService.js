@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import config from '../config/environment.js';
 import { TRANSACTION_TYPES } from '../config/constants.js';
 import { ExternalServiceError, ValidationError } from '../utils/errors.js';
@@ -6,36 +7,66 @@ import { db } from '../config/firebase.js';
 
 /**
  * Temporary session metadata for checkout flow (see docs/database.md).
- * Not the same as transactions: we write here when creating the checkout session (before payment).
- * ZCredit callback sends only UniqueID + gateway fields, so we look up userId/productId/productType/amount here to create the transaction.
- * Docs are deleted after callback; TTL 1h. Required — cannot use only transactions (no transaction exists until after payment).
+ * Written when creating the Hyp Pay page (before payment). Hyp redirect/webhook
+ * sends Order + gateway fields; we look up userId/productId here to create the transaction.
+ * Docs are deleted after success; TTL 1h.
  */
 const PAYMENT_SESSION_COLLECTION = 'payment_sessions';
 
-/**
- * ZCredit (SmartBee) Payment Service
- * 
- * Handles payment processing via:
- * - WebCheckout API: For creating iframe checkout sessions
- * - WebService API: For charging tokens (recurring payments)
- */
+function parseHypQuery(text) {
+  const raw = String(text || '').trim().replace(/^\?/, '');
+  const params = new URLSearchParams(raw);
+  const obj = {};
+  for (const [key, value] of params.entries()) {
+    obj[key] = value;
+  }
+  return obj;
+}
+
+function getParam(params, ...names) {
+  for (const name of names) {
+    if (params[name] != null && params[name] !== '') {
+      return params[name];
+    }
+    const match = Object.keys(params).find((k) => k.toLowerCase() === name.toLowerCase());
+    if (match && params[match] != null && params[match] !== '') {
+      return params[match];
+    }
+  }
+  return null;
+}
+
+function hypSignErrorMessage(ccode) {
+  if (ccode === '902' || ccode === '901') {
+    return 'שגיאת אימות מול Hyp. בדקו ש-HYP_MASOF, HYP_KEY ו-HYP_PASSP תואמים לסיסמת ה-API בפורטל (לא סיסמת ההתחברות).';
+  }
+  return 'שגיאה ביצירת עמוד תשלום. אנא נסה שנית.';
+}
+
 class PaymentService {
   constructor() {
-    this.webCheckoutUrl = `${config.zcredit.apiUrl}/webcheckout/api/WebCheckout`;
-    this.webServiceUrl = `${config.zcredit.apiUrl}/ZCreditWS/api/Transaction`;
-    // Session metadata TTL: 1 hour
+    this.apiUrl = (config.hyp.apiUrl || 'https://pay.hyp.co.il/p/').replace(/\?+$/, '');
     this.sessionMetadataTTL = 3600;
   }
 
-  /**
-   * Store session metadata for callback processing
-   */
+  getCredentials() {
+    const masof = config.hyp.masof;
+    const key = config.hyp.key;
+    const passP = config.hyp.passP;
+    if (!masof || !key || !passP) {
+      throw new ValidationError(
+        'Hyp Pay credentials are not configured (HYP_MASOF, HYP_KEY, HYP_PASSP)',
+        'hyp'
+      );
+    }
+    return { masof, key, passP };
+  }
+
   async storeSessionMetadata(uniqueId, metadata) {
     if (!uniqueId) return;
 
     const expiresAt = new Date(Date.now() + this.sessionMetadataTTL * 1000);
 
-    // Store in Firestore so this works without Redis and across instances.
     await db.collection(PAYMENT_SESSION_COLLECTION).doc(uniqueId).set(
       {
         metadata,
@@ -44,13 +75,8 @@ class PaymentService {
       },
       { merge: true }
     );
-
-    // logger.debug('Stored session metadata (Firestore)', { uniqueId });
   }
 
-  /**
-   * Retrieve session metadata
-   */
   async getSessionMetadata(uniqueId) {
     if (!uniqueId) return null;
 
@@ -67,14 +93,11 @@ class PaymentService {
 
       if (expiresAt && Date.now() > expiresAt.getTime()) {
         logger.warn('Session metadata expired', { uniqueId });
-        // Best-effort cleanup
         await this.deleteSessionMetadata(uniqueId);
         return null;
       }
 
-      if (data.metadata) {
-        // logger.debug('Retrieved session metadata (Firestore)', { uniqueId });
-      } else {
+      if (!data.metadata) {
         logger.warn('Session metadata doc missing metadata field', { uniqueId });
       }
 
@@ -85,114 +108,106 @@ class PaymentService {
     }
   }
 
-  /**
-   * Delete session metadata after processing
-   */
   async deleteSessionMetadata(uniqueId) {
     if (!uniqueId) return;
     try {
       await db.collection(PAYMENT_SESSION_COLLECTION).doc(uniqueId).delete();
     } catch (error) {
-      // Best-effort cleanup
       logger.warn('Failed to delete session metadata', { uniqueId, error: error.message });
     }
   }
 
-  /**
-   * Determine if a transaction type requires recurring payments
-   * @param {string} transactionType 
-   * @returns {boolean}
-   */
   isRecurringType(transactionType) {
     return transactionType === TRANSACTION_TYPES.SUBSCRIPTION;
   }
 
   /**
-   * Create a WebCheckout session for iframe embedding
-   * @param {string} userId - User ID
-   * @param {string} productId - Product ID  
-   * @param {Object} productData - Product details (type, price, name, etc.)
-   * @param {Object} options - Optional settings
-   * @returns {Promise<Object>} Session data with URL
+   * Create a Hyp Pay hosted payment page URL for iframe/WebView checkout.
    */
   async createCheckoutSession(userId, productId, productData, options = {}) {
-    const uniqueId = `${userId}-${productId}-${Date.now()}`;
+    const uniqueId = `${Date.now().toString(36)}${randomBytes(4).toString('hex')}`;
     const isRecurring = this.isRecurringType(productData.type);
+    const { masof, key, passP } = this.getCredentials();
 
-    // logger.info('Creating checkout session', { userId, productId, uniqueId, isRecurring });
+    const successUrl = `${config.urls.backend}/api/payment/success`;
+    const params = new URLSearchParams({
+      action: 'APISign',
+      What: 'SIGN',
+      Sign: 'True',
+      Masof: masof,
+      KEY: key,
+      PassP: passP,
+      Amount: String(productData.price),
+      Coin: '1',
+      PageLang: 'HEB',
+      UTF8: 'True',
+      UTF8out: 'True',
+      Order: uniqueId,
+      Info: productData.name || 'StudioBuda',
+      OKURL: successUrl,
+      MoreData: 'True',
+    });
 
-    // We store metadata in a structured UniqueID format since AdditionalText doesn't allow special chars
-    // Format: userId|productId|productType|timestamp
-    // We'll parse this on callback
-    const metadataString = `${userId}|${productId}|${productData.type}|${Date.now()}`;
-    
-    const requestBody = {
-      Key: config.zcredit.key,
-      UniqueID: uniqueId,
-      Local: 'He', // Hebrew language
-      
-      // Callback URLs
-      CallBackUrl: `${config.urls.backend}/api/payment/callback`,
-      SuccessUrl: `${config.urls.frontend}/payment/success?uniqueId=${encodeURIComponent(uniqueId)}`,
-      CancelUrl: `${config.urls.frontend}/payment/cancel?uniqueId=${encodeURIComponent(uniqueId)}`,
-      FailureRedirectUrl: `${config.urls.frontend}/payment/failure?uniqueId=${encodeURIComponent(uniqueId)}`,
-      
-      // Payment settings
-      PaymentType: 'regular', // Always charge first payment
-      ShowCart: false, // Minimal UI for iframe
-      
-      // Total amount (required)
-      Total: productData.price,
-      
-      // Cart items
-      CartItems: [{
-        Amount: productData.price,
-        Description: productData.name,
-        Quantity: 1,
-      }],
-      
-      // Currency (1 = ILS)
-      Currency: 1,
-      
-      // Customer info if provided
-      ...(options.customerEmail && { CustomerEmail: options.customerEmail }),
-      ...(options.customerName && { CustomerName: options.customerName }),
-      ...(options.customerPhone && { CustomerPhone: options.customerPhone }),
-    };
+    if (isRecurring) {
+      // Tash=999 = unlimited monthly HK charges. FirstPaymentTash=1 = first charge is one payment (no installment picker).
+      params.set('HK', 'True');
+      params.set('freq', '1');
+      params.set('Tash', '999');
+      params.set('FirstPaymentTash', '1');
+      params.set('OnlyOnApprove', 'True');
+    } else {
+      // Terminal defaults often allow many installments; lock this purchase to a single charge.
+      params.set('Tash', '1');
+      params.set('FixTash', 'True');
+    }
+
+    if (options.customerName) {
+      const parts = String(options.customerName).trim().split(/\s+/);
+      if (parts[0]) params.set('ClientName', parts[0]);
+      if (parts.length > 1) params.set('ClientLName', parts.slice(1).join(' '));
+    }
+    if (options.customerEmail) params.set('email', options.customerEmail);
+    if (options.customerPhone) params.set('cell', options.customerPhone);
 
     try {
-      const response = await fetch(`${this.webCheckoutUrl}/CreateSession`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
+      const signUrl = `${this.apiUrl}?${params.toString()}`;
+      const response = await fetch(signUrl, { method: 'GET' });
+      const responseText = (await response.text()).trim();
 
-      const responseData = await response.json();
-
-      // logger.debug('ZCredit CreateSession raw response', { statusCode: response.status, hasError: responseData.HasError });
-
-      // Response structure: { HasError, Data: { HasError, ReturnCode, SessionId, SessionUrl, ... } }
-      const data = responseData.Data || responseData;
-
-      if (!response.ok || responseData.HasError || data.HasError || !data.SessionUrl) {
-        logger.error('ZCredit CreateSession failed', {
-          error: data.ReturnMessage || 'Unknown error',
-          errorCode: data.ReturnCode,
-          hasError: data.HasError,
+      if (!response.ok) {
+        logger.error('Hyp APISign failed', {
+          status: response.status,
           userId,
           productId,
         });
         throw new ExternalServiceError(
-          data.ReturnMessage || 'שגיאה ביצירת עמוד תשלום. אנא נסה שנית.',
+          'שגיאה ביצירת עמוד תשלום. אנא נסה שנית.',
           'PAYMENT_SESSION_ERROR'
         );
       }
 
-      // logger.info('ZCredit CreateSession ok', { sessionId: data.SessionId, uniqueId });
+      const signed = parseHypQuery(responseText);
+      const resultCode = getParam(signed, 'CCode');
+      if (resultCode && resultCode !== '0') {
+        logger.error('Hyp APISign rejected', { ccode: resultCode, userId, productId });
+        throw new ExternalServiceError(
+          hypSignErrorMessage(resultCode),
+          'PAYMENT_SESSION_ERROR'
+        );
+      }
 
-      // Store session metadata for callback processing
+      if (!getParam(signed, 'signature') && !responseText.includes('action=pay')) {
+        logger.error('Hyp APISign missing signature', { userId, productId });
+        throw new ExternalServiceError(
+          'שגיאה ביצירת עמוד תשלום. אנא נסה שנית.',
+          'PAYMENT_SESSION_ERROR'
+        );
+      }
+
+      const sessionUrl = responseText.startsWith('http')
+        ? responseText
+        : `${this.apiUrl}?${responseText.replace(/^\?/, '')}`;
+
       await this.storeSessionMetadata(uniqueId, {
         userId,
         productId,
@@ -201,21 +216,20 @@ class PaymentService {
         amount: productData.price,
         monthlyEntries: productData.monthlyEntries || null,
         totalEntries: productData.totalEntries || null,
-        sessionId: data.SessionId,
       });
 
       return {
-        sessionId: data.SessionId,
-        sessionUrl: data.SessionUrl,
+        sessionId: uniqueId,
+        sessionUrl,
         uniqueId,
         isRecurring,
       };
     } catch (error) {
-      if (error instanceof ExternalServiceError) {
+      if (error instanceof ExternalServiceError || error instanceof ValidationError) {
         throw error;
       }
-      
-      logger.error('ZCredit CreateSession network error', {
+
+      logger.error('Hyp APISign network error', {
         error: error.message,
         userId,
         productId,
@@ -228,299 +242,111 @@ class PaymentService {
   }
 
   /**
-   * Process callback data from ZCredit after successful payment
-   * @param {Object} callbackData - Data received from ZCredit callback
-   * @returns {Promise<Object>} Processed payment data with metadata
+   * Verify Hyp Pay redirect/webhook parameters (APISign What=VERIFY).
+   * rawQuery should be the original query string in the same order Hyp sent it.
    */
-  async processCallbackData(callbackData) {
-    const {
-      SessionId,
-      ReferenceNumber,
-      Token,
-      Total,
-      CardNum,
-      CardName,
-      ApprovalNumber,
-      UniqueID,
-      CustomerEmail,
-      CustomerName,
-      CustomerPhone,
-      ExpDate_MMYY,
-    } = callbackData;
+  async verifyRedirect(rawQuery, hypParams = {}) {
+    const { masof, key, passP } = this.getCredentials();
+    const query = String(rawQuery || '').replace(/^\?/, '');
+    const fallback = new URLSearchParams(hypParams).toString();
+    const payload = query || fallback;
 
-    // logger.info('Payment callback', { uniqueId: UniqueID, referenceNumber: ReferenceNumber });
+    if (!payload) {
+      return false;
+    }
 
-    // Retrieve stored metadata using UniqueID
-    let metadata = await this.getSessionMetadata(UniqueID);
-    
-    if (!metadata) {
-      logger.error('No metadata found for payment callback', {
-        sessionId: SessionId,
-        uniqueId: UniqueID,
-      });
-      // Try to parse UniqueID format: userId-productId-timestamp
-      const parts = UniqueID ? UniqueID.split('-') : [];
-      if (parts.length >= 2) {
-        metadata = {
-          userId: parts[0],
-          productId: parts.slice(1, -1).join('-'), // Everything except last part (timestamp)
-        };
-        logger.warn('Using parsed UniqueID as fallback metadata', { metadata });
+    const verifyParams = new URLSearchParams({
+      action: 'APISign',
+      What: 'VERIFY',
+      Masof: masof,
+      KEY: key,
+      PassP: passP,
+    });
+
+    try {
+      const verifyUrl = `${this.apiUrl}?${verifyParams.toString()}&${payload}`;
+      const response = await fetch(verifyUrl, { method: 'GET' });
+      const text = (await response.text()).trim();
+      const parsed = parseHypQuery(text);
+      return getParam(parsed, 'CCode') === '0';
+    } catch (error) {
+      logger.error('Hyp VERIFY network error', { error: error.message });
+      return false;
+    }
+  }
+
+  /**
+   * Parse and validate a successful Hyp Pay completion (redirect or webhook).
+   */
+  async processSuccessfulPayment(hypParams, rawQuery, { requireSignature = true } = {}) {
+    const ccode = String(getParam(hypParams, 'CCode') ?? '');
+    if (ccode !== '0') {
+      throw new ValidationError('התשלום לא אושר', 'CCode');
+    }
+
+    const hasSign = Boolean(getParam(hypParams, 'Sign', 'signature'));
+    if (requireSignature || hasSign) {
+      const verified = await this.verifyRedirect(rawQuery, hypParams);
+      if (!verified) {
+        throw new ValidationError('אימות התשלום נכשל', 'Sign');
       }
     }
 
-    const processedData = {
-      sessionId: SessionId,
-      referenceNumber: ReferenceNumber,
-      token: Token || null,
-      amount: Total,
-      cardLast4: CardNum || null,
-      cardBrand: CardName || null,
-      approvalNumber: ApprovalNumber,
-      uniqueId: UniqueID,
-      cardExpiry: ExpDate_MMYY || null,
-      customer: {
-        email: CustomerEmail || null,
-        name: CustomerName || null,
-        phone: CustomerPhone || null,
-      },
+    const uniqueId = getParam(hypParams, 'Order');
+    const metadata = uniqueId ? await this.getSessionMetadata(uniqueId) : null;
+
+    return {
+      uniqueId,
+      hypTransactionId: getParam(hypParams, 'Id') || null,
+      hypHkId: getParam(hypParams, 'HKId') || null,
+      amount: parseFloat(getParam(hypParams, 'Amount')) || null,
+      approvalNumber: getParam(hypParams, 'ACode') || null,
+      cardLast4: getParam(hypParams, 'L4digit', 'CardNum') || null,
+      cardBrand: getParam(hypParams, 'Brand', 'CardName') || null,
       metadata: metadata || {},
     };
-
-    // logger.info('Payment callback done', { userId: metadata?.userId, productId: metadata?.productId });
-
-    // Clean up stored metadata
-    if (UniqueID) {
-      await this.deleteSessionMetadata(UniqueID);
-    }
-
-    return processedData;
   }
 
   /**
-   * Charge a token for recurring payment (used by cron script)
-   * @param {string} token - Payment token
-   * @param {number} amount - Amount to charge
-   * @param {string} transactionId - Transaction ID for reference
-   * @param {Object} options - Additional options
-   * @returns {Promise<Object>} Charge result
+   * Terminate a Hyp-managed recurring agreement (Horaat Keva).
    */
-  async chargeToken(token, amount, transactionId, options = {}) {
-    const uniqueId = `recurring-${transactionId}-${Date.now()}`;
+  async cancelHypAgreement(hkId) {
+    if (!hkId) return { success: true, alreadyTerminated: true };
 
-    // logger.info('Recurring token charge', { transactionId, amount });
-
-    const requestBody = {
-      TerminalNumber: config.zcredit.terminalNumber,
-      Password: config.zcredit.password,
-      
-      // Token as card number
-      CardNumber: token,
-      
-      // Transaction details
-      TransactionSum: amount,
-      TransactionUniqueIdForQuery: uniqueId,
-      
-      // Transaction type
-      J: 0, // Regular charge
-      CreditType: 1, // Regular payment (not installments)
-      Currency: 1, // ILS
-      
-      // Optional customer info
-      ...(options.holderId && { HolderID: options.holderId }),
-    };
+    const { masof, passP } = this.getCredentials();
+    const params = new URLSearchParams({
+      action: 'HKStatus',
+      Masof: masof,
+      PassP: passP,
+      HKId: String(hkId),
+      NewStat: '1',
+    });
 
     try {
-      const response = await fetch(`${this.webServiceUrl}/CommitFullTransaction`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
+      const response = await fetch(`${this.apiUrl}?${params.toString()}`, { method: 'GET' });
+      const text = (await response.text()).trim();
+      const parsed = parseHypQuery(text);
+      const ccode = getParam(parsed, 'CCode');
 
-      const data = await response.json();
-
-      if (!response.ok || data.HasError || data.ReturnCode !== 0) {
-        logger.error('Token charge failed', {
-          transactionId,
-          error: data.ReturnMessage || 'Unknown error',
-          errorCode: data.ReturnCode,
-          amount,
-        });
-        throw new ExternalServiceError(
-          data.ReturnMessage || 'שגיאה בחיוב התשלום החוזר',
-          'RECURRING_CHARGE_FAILED'
-        );
+      // 0 = updated, 906 = agreement does not exist (already gone)
+      if (ccode === '0' || ccode === '906') {
+        return { success: true, alreadyTerminated: ccode === '906' };
       }
 
-      // logger.info('Token charge ok', { transactionId, referenceNumber: data.ReferenceNumber });
-
-      return {
-        success: true,
-        referenceNumber: data.ReferenceNumber,
-        approvalNumber: data.AuthNum,
-        amount,
-        transactionId,
-      };
+      logger.error('Hyp HKStatus failed', { hkId, ccode });
+      throw new ExternalServiceError('שגיאה בביטול הוראת הקבע', 'HK_CANCEL_FAILED');
     } catch (error) {
-      if (error instanceof ExternalServiceError) {
+      if (error instanceof ExternalServiceError || error instanceof ValidationError) {
         throw error;
       }
-
-      logger.error('Token charge network error', {
-        transactionId,
-        error: error.message,
-        amount,
-      });
+      logger.error('Hyp HKStatus network error', { hkId, error: error.message });
       throw new ExternalServiceError(
-        'שגיאה בהתחברות לשרת התשלומים לחיוב חוזר',
-        'RECURRING_NETWORK_ERROR'
+        'שגיאה בהתחברות לשרת התשלומים לביטול הוראת קבע',
+        'HK_CANCEL_NETWORK_ERROR'
       );
-    }
-  }
-
-  /**
-   * Get token data (card info) from ZCredit
-   * @param {string} token - Payment token
-   * @returns {Promise<Object>} Token data
-   */
-  async getTokenData(token) {
-    const requestBody = {
-      TerminalNumber: config.zcredit.terminalNumber,
-      Password: config.zcredit.password,
-      Token: token,
-    };
-
-    try {
-      const response = await fetch(`${this.webServiceUrl}/GetTokenData`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || data.HasError) {
-        logger.error('GetTokenData failed', {
-          error: data.ReturnMessage || 'Unknown error',
-          errorCode: data.ReturnCode,
-        });
-        return null;
-      }
-
-      return {
-        cardNumber: data.CardNumber, // Masked card number
-        expiryDate: data.ExpDate_MMYY,
-        holderId: data.HolderID,
-      };
-    } catch (error) {
-      logger.error('GetTokenData network error', { error: error.message });
-      return null;
-    }
-  }
-
-  /**
-   * Refund a transaction
-   * @param {string} referenceNumber - ZCredit reference number
-   * @param {number} amount - Amount to refund (optional, full refund if not provided)
-   * @returns {Promise<Object>} Refund result
-   */
-  async refundTransaction(referenceNumber, amount = null) {
-    const requestBody = {
-      TerminalNumber: config.zcredit.terminalNumber,
-      Password: config.zcredit.password,
-      ReferenceNumber: referenceNumber,
-      ...(amount && { PartialSum: amount }),
-    };
-
-    try {
-      const response = await fetch(`${this.webServiceUrl}/RefundTransaction`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || data.HasError) {
-        logger.error('Refund failed', {
-          referenceNumber,
-          error: data.ReturnMessage || 'Unknown error',
-          errorCode: data.ReturnCode,
-        });
-        throw new ExternalServiceError(
-          'שגיאה בביצוע הזיכוי',
-          'REFUND_FAILED'
-        );
-      }
-
-      // logger.info('Refund ok', { referenceNumber, newRef: data.ReferenceNumber });
-
-      return {
-        success: true,
-        referenceNumber: data.ReferenceNumber,
-      };
-    } catch (error) {
-      if (error instanceof ExternalServiceError) {
-        throw error;
-      }
-
-      logger.error('Refund network error', {
-        referenceNumber,
-        error: error.message,
-      });
-      throw new ExternalServiceError(
-        'שגיאה בהתחברות לשרת התשלומים לביצוע זיכוי',
-        'REFUND_NETWORK_ERROR'
-      );
-    }
-  }
-
-  /**
-   * Query transaction status by reference ID
-   * @param {string} referenceNumber - ZCredit reference number
-   * @returns {Promise<Object>} Transaction status
-   */
-  async getTransactionStatus(referenceNumber) {
-    const requestBody = {
-      TerminalNumber: config.zcredit.terminalNumber,
-      Password: config.zcredit.password,
-      ReferenceNumber: referenceNumber,
-    };
-
-    try {
-      const response = await fetch(`${this.webServiceUrl}/GetTransactionStatusByReferenceId`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || data.HasError) {
-        logger.warn('GetTransactionStatus failed', {
-          referenceNumber,
-          error: data.ReturnMessage,
-        });
-        return null;
-      }
-
-      return data;
-    } catch (error) {
-      logger.error('GetTransactionStatus network error', {
-        referenceNumber,
-        error: error.message,
-      });
-      return null;
     }
   }
 }
 
 export default new PaymentService();
+export { parseHypQuery, getParam };

@@ -137,7 +137,7 @@ if (isDevelopment) {
         fontSrc: ["'self'", "https:", "data:"],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
-        frameSrc: ["'self'"],
+        frameSrc: ["'self'", "https://pay.hyp.co.il"],
       },
     },
   }));
@@ -165,7 +165,7 @@ app.get('/favicon.ico', (req, res) => {
   res.status(204).end(); // No content, but successful
 });
 
-// Payment webhooks (ZCredit callbacks)
+// Payment redirects and webhooks (Hyp Pay)
 app.use('/api/payment', paymentWebhooks);
 
 // Swagger configuration

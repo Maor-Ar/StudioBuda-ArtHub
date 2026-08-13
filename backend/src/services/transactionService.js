@@ -17,8 +17,11 @@ class TransactionService {
       monthlyEntries,
       totalEntries,
       invoiceId,
-      // New payment fields
+      // Payment fields
       zcreditReferenceNumber,
+      hypTransactionId,
+      hypHkId,
+      hypOrderId,
       paymentToken,
       cardLast4,
       cardBrand,
@@ -59,9 +62,9 @@ class TransactionService {
       validatePositiveNumber(totalEntries, 'totalEntries');
     }
 
-    // Require either invoiceId or zcreditReferenceNumber
-    if (!invoiceId && !zcreditReferenceNumber) {
-      throw new ValidationError('invoiceId or zcreditReferenceNumber is required', 'invoiceId');
+    const paymentReference = invoiceId || hypTransactionId || zcreditReferenceNumber;
+    if (!paymentReference) {
+      throw new ValidationError('invoiceId or payment reference is required', 'invoiceId');
     }
 
     const now = new Date();
@@ -69,13 +72,15 @@ class TransactionService {
       userId,
       transactionType,
       amount,
-      invoiceId: invoiceId || zcreditReferenceNumber, // Backwards compatibility
+      invoiceId: paymentReference,
       isActive: isActive !== undefined ? isActive : true,
       purchaseDate: purchaseDate || now,
       createdAt: now,
       updatedAt: now,
-      // New payment fields
       zcreditReferenceNumber: zcreditReferenceNumber || null,
+      hypTransactionId: hypTransactionId || null,
+      hypHkId: hypHkId || null,
+      hypOrderId: hypOrderId || null,
       paymentToken: paymentToken || null,
       cardLast4: cardLast4 || null,
       cardBrand: cardBrand || null,
@@ -266,7 +271,61 @@ class TransactionService {
   }
 
   async cancelSubscription(transactionId, managerId) {
+    const transaction = await this.getTransactionById(transactionId);
+    if (transaction.hypHkId) {
+      const paymentService = (await import('./paymentService.js')).default;
+      await paymentService.cancelHypAgreement(transaction.hypHkId);
+    }
     return await this.updateTransaction(transactionId, { isActive: false });
+  }
+
+  async getTransactionByHypOrderId(hypOrderId) {
+    if (!hypOrderId) return null;
+    const snapshot = await db.collection('transactions')
+      .where('hypOrderId', '==', String(hypOrderId))
+      .limit(1)
+      .get();
+    if (snapshot.empty) return null;
+    const doc = snapshot.docs[0];
+    return { id: doc.id, ...doc.data() };
+  }
+
+  async getTransactionByHypTransactionId(hypTransactionId) {
+    if (!hypTransactionId) return null;
+    const snapshot = await db.collection('transactions')
+      .where('hypTransactionId', '==', String(hypTransactionId))
+      .limit(1)
+      .get();
+    if (snapshot.empty) return null;
+    const doc = snapshot.docs[0];
+    return { id: doc.id, ...doc.data() };
+  }
+
+  async getTransactionByHypHkId(hypHkId) {
+    if (!hypHkId) return null;
+    const snapshot = await db.collection('transactions')
+      .where('hypHkId', '==', String(hypHkId))
+      .limit(1)
+      .get();
+    if (snapshot.empty) return null;
+    const doc = snapshot.docs[0];
+    return { id: doc.id, ...doc.data() };
+  }
+
+  async applyHypRecurringCharge(hypHkId, { hypTransactionId } = {}) {
+    const transaction = await this.getTransactionByHypHkId(hypHkId);
+    if (!transaction) return null;
+
+    const now = new Date();
+    const update = {
+      lastPaymentDate: now,
+      lastRenewalDate: now,
+      entriesUsedThisMonth: 0,
+    };
+    if (hypTransactionId) {
+      update.hypTransactionId = String(hypTransactionId);
+    }
+    return await this.updateTransaction(transaction.id, update);
   }
 
   async getTransactionById(transactionId) {

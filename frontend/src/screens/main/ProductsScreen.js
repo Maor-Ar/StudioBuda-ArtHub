@@ -1,25 +1,26 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMutation, useQuery } from '@apollo/client';
+import { useMutation, useQuery, useLazyQuery } from '@apollo/client';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { CREATE_PAYMENT_SESSION } from '../../services/graphql/mutations';
-import { GET_MY_TRANSACTIONS, GET_PRODUCTS } from '../../services/graphql/queries';
+import { GET_ME, GET_MY_TRANSACTIONS, GET_PRODUCTS } from '../../services/graphql/queries';
 import ProductCard from '../../components/ProductCard';
 import PaymentModal from '../../components/PaymentModal';
-import { showSuccessToast, showErrorToast } from '../../utils/toast';
+import { showErrorToast } from '../../utils/toast';
 import { getGraphQLErrorMessage } from '../../utils/errorMessages';
 import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 
 const ProductsScreen = () => {
   const insets = useSafeAreaInsets();
-  const { user, transactions, updateTransactions } = useAuth();
+  const navigation = useNavigation();
+  const { user, updateUser, updateTransactions } = useAuth();
   const [purchasingProductId, setPurchasingProductId] = useState(null);
-  
-  // Payment modal state
+
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [paymentSessionUrl, setPaymentSessionUrl] = useState(null);
-  const [currentProduct, setCurrentProduct] = useState(null);
+  const [paymentUniqueId, setPaymentUniqueId] = useState(null);
   const [isRecurring, setIsRecurring] = useState(false);
 
   const { data: productsData, loading: productsLoading, error: productsError } = useQuery(GET_PRODUCTS, {
@@ -31,13 +32,13 @@ const ProductsScreen = () => {
   const { refetch: refetchTransactions } = useQuery(GET_MY_TRANSACTIONS, {
     skip: true,
   });
+  const [fetchMe] = useLazyQuery(GET_ME, { fetchPolicy: 'network-only' });
 
-  // Create payment session mutation
   const [createPaymentSession] = useMutation(CREATE_PAYMENT_SESSION, {
     onCompleted: (data) => {
       if (data?.createPaymentSession) {
-        console.log('[Products] Payment session created:', data.createPaymentSession);
         setPaymentSessionUrl(data.createPaymentSession.sessionUrl);
+        setPaymentUniqueId(data.createPaymentSession.uniqueId);
         setIsRecurring(data.createPaymentSession.isRecurring);
         setPaymentModalVisible(true);
       }
@@ -46,20 +47,16 @@ const ProductsScreen = () => {
       console.error('[Products] Create payment session error:', error);
       showErrorToast(getGraphQLErrorMessage(error));
       setPurchasingProductId(null);
-      setCurrentProduct(null);
     },
   });
 
-  // Handle purchase - initiate payment flow
   const handlePurchase = async (product) => {
     if (!user) {
       showErrorToast('יש להתחבר כדי לבצע רכישה');
       return;
     }
 
-    console.log('[Products] Starting purchase for product:', product.id);
     setPurchasingProductId(product.id);
-    setCurrentProduct(product);
 
     try {
       await createPaymentSession({
@@ -68,53 +65,44 @@ const ProductsScreen = () => {
     } catch (error) {
       console.error('[Products] Purchase failed:', error);
       setPurchasingProductId(null);
-      setCurrentProduct(null);
     }
   };
 
-  // Handle payment success
-  const handlePaymentSuccess = useCallback(async () => {
-    console.log('[Products] Payment success!');
+  const closePaymentModal = useCallback(() => {
     setPaymentModalVisible(false);
     setPaymentSessionUrl(null);
+    setPaymentUniqueId(null);
     setPurchasingProductId(null);
-    
-    // Refetch transactions to get the new one
+  }, []);
+
+  const handlePaymentSuccess = useCallback(async () => {
+    closePaymentModal();
+
     try {
-      const { data } = await refetchTransactions();
-      if (data?.myTransactions) {
-        updateTransactions(data.myTransactions);
+      const [{ data: txData }, meResult] = await Promise.all([
+        refetchTransactions(),
+        fetchMe(),
+      ]);
+      if (txData?.myTransactions) {
+        updateTransactions(txData.myTransactions);
+      }
+      if (meResult?.data?.me) {
+        updateUser(meResult.data.me);
       }
     } catch (error) {
-      console.warn('[Products] Failed to refetch transactions:', error);
+      console.warn('[Products] Failed to refresh purchase data:', error);
     }
-    
-    showSuccessToast('הרכישה בוצעה בהצלחה! 🎉');
-    setCurrentProduct(null);
-  }, [refetchTransactions, updateTransactions]);
 
-  // Handle payment cancel
+    navigation.navigate('Calendar');
+  }, [closePaymentModal, fetchMe, navigation, refetchTransactions, updateTransactions, updateUser]);
+
   const handlePaymentCancel = useCallback(() => {
-    console.log('[Products] Payment cancelled');
-    setPaymentModalVisible(false);
-    setPaymentSessionUrl(null);
-    setPurchasingProductId(null);
-    setCurrentProduct(null);
+    closePaymentModal();
     showErrorToast('התשלום בוטל');
-  }, []);
-
-  // Handle payment modal close
-  const handlePaymentClose = useCallback(() => {
-    console.log('[Products] Payment modal closed');
-    setPaymentModalVisible(false);
-    setPaymentSessionUrl(null);
-    setPurchasingProductId(null);
-    setCurrentProduct(null);
-  }, []);
+  }, [closePaymentModal]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header - Studio Buda */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>סטודיו בודה</Text>
       </View>
@@ -124,7 +112,6 @@ const ProductsScreen = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Products Section Title */}
         <View style={styles.productsTitleContainer}>
           <Text style={styles.title}>רכישות</Text>
           <Text style={styles.subtitle}>בחרו את המנוי או הכרטיסייה המתאימה לכם</Text>
@@ -152,13 +139,13 @@ const ProductsScreen = () => {
         </View>
       </ScrollView>
 
-      {/* Payment Modal */}
       <PaymentModal
         visible={paymentModalVisible}
         sessionUrl={paymentSessionUrl}
+        uniqueId={paymentUniqueId}
         onSuccess={handlePaymentSuccess}
         onCancel={handlePaymentCancel}
-        onClose={handlePaymentClose}
+        onClose={closePaymentModal}
         isRecurring={isRecurring}
       />
     </View>
@@ -174,12 +161,12 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 10,
     paddingHorizontal: 20,
-    backgroundColor: '#FFD1E3', // Pink header background
+    backgroundColor: '#FFD1E3',
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#4E0D66', // Dark purple
+    color: '#4E0D66',
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.25)',
     textShadowOffset: { width: 0, height: 4 },
@@ -190,7 +177,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   scrollContent: {
-    paddingBottom: 120, // Space for bottom navigation
+    paddingBottom: 120,
   },
   productsTitleContainer: {
     paddingTop: 20,
@@ -202,7 +189,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     marginBottom: 8,
-    color: '#FFD1E3', // Pink text
+    color: '#FFD1E3',
     textAlign: 'center',
     textShadowColor: 'rgba(78, 13, 102, 0.3)',
     textShadowOffset: { width: 0, height: 2 },
@@ -210,7 +197,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: '#FFD1E3', // Pink text
+    color: '#FFD1E3',
     textAlign: 'center',
     opacity: 0.9,
   },

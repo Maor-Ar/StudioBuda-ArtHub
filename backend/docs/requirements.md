@@ -80,14 +80,17 @@ StudioBuda ArtHub is a user-friendly web platform backend for seamless registrat
   // Punch card fields
   totalEntries: number | null,
   entriesRemaining: number | null,
-  // ZCredit Payment fields (NEW)
-  paymentToken: string | null,          // ZCredit token for recurring charges (subscriptions only)
-  zcreditReferenceNumber: string | null, // ZCredit transaction reference
-  cardLast4: string | null,             // "9001" for display
-  cardBrand: string | null,             // "ויזה רגיל"
+  // Hyp Pay fields
+  hypTransactionId: string | null,      // Hyp transaction Id
+  hypHkId: string | null,               // Hyp-managed recurring agreement (subscriptions)
+  hypOrderId: string | null,            // Checkout Order / uniqueId
+  zcreditReferenceNumber: string | null, // Legacy ZCredit reference
+  paymentToken: string | null,          // Legacy token (unused for Hyp)
+  cardLast4: string | null,
+  cardBrand: string | null,
   lastPaymentDate: timestamp,           // When last successful charge occurred
   // Common fields
-  invoiceId: string,                    // Reference ID (zcreditReferenceNumber for ZCredit)
+  invoiceId: string,                    // Hyp transaction Id (or legacy reference)
   amount: number,
   createdAt: timestamp,
   updatedAt: timestamp
@@ -95,7 +98,7 @@ StudioBuda ArtHub is a user-friendly web platform backend for seamless registrat
 ```
 
 **Note:** `paymentMethod` field is NOT needed - payment type (one-time vs recurring) is determined by `transactionType`:
-- `transactionType === 'subscription'` → Recurring (first payment + monthly via cron)
+- `transactionType === 'subscription'` → Recurring (first payment + monthly via Hyp HK)
 - `transactionType === 'punch_card' || 'trial_lesson'` → One-time payment
 
 ### EventRegistrations Collection
@@ -254,7 +257,7 @@ StudioBuda ArtHub is a user-friendly web platform backend for seamless registrat
 - `cancelSubscription(id)`: Cancel a subscription (user can cancel own, manager/admin can cancel any)
 
 **Payments:**
-- `createPaymentSession(productId, product)`: Create ZCredit checkout session, returns iframe URL
+- `createPaymentSession(productId, product)`: Create Hyp Pay checkout session, returns iframe URL
 - `paymentStatus(uniqueId)`: Check status of a payment session (pending/completed/unknown)
 
 ## Cache Strategy
@@ -297,45 +300,39 @@ StudioBuda ArtHub is a user-friendly web platform backend for seamless registrat
 
 ## External Integrations
 
-### ZCredit (SmartBee) Payment Integration
+### Hyp Pay Integration
 
-ZCredit is used for all payment processing. The integration uses two APIs:
-- **WebCheckout API**: For creating iframe checkout sessions
-- **WebService API**: For charging tokens (recurring payments)
+Hyp Pay hosted payment pages are used for all customer checkout. Recurring subscriptions use Hyp-managed Horaat Keva (`HK=True`).
 
 #### Payment Flow
 
 1. **Initial Payment (All Products)**:
    - Frontend calls `createPaymentSession` mutation with product details
-   - Backend creates ZCredit WebCheckout session with callback URL
-   - Frontend displays ZCredit checkout page in iframe/WebView
-   - User enters card details in ZCredit's secure page
-   - ZCredit calls our callback endpoint with payment result and token
-   - Backend creates transaction record with token (for subscriptions)
-   - Frontend notified of success via postMessage/URL redirect
+   - Backend signs a Hyp Pay page (`APISign` / `SIGN`) and stores session metadata
+   - Frontend displays the Hyp page in iframe/WebView
+   - User enters card details on Hyp's secure page
+   - Hyp redirects to `/api/payment/success`; backend verifies (`APISign` / `VERIFY`) and creates the transaction
+   - Subscriptions store `hypHkId` for the recurring agreement
+   - Frontend is notified via postMessage / URL redirect
 
 2. **Recurring Payments (Subscriptions Only)**:
-   - Daily cron script (`scripts/processRecurringPayments.js`) runs
-   - Finds active subscriptions where lastPaymentDate > 30 days ago
-   - Charges stored token via ZCredit WebService API
-   - Updates lastPaymentDate on success, deactivates on failure
+   - Hyp charges the card monthly (HK)
+   - Webhook `/api/payment/webhook` resets `entriesUsedThisMonth` and updates `lastRenewalDate`
+   - Fallback cron `scripts/processRecurringPayments.js` resets entries if a month rolled without a webhook
 
 3. **Cancel Subscription**:
-   - User clicks "ביטול מנוי" button in profile
-   - Warning popup shows access end date (lastPaymentDate + 30 days)
-   - On confirmation, transaction.isActive set to false
-   - Cron script skips inactive subscriptions
+   - User clicks "ביטול מנוי" in profile
+   - Backend terminates the Hyp HK agreement (`HKStatus`) then sets `isActive` false
 
 #### Security
-- Card details never touch our servers (PCI DSS compliance via ZCredit)
-- Tokens stored only for recurring payments (subscriptions)
-- One-time payments (punch cards, trial lessons) don't store tokens
+- Card details never touch our servers (PCI DSS via Hyp hosted page)
+- Credentials (`HYP_MASOF`, `HYP_KEY`, `HYP_PASSP`) live in env / Secret Manager only
+- Completion redirects are verified with Hyp `VERIFY`
 
-#### Test Credentials
-- Terminal Number: 0882016016
-- Password: Z0882016016
-- Key: c0863aa14e77ec032effda671797c295d8a2ab154e49242871a197d158fa3f30
-- Test Panel: https://pci.zcredit.co.il/webcontrol/login.aspx
+#### Test environment
+- Configure `HYP_MASOF`, `HYP_KEY`, `HYP_PASSP` in backend `.env`
+- Test cards: see `scripts/e2eTestPayment.md`
+- Portal: https://pay.hyp.co.il/
 
 ### Email Service
 

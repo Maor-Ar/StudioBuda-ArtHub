@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import CalendarScreen from '../screens/main/CalendarScreen';
+import ProductsScreen from '../screens/main/ProductsScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import AdminNavigator from './AdminNavigator';
 import AuthenticatedLayout from '../components/AuthenticatedLayout';
@@ -31,6 +32,7 @@ const TabNavigator = () => {
         }}
       >
         <Tab.Screen name="Calendar" component={CalendarScreen} options={{ title: 'יומן' }} />
+        <Tab.Screen name="Products" component={ProductsScreen} options={{ title: 'רכישות' }} />
         <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'פרופיל' }} />
         {isManager && (
           <Tab.Screen name="Admin" component={AdminNavigator} options={{ title: 'ניהול' }} />

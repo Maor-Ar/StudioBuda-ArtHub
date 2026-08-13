@@ -153,6 +153,16 @@ export const GET_MY_TRANSACTIONS = gql`
   }
 `;
 
+export const GET_PAYMENT_STATUS = gql`
+  query PaymentStatus($uniqueId: String!) {
+    paymentStatus(uniqueId: $uniqueId) {
+      status
+      transactionId
+      message
+    }
+  }
+`;
+
 // Admin Queries
 export const GET_ALL_EVENTS = gql`
   query GetAllEvents {

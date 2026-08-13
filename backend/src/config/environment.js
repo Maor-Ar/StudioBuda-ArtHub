@@ -35,11 +35,7 @@ const optionalEnvVars = {
   CORS_ORIGIN: '*',
   PASSWORD_RESET_TOKEN_EXPIRY: 3600,
   EMAIL_SERVICE_PROVIDER: 'sendgrid',
-  // ZCredit (SmartBee) - Test credentials as defaults
-  ZCREDIT_TERMINAL_NUMBER: '0882016016',
-  ZCREDIT_PASSWORD: 'Z0882016016',
-  ZCREDIT_KEY: 'c0863aa14e77ec032effda671797c295d8a2ab154e49242871a197d158fa3f30',
-  ZCREDIT_API_URL: 'https://pci.zcredit.co.il',
+  HYP_API_URL: 'https://pay.hyp.co.il/p/',
   BACKEND_URL: 'http://localhost:4000',
   FRONTEND_URL: 'http://localhost:8081',
 };
@@ -108,11 +104,11 @@ const config = {
   cors: {
     origin: process.env.CORS_ORIGIN || optionalEnvVars.CORS_ORIGIN,
   },
-  zcredit: {
-    terminalNumber: process.env.ZCREDIT_TERMINAL_NUMBER || optionalEnvVars.ZCREDIT_TERMINAL_NUMBER,
-    password: process.env.ZCREDIT_PASSWORD || optionalEnvVars.ZCREDIT_PASSWORD,
-    key: process.env.ZCREDIT_KEY || optionalEnvVars.ZCREDIT_KEY,
-    apiUrl: process.env.ZCREDIT_API_URL || optionalEnvVars.ZCREDIT_API_URL,
+  hyp: {
+    apiUrl: process.env.HYP_API_URL || optionalEnvVars.HYP_API_URL,
+    masof: process.env.HYP_MASOF || '',
+    key: process.env.HYP_KEY || '',
+    passP: process.env.HYP_PASSP || '',
   },
   urls: {
     backend: process.env.BACKEND_URL || optionalEnvVars.BACKEND_URL,

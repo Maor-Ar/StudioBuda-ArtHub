@@ -111,6 +111,16 @@ REDIS_PASSWORD=
 GROW_API_URL=https://api.grow.com
 GROW_API_KEY=your-grow-api-key
 
+# Hyp Pay (hosted checkout — never commit real values)
+HYP_API_URL=https://pay.hyp.co.il/p/
+HYP_MASOF=your-hyp-terminal-number
+HYP_KEY=your-hyp-api-key
+HYP_PASSP=your-hyp-api-password
+BACKEND_URL=http://localhost:4000
+FRONTEND_URL=http://localhost:8081
+
+In Hyp Portal → Settings → Payment Page and API, set the success URL to `{BACKEND_URL}/api/payment/success` and hide street / city / zip fields (the Pay API cannot hide address inputs).
+
 # Email Service Configuration (Optional for now)
 EMAIL_SERVICE_PROVIDER=sendgrid
 EMAIL_API_KEY=your-email-api-key

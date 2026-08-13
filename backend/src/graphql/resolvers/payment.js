@@ -3,18 +3,31 @@ import transactionService from '../../services/transactionService.js';
 import productService from '../../services/productService.js';
 import { requireAuthenticated } from '../middleware/permissions.js';
 import { ValidationError } from '../../utils/errors.js';
-import logger from '../../utils/logger.js';
 
 export const paymentResolvers = {
   Query: {
     paymentStatus: async (_, { uniqueId }, context) => {
       await requireAuthenticated(context);
-      
-      // Check if we have metadata stored (means session exists but not yet completed)
+
       const metadata = await paymentService.getSessionMetadata(uniqueId);
-      
+      const existing = await transactionService.getTransactionByHypOrderId(uniqueId);
+
+      if (existing && existing.userId === context.user.id) {
+        return {
+          status: 'completed',
+          transactionId: existing.id,
+          message: 'התשלום הושלם בהצלחה',
+        };
+      }
+
       if (metadata) {
-        // Session exists, payment not yet completed
+        if (metadata.userId && metadata.userId !== context.user.id) {
+          return {
+            status: 'unknown',
+            transactionId: null,
+            message: 'לא נמצא תהליך תשלום פעיל',
+          };
+        }
         return {
           status: 'pending',
           transactionId: null,
@@ -22,29 +35,6 @@ export const paymentResolvers = {
         };
       }
 
-      // Check for recent transaction by this user
-      try {
-        const transactions = await transactionService.getUserActiveTransactions(context.user.id, false);
-        
-        // Find a transaction that was created recently (within last 5 minutes)
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-        const recentTransaction = transactions.find(tx => {
-          const createdAt = tx.createdAt?.toDate ? tx.createdAt.toDate() : new Date(tx.createdAt);
-          return createdAt > fiveMinutesAgo;
-        });
-
-        if (recentTransaction) {
-          return {
-            status: 'completed',
-            transactionId: recentTransaction.id,
-            message: 'התשלום הושלם בהצלחה',
-          };
-        }
-      } catch (error) {
-        logger.warn('Error checking recent transactions', { error: error.message, uniqueId });
-      }
-
-      // Session not found
       return {
         status: 'unknown',
         transactionId: null,

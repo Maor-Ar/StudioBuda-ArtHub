@@ -30,7 +30,7 @@ npm install
 3. Configure your `.env` file with the required credentials:
    - Firebase credentials (required)
    - Redis connection details (required)
-   - Optional: Grow API, Email service
+   - Optional: Hyp Pay (`HYP_MASOF`, `HYP_KEY`, `HYP_PASSP`), Grow API, Email service
 
 4. Start the development server:
 ```bash

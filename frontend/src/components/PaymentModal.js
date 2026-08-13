@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,103 +7,202 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Platform,
-  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShouldShowLocalLoader } from '../context/LoadingContext';
+import { GRAPHQL_ENDPOINT } from '../utils/constants';
 
-// Conditionally import WebView only for native platforms
 let WebView = null;
 if (Platform.OS !== 'web') {
-  // Dynamic import for native platforms
   WebView = require('react-native-webview').WebView;
 }
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const POLL_INTERVAL_MS = 3000;
+
+function paymentStatusUrl(uniqueId) {
+  try {
+    const graphqlUrl = new URL(GRAPHQL_ENDPOINT);
+    return `${graphqlUrl.origin}/api/payment/status/${encodeURIComponent(uniqueId)}`;
+  } catch (e) {
+    return `http://localhost:4000/api/payment/status/${encodeURIComponent(uniqueId)}`;
+  }
+}
 
 /**
- * PaymentModal Component
- * 
- * Displays ZCredit payment page in an iframe/WebView for secure payment entry.
- * 
- * Props:
- * - visible: boolean - Whether modal is visible
- * - sessionUrl: string - ZCredit checkout URL to load
- * - onSuccess: function - Called when payment succeeds
- * - onCancel: function - Called when user cancels
- * - onClose: function - Called to close the modal
- * - isRecurring: boolean - Whether this is a subscription payment
+ * Hyp does not postMessage itself. Our backend success page posts
+ * { type: 'payment_success' } after VERIFY + DB write.
+ * On web iframes we often miss that, so we also silently poll paymentStatus
+ * every 3s while the modal is open (no loader).
  */
 const PaymentModal = ({
   visible,
   sessionUrl,
+  uniqueId,
   onSuccess,
   onCancel,
   onClose,
   isRecurring = false,
 }) => {
   const insets = useSafeAreaInsets();
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [view, setView] = useState('checkout');
   const webViewRef = useRef(null);
-  const showWebViewLoading = useShouldShowLocalLoader(loading);
+  const settledRef = useRef(false);
+  const initialLoadDoneRef = useRef(false);
+  const openedAtRef = useRef(Date.now());
+  const showInitialLoader = useShouldShowLocalLoader(initialLoading && view === 'checkout');
 
-  // Security message in Hebrew
   const securityMessage = isRecurring
-    ? 'פרטי התשלום שלך לא נשמרים אצלנו.\nהתשלום מבוצע באמצעות ZCredit בצורה מאובטחת.\nהחיובים החודשיים יבוצעו דרך MAX.'
-    : 'פרטי התשלום שלך לא נשמרים אצלנו.\nהתשלום מבוצע באמצעות ZCredit בצורה מאובטחת.';
+    ? 'פרטי התשלום שלך לא נשמרים אצלנו.\nהתשלום מבוצע באמצעות Hyp בצורה מאובטחת.\nהחיובים החודשיים יבוצעו אוטומטית דרך Hyp.'
+    : 'פרטי התשלום שלך לא נשמרים אצלנו.\nהתשלום מבוצע באמצעות Hyp בצורה מאובטחת.';
 
-  // Handle WebView messages (for success/cancel detection)
-  const handleMessage = useCallback((event) => {
-    console.log('[Payment] Received message from WebView:', event.nativeEvent.data);
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'payment_success') {
-        console.log('[Payment] Payment success detected');
-        onSuccess?.();
-      } else if (data.type === 'payment_cancel') {
-        console.log('[Payment] Payment cancelled');
-        onCancel?.();
-      }
-    } catch (e) {
-      // Not JSON, might be a string message
-      if (event.nativeEvent.data === 'payment_success') {
-        onSuccess?.();
-      } else if (event.nativeEvent.data === 'payment_cancel') {
-        onCancel?.();
-      }
+  const resetState = useCallback(() => {
+    setInitialLoading(true);
+    setError(null);
+    setView('checkout');
+    settledRef.current = false;
+    initialLoadDoneRef.current = false;
+    openedAtRef.current = Date.now();
+  }, []);
+
+  useEffect(() => {
+    if (visible) {
+      resetState();
     }
-  }, [onSuccess, onCancel]);
+  }, [visible, sessionUrl, uniqueId, resetState]);
 
-  // Handle URL navigation to detect success/cancel pages
+  const markConfirmed = useCallback(() => {
+    if (settledRef.current) return;
+    settledRef.current = true;
+    setInitialLoading(false);
+    setError(null);
+    setView('success');
+  }, []);
+
+  const markFailed = useCallback((message) => {
+    if (settledRef.current) return;
+    settledRef.current = true;
+    setInitialLoading(false);
+    setView('error');
+    setError(message || 'התשלום נכשל. אנא נסה שנית.');
+  }, []);
+
+  const checkStatusOnce = useCallback(async () => {
+    if (!uniqueId || settledRef.current) return null;
+    try {
+      // REST status is easy to spot in DevTools Network (not only GraphQL).
+      const response = await fetch(paymentStatusUrl(uniqueId), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data?.status || null;
+    } catch (statusError) {
+      console.warn('[Payment] Status check failed:', statusError?.message);
+      return null;
+    }
+  }, [uniqueId]);
+
+  // Silent backup while checkout is open — postMessage can miss on web iframes.
+  useEffect(() => {
+    if (!visible || !uniqueId || view === 'success' || view === 'error') {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const poll = async () => {
+      const status = await checkStatusOnce();
+      if (cancelled || settledRef.current) return;
+      if (status === 'completed') {
+        markConfirmed();
+      }
+    };
+
+    // First check after a short delay so createPaymentSession finishes storing the session.
+    const first = setTimeout(poll, 1500);
+    const timer = setInterval(poll, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(first);
+      clearInterval(timer);
+    };
+  }, [visible, uniqueId, view, checkStatusOnce, markConfirmed]);
+
+  const handleGatewayMessage = useCallback((payload) => {
+    if (!payload) return;
+    const type = typeof payload === 'string' ? payload : payload.type;
+    if (type === 'payment_success') {
+      markConfirmed();
+    } else if (type === 'payment_cancel') {
+      onCancel?.();
+    } else if (type === 'payment_failure') {
+      markFailed('התשלום נכשל. אנא נסה שנית.');
+    }
+  }, [markConfirmed, markFailed, onCancel]);
+
+  const handleMessage = useCallback((event) => {
+    try {
+      handleGatewayMessage(JSON.parse(event.nativeEvent.data));
+    } catch (e) {
+      handleGatewayMessage(event.nativeEvent.data);
+    }
+  }, [handleGatewayMessage]);
+
   const handleNavigationStateChange = useCallback((navState) => {
-    console.log('[Payment] Navigation state change:', navState.url);
-    
-    // Check if navigated to success URL
-    if (navState.url.includes('/payment/success')) {
-      console.log('[Payment] Detected success URL');
-      onSuccess?.();
+    const url = navState?.url || '';
+    if (url.includes('/api/payment/success') || url.includes('/payment/success')) {
+      // Keep checkout visible; silent poll will flip to success once DB is ready.
+      checkStatusOnce().then((status) => {
+        if (status === 'completed') markConfirmed();
+      });
       return false;
     }
-    
-    // Check if navigated to cancel URL
-    if (navState.url.includes('/payment/cancel')) {
-      console.log('[Payment] Detected cancel URL');
+    if (url.includes('/payment/cancel')) {
       onCancel?.();
       return false;
     }
-    
-    // Check if navigated to failure URL
-    if (navState.url.includes('/payment/failure')) {
-      console.log('[Payment] Detected failure URL');
-      setError('התשלום נכשל. אנא נסה שנית.');
+    if (url.includes('/payment/failure') || url.includes('/api/payment/failure')) {
+      markFailed('התשלום נכשל. אנא נסה שנית.');
       return false;
     }
-    
     return true;
-  }, [onSuccess, onCancel]);
+  }, [checkStatusOnce, markConfirmed, markFailed, onCancel]);
 
-  // Render WebView for native platforms
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !visible) return undefined;
+
+    const handleWindowMessage = (event) => {
+      handleGatewayMessage(event?.data);
+    };
+
+    window.addEventListener('message', handleWindowMessage);
+    return () => window.removeEventListener('message', handleWindowMessage);
+  }, [visible, handleGatewayMessage]);
+
+  const handleContinue = useCallback(() => {
+    onSuccess?.();
+  }, [onSuccess]);
+
+  const onCheckoutLoadStart = useCallback(() => {
+    if (!initialLoadDoneRef.current) {
+      setInitialLoading(true);
+    }
+  }, []);
+
+  const onCheckoutLoadEnd = useCallback(() => {
+    initialLoadDoneRef.current = true;
+    setInitialLoading(false);
+    // After Hyp redirects the iframe to our success URL, try a quiet status check.
+    if (uniqueId && !settledRef.current) {
+      checkStatusOnce().then((status) => {
+        if (status === 'completed') markConfirmed();
+      });
+    }
+  }, [uniqueId, checkStatusOnce, markConfirmed]);
+
   const renderNativeContent = () => {
     if (!WebView) {
       return (
@@ -118,12 +217,12 @@ const PaymentModal = ({
         ref={webViewRef}
         source={{ uri: sessionUrl }}
         style={styles.webView}
-        onLoadStart={() => setLoading(true)}
-        onLoadEnd={() => setLoading(false)}
+        onLoadStart={onCheckoutLoadStart}
+        onLoadEnd={onCheckoutLoadEnd}
         onError={(e) => {
           console.error('[Payment] WebView error:', e.nativeEvent);
           setError('שגיאה בטעינת עמוד התשלום');
-          setLoading(false);
+          setInitialLoading(false);
         }}
         onMessage={handleMessage}
         onNavigationStateChange={handleNavigationStateChange}
@@ -135,27 +234,15 @@ const PaymentModal = ({
         mixedContentMode="compatibility"
         thirdPartyCookiesEnabled={true}
         sharedCookiesEnabled={true}
-        // Inject JS to detect payment completion
         injectedJavaScript={`
           (function() {
-            // Listen for custom events from ZCredit
             window.addEventListener('message', function(event) {
-              window.ReactNativeWebView.postMessage(JSON.stringify(event.data));
+              try {
+                window.ReactNativeWebView.postMessage(
+                  typeof event.data === 'string' ? event.data : JSON.stringify(event.data)
+                );
+              } catch (e) {}
             });
-            
-            // Monitor for success/cancel elements
-            const observer = new MutationObserver(function() {
-              const successElement = document.querySelector('.payment-success');
-              const cancelElement = document.querySelector('.payment-cancel');
-              
-              if (successElement) {
-                window.ReactNativeWebView.postMessage('payment_success');
-              } else if (cancelElement) {
-                window.ReactNativeWebView.postMessage('payment_cancel');
-              }
-            });
-            
-            observer.observe(document.body, { childList: true, subtree: true });
           })();
           true;
         `}
@@ -163,7 +250,6 @@ const PaymentModal = ({
     );
   };
 
-  // Render iframe for web platform
   const renderWebContent = () => {
     return (
       <View style={styles.iframeContainer}>
@@ -175,54 +261,95 @@ const PaymentModal = ({
             border: 'none',
             borderRadius: 8,
           }}
-          title="ZCredit Payment"
-          onLoad={() => setLoading(false)}
+          title="Hyp Payment"
+          allow="payment *"
+          onLoad={onCheckoutLoadEnd}
           onError={() => {
             setError('שגיאה בטעינת עמוד התשלום');
-            setLoading(false);
+            setInitialLoading(false);
           }}
         />
       </View>
     );
   };
 
+  const renderSuccess = () => (
+    <View style={styles.resultContainer}>
+      <View style={styles.successBadge} accessibilityLabel="התשלום אושר">
+        <Text style={styles.successCheck}>✓</Text>
+      </View>
+      <Text style={styles.resultTitle}>התשלום בוצע בהצלחה</Text>
+      <Text style={styles.resultSubtitle}>
+        הרכישה נרשמה בחשבון שלך. אפשר להמשיך ליומן ולהירשם לשיעורים.
+      </Text>
+      <TouchableOpacity
+        style={styles.continueButton}
+        onPress={handleContinue}
+        accessibilityRole="button"
+        accessibilityLabel="המשך ליומן"
+      >
+        <Text style={styles.continueButtonText}>המשך ליומן</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const showCheckout = view === 'checkout';
+
   return (
     <Modal
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={onClose}
+      onRequestClose={view === 'success' ? handleContinue : onClose}
     >
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeButtonText}>✕</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>תשלום מאובטח</Text>
+          {view === 'success' ? (
+            <View style={styles.placeholder} />
+          ) : (
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="סגירת תשלום"
+            >
+              <Text style={styles.closeButtonText}>✕</Text>
+            </TouchableOpacity>
+          )}
+          <Text style={styles.headerTitle}>
+            {view === 'success' ? 'רכישה הושלמה' : 'תשלום מאובטח'}
+          </Text>
           <View style={styles.placeholder} />
         </View>
 
-        {/* Security Message */}
-        <View style={styles.securityMessageContainer}>
-          <Text style={styles.lockIcon}>🔒</Text>
-          <Text style={styles.securityMessage}>{securityMessage}</Text>
-        </View>
+        {showCheckout && (
+          <View style={styles.securityMessageContainer}>
+            <Text style={styles.lockIcon}>🔒</Text>
+            <Text style={styles.securityMessage}>{securityMessage}</Text>
+          </View>
+        )}
 
-        {/* Payment Content */}
         <View style={styles.contentContainer}>
-          {error ? (
+          {view === 'success' ? (
+            renderSuccess()
+          ) : view === 'error' || error ? (
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{error}</Text>
               <TouchableOpacity
                 style={styles.retryButton}
                 onPress={() => {
+                  settledRef.current = false;
+                  initialLoadDoneRef.current = false;
+                  openedAtRef.current = Date.now();
                   setError(null);
-                  setLoading(true);
+                  setView('checkout');
+                  setInitialLoading(true);
                   if (webViewRef.current) {
                     webViewRef.current.reload();
                   }
                 }}
+                accessibilityRole="button"
+                accessibilityLabel="נסה שנית"
               >
                 <Text style={styles.retryButtonText}>נסה שנית</Text>
               </TouchableOpacity>
@@ -235,7 +362,7 @@ const PaymentModal = ({
             </View>
           )}
 
-          {loading && showWebViewLoading && (
+          {showInitialLoader && (
             <View style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color="#4E0D66" />
               <Text style={styles.loadingText}>טוען עמוד תשלום...</Text>
@@ -243,12 +370,18 @@ const PaymentModal = ({
           )}
         </View>
 
-        {/* Cancel Button */}
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-            <Text style={styles.cancelButtonText}>ביטול</Text>
-          </TouchableOpacity>
-        </View>
+        {view !== 'success' && (
+          <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="ביטול"
+            >
+              <Text style={styles.cancelButtonText}>ביטול</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </Modal>
   );
@@ -270,9 +403,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFD1E3',
   },
   closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: 'rgba(0,0,0,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -288,7 +421,7 @@ const styles = StyleSheet.create({
     color: '#4E0D66',
   },
   placeholder: {
-    width: 40,
+    width: 44,
   },
   securityMessageContainer: {
     flexDirection: 'row',
@@ -325,7 +458,7 @@ const styles = StyleSheet.create({
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -350,11 +483,64 @@ const styles = StyleSheet.create({
     backgroundColor: '#4E0D66',
     paddingHorizontal: 24,
     paddingVertical: 12,
+    minHeight: 44,
     borderRadius: 8,
+    justifyContent: 'center',
   },
   retryButtonText: {
     color: '#FFF',
     fontSize: 14,
+    fontWeight: 'bold',
+  },
+  resultContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    backgroundColor: '#FFF',
+  },
+  successBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  successCheck: {
+    fontSize: 36,
+    color: '#2E7D32',
+    fontWeight: 'bold',
+  },
+  resultTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#4E0D66',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  resultSubtitle: {
+    fontSize: 16,
+    color: '#4E0D66',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+    opacity: 0.85,
+  },
+  continueButton: {
+    backgroundColor: '#4E0D66',
+    minHeight: 48,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 200,
+  },
+  continueButtonText: {
+    color: '#FFD1E3',
+    fontSize: 16,
     fontWeight: 'bold',
   },
   footer: {
@@ -367,8 +553,10 @@ const styles = StyleSheet.create({
   cancelButton: {
     backgroundColor: '#F5F5F5',
     paddingVertical: 14,
+    minHeight: 48,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelButtonText: {
     fontSize: 16,

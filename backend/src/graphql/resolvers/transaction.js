@@ -83,6 +83,9 @@ export const transactionResolvers = {
     },
     paymentSource: (transaction) => transaction.paymentSource ?? null,
     adminNote: (transaction) => transaction.adminNote ?? null,
+    hypTransactionId: (transaction) => transaction.hypTransactionId ?? null,
+    hypHkId: (transaction) => transaction.hypHkId ?? null,
+    hypOrderId: (transaction) => transaction.hypOrderId ?? null,
     accessEndsDate: (transaction) => {
       // Only applicable to subscriptions
       if (transaction.transactionType !== 'subscription') {

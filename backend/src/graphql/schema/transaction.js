@@ -18,6 +18,9 @@ export const transactionTypeDefs = gql`
     updatedAt: String!
     # New payment-related fields
     zcreditReferenceNumber: String
+    hypTransactionId: String
+    hypHkId: String
+    hypOrderId: String
     paymentToken: String
     cardLast4: String
     cardBrand: String

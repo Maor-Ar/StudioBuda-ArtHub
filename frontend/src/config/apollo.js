@@ -172,6 +172,10 @@ const isAuthLikeGraphQLError = (err) => {
 };
 
 const loadingLink = new ApolloLink((operation, forward) => {
+  if (operation.getContext?.().skipGlobalLoader) {
+    return forward(operation);
+  }
+
   const operationName = operation.operationName || 'Unknown';
   notifyLoadingChange({ delta: 1, operationName });
   return new Observable((observer) => {
