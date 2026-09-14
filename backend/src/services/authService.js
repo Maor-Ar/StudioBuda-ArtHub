@@ -1,7 +1,7 @@
 import { auth } from '../config/firebase.js';
 import userService from './userService.js';
 import emailService from './emailService.js';
-import { AuthenticationError, ValidationError } from '../utils/errors.js';
+import { AuthenticationError, ValidationError, OAuthAccountNoPasswordError } from '../utils/errors.js';
 import { generateResetToken } from '../utils/helpers.js';
 import config from '../config/environment.js';
 import { db } from '../config/firebase.js';
@@ -49,6 +49,10 @@ class AuthService {
     }
 
     if (user.userType !== 'regular') {
+      if (!user.passwordHash) {
+        // Account created via OAuth - nothing to reset, suggest signing in with the provider
+        throw new OAuthAccountNoPasswordError(user.userType);
+      }
       throw new ValidationError('Password reset is only available for email/password accounts');
     }
 

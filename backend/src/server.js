@@ -196,11 +196,13 @@ const apolloServer = new ApolloServer({
   resolvers,
   introspection: isDevelopment,
   plugins: isDevelopment ? [] : [ApolloServerPluginLandingPageDisabled()],
-  formatError: (formattedError) => {
+  formatError: (formattedError, error) => {
     // Verbose: logger.debug / logger.error per GraphQL error (uncomment to debug)
     // logger.error('GraphQL', formattedError.message);
-    // Preserve AppError.code (e.g. AUTHENTICATION_ERROR) in extensions for the client
-    const orig = formattedError.originalError;
+    // Preserve AppError.code (e.g. AUTHENTICATION_ERROR) in extensions for the client.
+    // Apollo Server 4 passes the raw error as the 2nd arg; the thrown AppError is
+    // wrapped in a GraphQLError, so unwrap via originalError.
+    const orig = (error && error.originalError) || error || null;
     const code =
       (orig && orig.code) ||
       formattedError.extensions?.code ||

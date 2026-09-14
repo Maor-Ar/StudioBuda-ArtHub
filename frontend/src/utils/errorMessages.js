@@ -36,6 +36,24 @@ export const AUTH_ERRORS = {
 };
 
 /**
+ * Backend error codes (extensions.code) that the client handles specially
+ */
+export const AUTH_ERROR_CODES = {
+  OAUTH_ACCOUNT_NO_PASSWORD: 'OAUTH_ACCOUNT_NO_PASSWORD',
+};
+
+/**
+ * Returns true when the backend reported that the account was created via an
+ * OAuth provider (e.g. Google) and has no password to log in / reset with.
+ * @param {Error} error - Apollo / GraphQL error object
+ * @returns {boolean}
+ */
+export const isOAuthAccountNoPasswordError = (error) => {
+  const code = error?.graphQLErrors?.[0]?.extensions?.code;
+  return code === AUTH_ERROR_CODES.OAUTH_ACCOUNT_NO_PASSWORD;
+};
+
+/**
  * Success messages
  */
 export const SUCCESS_MESSAGES = {

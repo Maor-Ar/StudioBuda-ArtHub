@@ -1,7 +1,7 @@
 import authService from '../../services/authService.js';
 import transactionService from '../../services/transactionService.js';
 import { auth } from '../../config/firebase.js';
-import { AuthenticationError, ValidationError } from '../../utils/errors.js';
+import { AuthenticationError, ValidationError, OAuthAccountNoPasswordError } from '../../utils/errors.js';
 import { validateEmail, validatePassword } from '../../utils/validators.js';
 import bcrypt from 'bcrypt';
 import logger from '../../utils/logger.js';
@@ -101,6 +101,12 @@ export const authResolvers = {
       const user = await authService.getUserByEmail(email);
       if (!user) {
         throw new AuthenticationError('Invalid email or password');
+      }
+
+      // Account created via OAuth (e.g. Google) - there is no password to check.
+      // Return a dedicated error so the client can suggest signing in with the provider.
+      if (!user.passwordHash && user.userType !== 'regular') {
+        throw new OAuthAccountNoPasswordError(user.userType);
       }
 
       if (user.userType !== 'regular') {

@@ -19,7 +19,12 @@ import authService from '../../services/authService';
 import { OAUTH_PROVIDERS, STORAGE_KEYS } from '../../utils/constants';
 import RememberMeRow from '../../components/RememberMeRow';
 import { validateEmail } from '../../utils/validation';
-import { getGraphQLErrorMessage, getOAuthErrorMessage, SUCCESS_MESSAGES } from '../../utils/errorMessages';
+import {
+  getGraphQLErrorMessage,
+  getOAuthErrorMessage,
+  isOAuthAccountNoPasswordError,
+  SUCCESS_MESSAGES,
+} from '../../utils/errorMessages';
 import { showErrorToast, showSuccessToast } from '../../utils/toast';
 import GoogleIcon from '../../assets/icons/Google.svg';
 
@@ -35,6 +40,8 @@ const LoginScreen = ({ navigation }) => {
   const [rememberMe, setRememberMe] = useState(true);
   const [forgotVisible, setForgotVisible] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
+  // Shown when the email belongs to an account that was created via Google (no password)
+  const [googleAccountVisible, setGoogleAccountVisible] = useState(false);
   
   const { login } = useAuth();
 
@@ -63,6 +70,10 @@ const LoginScreen = ({ navigation }) => {
       }
     },
     onError: (error) => {
+      if (isOAuthAccountNoPasswordError(error)) {
+        setGoogleAccountVisible(true);
+        return;
+      }
       const friendlyMessage = getGraphQLErrorMessage(error);
       showErrorToast(friendlyMessage);
     },
@@ -95,6 +106,11 @@ const LoginScreen = ({ navigation }) => {
       showSuccessToast('אם המייל קיים במערכת, נשלח קישור לאיפוס סיסמה');
     },
     onError: (error) => {
+      if (isOAuthAccountNoPasswordError(error)) {
+        setForgotVisible(false);
+        setGoogleAccountVisible(true);
+        return;
+      }
       const friendlyMessage = getGraphQLErrorMessage(error);
       showErrorToast(friendlyMessage);
     },
@@ -377,6 +393,35 @@ const LoginScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Account registered via Google - no password */}
+      <Modal visible={googleAccountVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>נראה שנרשמת לאתר באמצעות Google</Text>
+            <Text style={styles.modalSubtitle}>
+              אין לחשבון הזה סיסמה. אפשר להתחבר בקלות באמצעות Google
+            </Text>
+            <TouchableOpacity
+              style={[styles.modalGoogleBtn, oauthLoading && styles.buttonDisabled]}
+              onPress={() => {
+                setGoogleAccountVisible(false);
+                handleOAuth(OAUTH_PROVIDERS.GOOGLE);
+              }}
+              disabled={oauthLoading}
+            >
+              <GoogleIcon width={20} height={20} style={styles.icon} />
+              <Text style={styles.modalGoogleText}>המשך עם גוגל</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalSecondaryBtn}
+              onPress={() => setGoogleAccountVisible(false)}
+            >
+              <Text style={styles.modalSecondaryText}>סגור</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -584,6 +629,23 @@ const styles = StyleSheet.create({
     color: '#FFE2ED',
     fontSize: 15,
     fontWeight: '600',
+  },
+  modalGoogleBtn: {
+    marginTop: 12,
+    height: 44,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DDB0E3',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalGoogleText: {
+    color: '#4E0D66',
+    fontSize: 15,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   modalSecondaryBtn: {
     marginTop: 8,

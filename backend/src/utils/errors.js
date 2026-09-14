@@ -17,6 +17,23 @@ export class AuthenticationError extends AppError {
   }
 }
 
+/**
+ * Thrown when a user tries to use email/password on an account that was
+ * created via an OAuth provider (Google etc.) and therefore has no password.
+ * Exposed to the client via extensions.code = OAUTH_ACCOUNT_NO_PASSWORD.
+ */
+export class OAuthAccountNoPasswordError extends AppError {
+  constructor(provider = 'google') {
+    super(
+      `This account was created with ${provider} and has no password. Please sign in with ${provider}.`,
+      ERROR_CODES.OAUTH_ACCOUNT_NO_PASSWORD,
+      401,
+      'email'
+    );
+    this.provider = provider;
+  }
+}
+
 export class AuthorizationError extends AppError {
   constructor(message = 'Permission denied', field = null) {
     super(message, ERROR_CODES.AUTHORIZATION_ERROR, 403, field);
