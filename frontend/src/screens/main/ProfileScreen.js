@@ -1,5 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Linking } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  Linking,
+  Modal,
+  Pressable,
+  Image,
+  useWindowDimensions,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@apollo/client';
 import { useAuth } from '../../context/AuthContext';
@@ -7,8 +19,9 @@ import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 import { GET_ME, GET_MY_REGISTRATIONS, GET_MY_TRANSACTIONS, GET_PRODUCTS } from '../../services/graphql/queries';
 import TextModal from '../../components/TextModal';
 import TooltipIcon from '../../components/admin-dashboard/TooltipIcon';
-import GoogleMapsIcon from '../../assets/icons/GoogleMaps.svg';
-import { MAIN_SITE_URL, STUDIO_LOCATION, STUDIO_MAPS_URL } from '../../utils/constants';
+import { MAIN_SITE_URL, STUDIO_LOCATION_LINES } from '../../utils/constants';
+
+const STUDIO_MAP_IMAGE = require('../../assets/images/Map.jpeg');
 
 const ENTRIES_HELP = {
   subscription:
@@ -97,11 +110,13 @@ const PRIVACY_CONTENT = `1. מבוא
 
 const ProfileScreen = () => {
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const { user, transactions: contextTransactions, logout, updateTransactions } = useAuth();
   
   // Terms and Privacy modals state
   const [termsModalVisible, setTermsModalVisible] = useState(false);
   const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
+  const [mapModalVisible, setMapModalVisible] = useState(false);
 
   // Fetch fresh user data from the server
   const { data: userData, loading: userLoading } = useQuery(GET_ME);
@@ -210,14 +225,6 @@ const ProfileScreen = () => {
       month: 'long', 
       year: 'numeric' 
     });
-  };
-
-  const openStudioAddress = async () => {
-    try {
-      await Linking.openURL(STUDIO_MAPS_URL);
-    } catch (error) {
-      console.warn('[PROFILE] Failed to open studio maps link:', error);
-    }
   };
 
   if (showUserLoading) {
@@ -414,17 +421,23 @@ const ProfileScreen = () => {
             <Text style={styles.contactValue}>055-664-6033 </Text>
             <Text style={styles.contactLabel}>טלפון לבירורים:</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.contactItem}
-            onPress={openStudioAddress}
-            activeOpacity={0.7}
-          >
+          <View style={styles.addressItem}>
+            <Text style={[styles.contactLabel, styles.addressLabel]}>כתובת הסטודיו:</Text>
             <View style={styles.addressValueRow}>
-              <GoogleMapsIcon width={18} height={18} style={styles.mapsIcon} />
-              <Text style={styles.contactAddressValue}>{STUDIO_LOCATION}</Text>
+              <TouchableOpacity
+                style={styles.mapButton}
+                onPress={() => setMapModalVisible(true)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="מפת המקום"
+              >
+                <Text style={styles.mapButtonText}>מפת המקום</Text>
+              </TouchableOpacity>
+              <Text style={styles.contactAddressValue}>
+                {STUDIO_LOCATION_LINES.join('\n')}
+              </Text>
             </View>
-            <Text style={styles.contactLabel}>כתובת הסטודיו: </Text>
-          </TouchableOpacity>
+          </View>
         </View>
 
         {/* Logout Button */}
@@ -448,6 +461,45 @@ const ProfileScreen = () => {
         content={PRIVACY_CONTENT}
         onClose={() => setPrivacyModalVisible(false)}
       />
+
+      <Modal
+        visible={mapModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMapModalVisible(false)}
+      >
+        <View style={styles.mapOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setMapModalVisible(false)}
+            accessibilityLabel="סגירה"
+          />
+          <View style={styles.mapDialog}>
+            <TouchableOpacity
+              style={styles.mapClose}
+              onPress={() => setMapModalVisible(false)}
+              accessibilityRole="button"
+              accessibilityLabel="סגירה"
+            >
+              <Text style={styles.mapCloseText}>×</Text>
+            </TouchableOpacity>
+            <Text style={styles.mapTitle}>מפת המקום</Text>
+            <Text style={styles.mapSubtitle}>חניה, כניסה ומתחם חאן בבא</Text>
+            <ScrollView
+              style={[styles.mapFrame, { maxHeight: Math.max(220, windowHeight * 0.62) }]}
+              contentContainerStyle={styles.mapFrameContent}
+              showsVerticalScrollIndicator
+            >
+              <Image
+                source={STUDIO_MAP_IMAGE}
+                style={styles.mapImage}
+                resizeMode="contain"
+                accessibilityLabel="מפת הסטודיו בתע״ש 14 כפר סבא, כולל חניה ומתחם חאן בבא"
+              />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -745,20 +797,104 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'right',
   },
+  addressItem: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(78, 13, 102, 0.1)',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
   addressValueRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'flex-end',
+    gap: 8,
+    width: '100%',
   },
-  mapsIcon: {
-    marginTop: 1,
+  addressLabel: {
+    marginLeft: 0,
   },
   contactAddressValue: {
+    flexShrink: 1,
     fontSize: 15,
-    color: '#000000',
+    lineHeight: 22,
+    color: '#4E0D66',
     fontWeight: '600',
     textAlign: 'right',
-    textDecorationLine: 'underline',
+  },
+  mapButton: {
+    flexShrink: 0,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(78, 13, 102, 0.28)',
+    backgroundColor: '#FFFFFF',
+  },
+  mapButtonText: {
+    color: '#4E0D66',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  mapOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(26, 15, 46, 0.88)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  mapDialog: {
+    width: '100%',
+    maxWidth: 720,
+    maxHeight: '92%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingTop: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  mapClose: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFD1E3',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  mapCloseText: {
+    fontSize: 26,
+    lineHeight: 28,
+    color: '#4E0D66',
+    fontWeight: '600',
+  },
+  mapTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#4E0D66',
+    textAlign: 'center',
+    lineHeight: 40,
+    paddingHorizontal: 44,
+  },
+  mapSubtitle: {
+    fontSize: 14,
+    color: '#5D3587',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  mapFrame: {
+    width: '100%',
+  },
+  mapFrameContent: {
+    paddingBottom: 4,
+  },
+  mapImage: {
+    width: '100%',
+    aspectRatio: 992 / 1067,
   },
 });
 
