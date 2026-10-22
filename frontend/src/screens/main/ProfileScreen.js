@@ -110,7 +110,8 @@ const PRIVACY_CONTENT = `1. מבוא
 
 const ProfileScreen = () => {
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const mapImageWidth = Math.min(688, Math.max(260, windowWidth - 64));
   const { user, transactions: contextTransactions, logout, updateTransactions } = useAuth();
   
   // Terms and Privacy modals state
@@ -492,7 +493,7 @@ const ProfileScreen = () => {
             >
               <Image
                 source={STUDIO_MAP_IMAGE}
-                style={styles.mapImage}
+                style={{ width: mapImageWidth, height: mapImageWidth * (1067 / 992) }}
                 resizeMode="contain"
                 accessibilityLabel="מפת הסטודיו בתע״ש 14 כפר סבא, כולל חניה ומתחם חאן בבא"
               />
@@ -891,10 +892,6 @@ const styles = StyleSheet.create({
   },
   mapFrameContent: {
     paddingBottom: 4,
-  },
-  mapImage: {
-    width: '100%',
-    aspectRatio: 992 / 1067,
   },
 });
 
