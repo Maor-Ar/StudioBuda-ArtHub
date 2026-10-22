@@ -88,6 +88,14 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Per-occurrence overrides (cancellation + field edits for a specific date).
+    match /event_occurrence_overrides/{overrideId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Legacy cancellation collection — keep readable until the trial site migrates
+    // to event_occurrence_overrides. Remove this block after that migration.
     match /event_cancellations/{cancellationId} {
       allow read: if true;
       allow write: if false;

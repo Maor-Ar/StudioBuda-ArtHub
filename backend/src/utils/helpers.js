@@ -1,6 +1,59 @@
 import { MAX_EVENT_DATE_RANGE_DAYS } from '../config/constants.js';
 import { randomBytes } from 'crypto';
 
+export const toUtcDateKey = (dateValue) => {
+  if (!dateValue) return null;
+  const dateObj = dateValue?.toDate ? dateValue.toDate() : new Date(dateValue);
+  if (Number.isNaN(dateObj.getTime())) return null;
+  return dateObj.toISOString().split('T')[0];
+};
+
+export const parseEventOccurrenceId = (eventId) => {
+  let actualEventId = eventId;
+  let occurrenceDate = null;
+
+  if (typeof eventId === 'string' && eventId.includes('_')) {
+    const parts = eventId.split('_');
+    if (parts.length >= 2) {
+      const datePart = parts[parts.length - 1];
+      actualEventId = parts.slice(0, -1).join('_');
+      const parsed = new Date(`${datePart}T00:00:00.000Z`);
+      if (Number.isNaN(parsed.getTime()) || parsed.toISOString().split('T')[0] !== datePart) {
+        actualEventId = eventId;
+        occurrenceDate = null;
+      } else {
+        occurrenceDate = parsed;
+      }
+    }
+  }
+
+  return {
+    actualEventId,
+    occurrenceDate,
+    dateKey: occurrenceDate ? occurrenceDate.toISOString().split('T')[0] : null,
+  };
+};
+
+export const subtractOneUtcDayKey = (dateKey) => {
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().split('T')[0];
+};
+
+export const shouldSplitRecurringSeries = (baseEvent, splitDateKey) => {
+  if (!baseEvent?.isRecurring || !splitDateKey) return false;
+  const baseDateKey = toUtcDateKey(baseEvent.date);
+  if (!baseDateKey) return false;
+  return splitDateKey > baseDateKey;
+};
+
+const toUtcMidnight = (dateValue) => {
+  const date = dateValue?.toDate ? dateValue.toDate() : new Date(dateValue);
+  const normalized = new Date(date);
+  normalized.setUTCHours(0, 0, 0, 0);
+  return normalized;
+};
+
 /**
  * Generate recurring event instances for a date range
  * @param {Object} baseEvent - The base recurring event
@@ -14,7 +67,7 @@ export const generateRecurringInstances = (baseEvent, startDate, endDate) => {
   }
 
   const instances = [];
-  const baseDate = baseEvent.date.toDate();
+  const baseDate = baseEvent.date?.toDate ? baseEvent.date.toDate() : new Date(baseEvent.date);
   const intervalDays = baseEvent.recurringIntervalDays;
 
   // Normalize baseDate to UTC midnight
@@ -32,17 +85,26 @@ export const generateRecurringInstances = (baseEvent, startDate, endDate) => {
     currentDate.setUTCDate(currentDate.getUTCDate() + intervalDays);
     currentDate.setUTCHours(0, 0, 0, 0);
   }
-  
+
   // Normalize endDate to UTC midnight for comparison
   const endDateUTC = new Date(endDate);
   endDateUTC.setUTCHours(23, 59, 59, 999);
 
-  // Generate instances until endDate
-  while (currentDate <= endDateUTC) {
+  let effectiveEnd = endDateUTC;
+  if (baseEvent.recurrenceEndDate) {
+    const recEnd = toUtcMidnight(baseEvent.recurrenceEndDate);
+    recEnd.setUTCHours(23, 59, 59, 999);
+    if (recEnd < effectiveEnd) {
+      effectiveEnd = recEnd;
+    }
+  }
+
+  // Generate instances until endDate / recurrenceEndDate
+  while (currentDate <= effectiveEnd) {
     // Ensure the date is at UTC midnight to preserve the intended date
     const instanceDate = new Date(currentDate);
     instanceDate.setUTCHours(0, 0, 0, 0);
-    
+
     const instance = {
       ...baseEvent,
       id: `${baseEvent.id}_${instanceDate.toISOString().split('T')[0]}`,
@@ -52,7 +114,7 @@ export const generateRecurringInstances = (baseEvent, startDate, endDate) => {
       baseEventId: baseEvent.id,
     };
     instances.push(instance);
-    
+
     currentDate = new Date(currentDate);
     currentDate.setUTCDate(currentDate.getUTCDate() + intervalDays);
     currentDate.setUTCHours(0, 0, 0, 0);

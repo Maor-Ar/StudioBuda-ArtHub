@@ -18,13 +18,16 @@ export const registrationTypeDefs = gql`
     event: Event
   }
 
-  type EventCancellation {
+  type EventOccurrenceOverride {
     id: ID!
     eventId: String!
     dateKey: String!
-    reason: String!
-    cancelledBy: String!
-    cancelledAt: String!
+    isCancelled: Boolean!
+    cancellationReason: String
+    cancelledBy: String
+    cancelledAt: String
+    overrides: EventOccurrenceOverrideFields
+    updatedAt: String
   }
 
   input RegisterForEventInput {

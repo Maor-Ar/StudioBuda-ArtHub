@@ -1,6 +1,7 @@
 import registrationService from '../../services/registrationService.js';
 import eventService from '../../services/eventService.js';
 import userService from '../../services/userService.js';
+import occurrenceOverrideService from '../../services/occurrenceOverrideService.js';
 import { requireAdmin, requireAuthenticated } from '../middleware/permissions.js';
 
 const enrichRegistrationsWithEvents = async (registrations) => {
@@ -21,10 +22,10 @@ const enrichRegistrationsWithEvents = async (registrations) => {
     }));
 
   const uniqueEventIds = [...new Set(registrations.map((reg) => reg.eventId))];
-  const [eventsMap, registrationCounts, cancellations] = await Promise.all([
+  const [eventsMap, registrationCounts, overrides] = await Promise.all([
     eventService.getEventsByIds(uniqueEventIds),
     registrationService.countRegistrationsByEventAndDate(occurrenceKeys),
-    registrationService.getCancellationsForOccurrences(occurrenceKeys),
+    occurrenceOverrideService.getForOccurrences(occurrenceKeys),
   ]);
 
   return registrationsWithDateKeys.map(({ reg, dateKey }) => {
@@ -34,16 +35,15 @@ const enrichRegistrationsWithEvents = async (registrations) => {
 
     const event = eventsMap.get(reg.eventId);
     const countKey = `${reg.eventId}:${dateKey}`;
-    const cancellation = cancellations.get(`${reg.eventId}_${dateKey}`);
+    const overrideDoc = overrides.get(`${reg.eventId}_${dateKey}`);
+    const resolved = event ? occurrenceOverrideService.applyToEvent(event, overrideDoc) : null;
 
     return {
       ...reg,
-      _enrichedEvent: event
+      _enrichedEvent: resolved
         ? {
-            ...event,
+            ...resolved,
             registeredCount: registrationCounts[countKey] || 0,
-            isCancelled: cancellation != null && cancellation.isActive !== false,
-            cancellationReason: cancellation?.reason || null,
           }
         : null,
     };
@@ -145,16 +145,15 @@ export const registrationResolvers = {
       const registrationCounts = await registrationService.countRegistrationsByEventAndDate([
         { eventId: registration.eventId, dateKey },
       ]);
-      const cancellations = await registrationService.getCancellationsForOccurrences([
+      const overrides = await occurrenceOverrideService.getForOccurrences([
         { eventId: registration.eventId, dateKey },
       ]);
-      const cancellation = cancellations.get(`${registration.eventId}_${dateKey}`);
+      const overrideDoc = overrides.get(`${registration.eventId}_${dateKey}`);
+      const resolved = occurrenceOverrideService.applyToEvent(event, overrideDoc);
 
       return {
-        ...event,
+        ...resolved,
         registeredCount: registrationCounts[`${registration.eventId}:${dateKey}`] || 0,
-        isCancelled: cancellation != null && cancellation.isActive !== false,
-        cancellationReason: cancellation?.reason || null,
       };
     },
     occurrenceDate: (registration) => {

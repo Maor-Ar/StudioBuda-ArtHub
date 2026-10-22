@@ -30,6 +30,7 @@ export const GET_EVENTS = gql`
       description
       isRecurring
       recurringIntervalDays
+      recurrenceEndDate
       instructorName
       maxRegistrations
       eventType
@@ -37,6 +38,8 @@ export const GET_EVENTS = gql`
       isActive
       isCancelled
       cancellationReason
+      hasOccurrenceOverride
+      overriddenFields
       registeredCount
       availableSpots
       occurrenceDate
@@ -57,6 +60,7 @@ export const GET_EVENT = gql`
       description
       isRecurring
       recurringIntervalDays
+      recurrenceEndDate
       instructorName
       maxRegistrations
       eventType
@@ -64,6 +68,8 @@ export const GET_EVENT = gql`
       isActive
       isCancelled
       cancellationReason
+      hasOccurrenceOverride
+      overriddenFields
       registeredCount
       availableSpots
       occurrenceDate
@@ -99,6 +105,9 @@ export const GET_MY_REGISTRATIONS = gql`
         availableSpots
         isCancelled
         cancellationReason
+        hasOccurrenceOverride
+        overriddenFields
+        recurrenceEndDate
       }
     }
   }
@@ -175,6 +184,7 @@ export const GET_ALL_EVENTS = gql`
       description
       isRecurring
       recurringIntervalDays
+      recurrenceEndDate
       instructorName
       maxRegistrations
       eventType

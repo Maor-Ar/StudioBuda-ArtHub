@@ -97,11 +97,19 @@ class AdminDashboardService {
   }
 
   async computeDashboardMetrics() {
-    const [transactionsSnap, registrationsSnap, manualRegistrationsSnap, eventsSnap, cancellationsSnap] = await Promise.all([
+    const [
+      transactionsSnap,
+      registrationsSnap,
+      manualRegistrationsSnap,
+      eventsSnap,
+      overridesSnap,
+      legacyCancellationsSnap,
+    ] = await Promise.all([
       db.collection('transactions').get(),
       db.collection('event_registrations').where('status', '==', 'confirmed').get(),
       db.collection(MANUAL_REGISTRATIONS_COLLECTION).where('status', '==', 'confirmed').get(),
       db.collection('events').get(),
+      db.collection('event_occurrence_overrides').get(),
       db.collection('event_cancellations').get(),
     ]);
 
@@ -115,12 +123,20 @@ class AdminDashboardService {
     const allRegistrations = [...registrations, ...manualRegistrations];
     const eventsMap = new Map(eventsSnap.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() }]));
     const transactionsMap = new Map(transactions.map((tx) => [tx.id, tx]));
-    const cancelledOccurrences = new Set(
-      cancellationsSnap.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .filter((item) => item.isActive !== false)
-        .map((item) => item.id)
-    );
+    const cancelledOccurrences = new Set();
+    overridesSnap.docs.forEach((doc) => {
+      const data = doc.data() || {};
+      if (data.isCancelled === true) {
+        cancelledOccurrences.add(doc.id);
+      }
+    });
+    legacyCancellationsSnap.docs.forEach((doc) => {
+      if (cancelledOccurrences.has(doc.id)) return;
+      const data = doc.data() || {};
+      if (data.isActive !== false) {
+        cancelledOccurrences.add(doc.id);
+      }
+    });
 
     const now = new Date();
     const currentMonthStart = monthStartUtc(now);

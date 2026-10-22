@@ -27,6 +27,7 @@ const EMPTY_FORM = {
   eventType: EVENT_TYPES.SUBSCRIPTION_ONLY,
   isRecurring: false,
   recurringIntervalDays: '7',
+  recurrenceEndDate: '',
   price: '',
 };
 
@@ -79,6 +80,7 @@ const AdminEventsScreen = ({ navigation }) => {
       eventType: event.eventType || EVENT_TYPES.SUBSCRIPTION_ONLY,
       isRecurring: event.isRecurring || false,
       recurringIntervalDays: String(event.recurringIntervalDays || 7),
+      recurrenceEndDate: event.recurrenceEndDate ? new Date(event.recurrenceEndDate).toISOString().split('T')[0] : '',
       price: event.price ? String(event.price) : '',
     });
     setModalVisible(true);
@@ -100,6 +102,11 @@ const AdminEventsScreen = ({ navigation }) => {
       eventType: form.eventType,
       isRecurring: form.isRecurring,
       ...(form.isRecurring && { recurringIntervalDays: parseInt(form.recurringIntervalDays) || 7 }),
+      ...(form.isRecurring && {
+        recurrenceEndDate: form.recurrenceEndDate
+          ? new Date(form.recurrenceEndDate + 'T00:00:00.000Z').toISOString()
+          : null,
+      }),
       ...(form.price && { price: parseFloat(form.price) }),
     };
 
@@ -182,7 +189,9 @@ const AdminEventsScreen = ({ navigation }) => {
                   {EVENT_TYPE_LABELS[event.eventType] || event.eventType} | {event.instructorName}
                 </Text>
                 <Text style={styles.eventMeta}>
-                  {event.isRecurring ? `חוזר כל ${event.recurringIntervalDays} ימים` : 'חד פעמי'} | עד {event.maxRegistrations} משתתפים
+                  {event.isRecurring
+                    ? `חוזר כל ${event.recurringIntervalDays} ימים${event.recurrenceEndDate ? ` | עד ${formatDate(event.recurrenceEndDate)}` : ''}`
+                    : 'חד פעמי'} | עד {event.maxRegistrations} משתתפים
                 </Text>
               </View>
               <View style={styles.eventActions}>
@@ -254,6 +263,8 @@ const AdminEventsScreen = ({ navigation }) => {
                 <>
                   <Text style={styles.fieldLabel}>חזרה כל (ימים)</Text>
                   <TextInput style={styles.input} value={form.recurringIntervalDays} onChangeText={v => setForm(p => ({...p, recurringIntervalDays: v}))} keyboardType="numeric" placeholderTextColor="#999" />
+                  <Text style={styles.fieldLabel}>תאריך סיום (YYYY-MM-DD)</Text>
+                  <TextInput style={styles.input} value={form.recurrenceEndDate} onChangeText={v => setForm(p => ({...p, recurrenceEndDate: v}))} placeholder="ריק = ללא סיום" placeholderTextColor="#999" />
                 </>
               )}
 

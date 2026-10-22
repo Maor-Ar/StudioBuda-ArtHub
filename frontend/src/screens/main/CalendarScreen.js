@@ -11,6 +11,7 @@ import {
   ADMIN_RESERVE_SPOT,
   ADMIN_CANCEL_EVENT_OCCURRENCE,
   ADMIN_REENABLE_EVENT_OCCURRENCE,
+  ADMIN_EDIT_EVENT,
 } from '../../services/graphql/mutations';
 import { GET_MY_REGISTRATIONS, GET_EVENT_REGISTRATIONS, GET_MY_TRANSACTIONS } from '../../services/graphql/queries';
 import EventCard from '../../components/EventCard';
@@ -93,6 +94,7 @@ const CalendarScreen = () => {
   const [calendarModalEvent, setCalendarModalEvent] = useState(null);
   const [calendarModalMode, setCalendarModalMode] = useState('success');
   const pendingRegisterEventRef = useRef(null);
+  const pendingEditScopeRef = useRef(null);
   const didAutoSwitchInitialDateRef = useRef(false);
 
   // Initialize with current date
@@ -291,6 +293,31 @@ const CalendarScreen = () => {
     }
   );
 
+  const [adminEditEvent, { loading: adminEditingEvent }] = useMutation(
+    ADMIN_EDIT_EVENT,
+    {
+      onCompleted: async () => {
+        const shouldCloseModal = pendingEditScopeRef.current === 'THIS_AND_FUTURE';
+        pendingEditScopeRef.current = null;
+        try {
+          await refreshCalendarData({ includeEventRegs: true });
+          showSuccessToast('השיעור עודכן בהצלחה');
+        } catch (error) {
+          console.error('[ADMIN EDIT EVENT] Error refetching:', error);
+          showSuccessToast('השיעור עודכן בהצלחה');
+        }
+        if (shouldCloseModal) {
+          setModalVisible(false);
+          setSelectedEvent(null);
+        }
+      },
+      onError: (e) => {
+        const friendlyMessage = getGraphQLErrorMessage(e);
+        showErrorToast(friendlyMessage);
+      },
+    }
+  );
+
   const [adminReenableEventOccurrence, { loading: adminReenablingOccurrence }] = useMutation(
     ADMIN_REENABLE_EVENT_OCCURRENCE,
     {
@@ -473,6 +500,8 @@ const CalendarScreen = () => {
         availableSpots: event.availableSpots || 0, // Use from event data (calculated by backend)
         isCancelled: event.isCancelled ?? false,
         cancellationReason: event.cancellationReason ?? null,
+        hasOccurrenceOverride: event.hasOccurrenceOverride ?? false,
+        overriddenFields: event.overriddenFields || [],
         registrationId: registration.id, // Store registration ID for cancellation
       };
     });
@@ -1008,6 +1037,20 @@ const CalendarScreen = () => {
                 });
               }}
               adminReenableLoading={adminReenablingOccurrence}
+              onAdminEdit={(changes, scope) => {
+                if (!selectedEvent) return;
+                pendingEditScopeRef.current = scope;
+                adminEditEvent({
+                  variables: {
+                    input: {
+                      eventId: selectedEvent.id,
+                      scope,
+                      changes,
+                    },
+                  },
+                });
+              }}
+              adminEditLoading={adminEditingEvent}
               registrations={adminEventRegistrations}
               registrationsLoading={eventRegistrationsLoading}
               onRemoveRegistration={handleAdminRemoveRegistration}

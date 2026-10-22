@@ -55,7 +55,18 @@ function expand(event, startDate, endDate) {
   }
   const endDateUTC = new Date(endDate);
   endDateUTC.setUTCHours(23, 59, 59, 999);
-  while (currentDate <= endDateUTC) {
+  let effectiveEnd = endDateUTC;
+  if (event.recurrenceEndDate) {
+    const recEndRaw = event.recurrenceEndDate?.toDate
+      ? event.recurrenceEndDate.toDate()
+      : new Date(event.recurrenceEndDate);
+    const recEnd = toUtcMidnight(recEndRaw);
+    recEnd.setUTCHours(23, 59, 59, 999);
+    if (recEnd < effectiveEnd) {
+      effectiveEnd = recEnd;
+    }
+  }
+  while (currentDate <= effectiveEnd) {
     results.push({
       occurrenceDate: new Date(currentDate),
       occurrenceDateKey: currentDate.toISOString().split('T')[0],
@@ -120,8 +131,12 @@ async function main() {
 
   const open = [];
   for (const occ of occurrences) {
-    const cancel = await db.collection('event_cancellations').doc(`${occ.baseEventId}_${occ.occurrenceDateKey}`).get();
-    if (cancel.exists && cancel.data()?.isActive !== false) continue;
+    const override = await db.collection('event_occurrence_overrides').doc(`${occ.baseEventId}_${occ.occurrenceDateKey}`).get();
+    if (override.exists && override.data()?.isCancelled === true) continue;
+    if (!override.exists) {
+      const cancel = await db.collection('event_cancellations').doc(`${occ.baseEventId}_${occ.occurrenceDateKey}`).get();
+      if (cancel.exists && cancel.data()?.isActive !== false) continue;
+    }
     const registered = counts[`${occ.baseEventId}:${occ.occurrenceDateKey}`] || 0;
     const spots = occ.maxRegistrations - registered;
     if (spots > 0) open.push({ ...occ, availableSpots: spots });

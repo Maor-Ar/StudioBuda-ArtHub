@@ -4,6 +4,13 @@ import UserHeadIcon from '../assets/icons/user-head.svg';
 import UsersFourIcon from '../assets/icons/users-four.svg';
 import LeftArrow from '../assets/icons/LeftArrow.svg';
 import { useShouldShowLocalLoader } from '../context/LoadingContext';
+import EventEditModal from './EventEditModal';
+
+const EDIT_SCOPE_OPTIONS = [
+  { id: 'THIS_OCCURRENCE', label: 'ערוך את התאריך הזה בלבד', title: 'עריכת תאריך זה' },
+  { id: 'THIS_AND_FUTURE', label: 'ערוך מתאריך זה והלאה', title: 'עריכה מתאריך זה והלאה' },
+  { id: 'ALL', label: 'ערוך את כל השיעורים (עבר, הווה ועתיד)', title: 'עריכת כל השיעורים' },
+];
 
 const EventDetailModal = ({
   event,
@@ -29,21 +36,45 @@ const EventDetailModal = ({
   adminCancelLoading = false,
   onAdminReenableOccurrence,
   adminReenableLoading = false,
+  onAdminEdit,
+  adminEditLoading = false,
 }) => {
   if (!event) return null;
 
   const [adminCancelReason, setAdminCancelReason] = useState('');
   const [manualNameModalVisible, setManualNameModalVisible] = useState(false);
   const [manualCustomerName, setManualCustomerName] = useState('');
+  const [scopeMenuVisible, setScopeMenuVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editScope, setEditScope] = useState('THIS_OCCURRENCE');
   const showRegistrationsLoading = useShouldShowLocalLoader(registrationsLoading);
+  const isRecurringOccurrence = !!(event.isRecurring || event.isInstance);
+  const selectedScopeOption = EDIT_SCOPE_OPTIONS.find((option) => option.id === editScope) || EDIT_SCOPE_OPTIONS[0];
 
   useEffect(() => {
     if (!visible) {
       setAdminCancelReason('');
       setManualNameModalVisible(false);
       setManualCustomerName('');
+      setScopeMenuVisible(false);
+      setEditModalVisible(false);
     }
   }, [visible]);
+
+  const openAdminEdit = () => {
+    if (isRecurringOccurrence) {
+      setScopeMenuVisible(true);
+      return;
+    }
+    setEditScope('ALL');
+    setEditModalVisible(true);
+  };
+
+  const handleScopeSelect = (scopeId) => {
+    setEditScope(scopeId);
+    setScopeMenuVisible(false);
+    setEditModalVisible(true);
+  };
 
   const formatTime = (time) => {
     if (!time) return '';
@@ -100,6 +131,11 @@ const EventDetailModal = ({
             <Text style={styles.title}>
               {isCancelled ? (cancellationReason || 'השיעור בוטל') : (event.title || 'שיעור רישום')}
             </Text>
+            {event.hasOccurrenceOverride ? (
+              <View style={styles.overrideBadge}>
+                <Text style={styles.overrideBadgeText}>שונה לתאריך זה</Text>
+              </View>
+            ) : null}
 
             {/* Event Date */}
             <View style={styles.detailRow}>
@@ -183,17 +219,26 @@ const EventDetailModal = ({
               </TouchableOpacity>
             )}
 
-            {isAdmin && !isCancelled && (
+            {isAdmin && !isPast && (
               <View style={styles.adminActionsContainer}>
                 <TouchableOpacity
-                  style={[styles.reserveSpotButton, adminActionLoading && styles.adminButtonDisabled]}
-                  onPress={() => setManualNameModalVisible(true)}
-                  disabled={adminActionLoading}
+                  style={[styles.editEventButton, adminEditLoading && styles.adminButtonDisabled]}
+                  onPress={openAdminEdit}
+                  disabled={adminEditLoading}
                 >
-                  <Text style={styles.reserveSpotButtonText}>
-                    {adminActionLoading ? 'שומר...' : 'שריון מקום ידני'}
-                  </Text>
+                  <Text style={styles.editEventButtonText}>עריכה</Text>
                 </TouchableOpacity>
+                {!isCancelled && (
+                  <TouchableOpacity
+                    style={[styles.reserveSpotButton, adminActionLoading && styles.adminButtonDisabled]}
+                    onPress={() => setManualNameModalVisible(true)}
+                    disabled={adminActionLoading}
+                  >
+                    <Text style={styles.reserveSpotButtonText}>
+                      {adminActionLoading ? 'שומר...' : 'שריון מקום ידני'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
 
@@ -341,6 +386,45 @@ const EventDetailModal = ({
           </View>
         </View>
       </Modal>
+      <Modal
+        visible={scopeMenuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setScopeMenuVisible(false)}
+      >
+        <View style={styles.inlineModalOverlay}>
+          <View style={styles.inlineModalCard}>
+            <Text style={styles.inlineModalTitle}>איך לערוך?</Text>
+            {EDIT_SCOPE_OPTIONS.map((option) => (
+              <TouchableOpacity
+                key={option.id}
+                style={styles.scopeOptionButton}
+                onPress={() => handleScopeSelect(option.id)}
+              >
+                <Text style={styles.scopeOptionText}>{option.label}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={[styles.inlineModalSecondaryButton, styles.scopeCancelButton]}
+              onPress={() => setScopeMenuVisible(false)}
+            >
+              <Text style={styles.inlineModalSecondaryButtonText}>ביטול</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      <EventEditModal
+        visible={editModalVisible}
+        initialValues={event}
+        loading={adminEditLoading}
+        title={selectedScopeOption.title}
+        onClose={() => setEditModalVisible(false)}
+        onSubmit={(changes) => {
+          if (!changes || Object.keys(changes).length === 0) return;
+          onAdminEdit?.(changes, editScope);
+          setEditModalVisible(false);
+        }}
+      />
     </Modal>
   );
 };
@@ -389,6 +473,24 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
+  },
+  overrideBadge: {
+    alignSelf: 'flex-end',
+    backgroundColor: 'rgba(255, 209, 227, 0.18)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginTop: -18,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 209, 227, 0.35)',
+  },
+  overrideBadgeText: {
+    color: '#FFD1E3',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
   title: {
     fontSize: 28,
@@ -565,6 +667,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  editEventButton: {
+    width: '100%',
+    height: 46,
+    backgroundColor: 'rgba(255, 209, 227, 0.16)',
+    borderRadius: 23,
+    borderWidth: 1.5,
+    borderColor: '#FFD1E3',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editEventButtonText: {
+    color: '#FFD1E3',
+    fontSize: 16,
+    fontWeight: '700',
     textAlign: 'center',
     writingDirection: 'rtl',
   },
@@ -788,6 +907,24 @@ const styles = StyleSheet.create({
     color: '#FFD1E3',
     fontSize: 15,
     fontWeight: '600',
+  },
+  scopeOptionButton: {
+    backgroundColor: 'rgba(255, 209, 227, 0.16)',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    marginTop: 10,
+  },
+  scopeCancelButton: {
+    marginTop: 14,
+    flex: 0,
+  },
+  scopeOptionText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
 });
 

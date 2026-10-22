@@ -109,6 +109,7 @@ export const CREATE_EVENT = gql`
       description
       isRecurring
       recurringIntervalDays
+      recurrenceEndDate
       instructorName
       maxRegistrations
       eventType
@@ -129,6 +130,7 @@ export const UPDATE_EVENT = gql`
       description
       isRecurring
       recurringIntervalDays
+      recurrenceEndDate
       instructorName
       maxRegistrations
       eventType
@@ -225,9 +227,11 @@ export const ADMIN_CANCEL_EVENT_OCCURRENCE = gql`
       id
       eventId
       dateKey
-      reason
+      isCancelled
+      cancellationReason
       cancelledBy
       cancelledAt
+      updatedAt
     }
   }
 `;
@@ -238,9 +242,41 @@ export const ADMIN_REENABLE_EVENT_OCCURRENCE = gql`
       id
       eventId
       dateKey
-      reason
+      isCancelled
+      cancellationReason
       cancelledBy
       cancelledAt
+      updatedAt
+    }
+  }
+`;
+
+export const ADMIN_EDIT_EVENT = gql`
+  mutation AdminEditEvent($input: AdminEditEventInput!) {
+    adminEditEvent(input: $input) {
+      id
+      date
+      startTime
+      duration
+      title
+      description
+      isRecurring
+      recurringIntervalDays
+      recurrenceEndDate
+      instructorName
+      maxRegistrations
+      eventType
+      price
+      isActive
+      isCancelled
+      cancellationReason
+      hasOccurrenceOverride
+      overriddenFields
+      registeredCount
+      availableSpots
+      occurrenceDate
+      isInstance
+      baseEventId
     }
   }
 `;

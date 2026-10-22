@@ -65,6 +65,10 @@ export const resolvers = {
     ...eventResolvers.Event,
   },
 
+  EventOccurrenceOverride: {
+    ...eventResolvers.EventOccurrenceOverride,
+  },
+
   Transaction: {
     ...transactionResolvers.Transaction,
   },

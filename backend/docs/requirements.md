@@ -116,7 +116,7 @@ StudioBuda ArtHub is a user-friendly web platform backend for seamless registrat
 }
 ```
 
-### EventCancellations Collection
+### EventOccurrenceOverrides Collection
 
 ```javascript
 {
@@ -124,11 +124,22 @@ StudioBuda ArtHub is a user-friendly web platform backend for seamless registrat
   // `${eventId}_${dateKey}`
   id: string (doc id),
   eventId: string,      // baseEventId for recurring occurrences (or the one-time event id)
-  dateKey: string,      // YYYY-MM-DD (UTC) for the cancelled occurrence date
-  reason: string,
-  cancelledBy: string, // admin user id
-  cancelledAt: timestamp,
-  isActive: boolean
+  dateKey: string,      // YYYY-MM-DD (UTC)
+  isCancelled: boolean,
+  cancellationReason: string | null,
+  cancelledBy: string | null,
+  cancelledAt: timestamp | null,
+  overrides: {
+    title?: string,
+    description?: string,
+    startTime?: string,
+    duration?: number,
+    instructorName?: string,
+    maxRegistrations?: number,
+  },
+  createdAt: timestamp,
+  updatedAt: timestamp,
+  updatedBy: string | null
 }
 ```
 
@@ -246,9 +257,10 @@ StudioBuda ArtHub is a user-friendly web platform backend for seamless registrat
 - `registerForEvent(input)`: Register authenticated user for an event (creates transaction if needed for paid_workshop)
 - `cancelRegistration(id)`: Cancel event registration
 
-**Event cancellations (Admin only):**
-- `adminCancelEventOccurrence(input)`: Cancel a specific event occurrence (recurring instance) using a reason. Stores an `event_cancellations` override (keyed by `eventId + dateKey`), cancels existing confirmed registrations for that occurrence, and refunds subscription/punch-card entries.
-- `adminReenableEventOccurrence(input)`: Re-enable a previously cancelled occurrence. Disables the cancellation override and clears any confirmed registrations for that occurrence (so users must re-register).
+**Event cancellations / occurrence edits (Admin only):**
+- `adminCancelEventOccurrence(input)`: Cancel a specific event occurrence using a reason. Stores an `event_occurrence_overrides` doc (keyed by `eventId + dateKey`) with `isCancelled: true`, cancels existing confirmed registrations for that occurrence, and refunds subscription/punch-card entries.
+- `adminReenableEventOccurrence(input)`: Re-enable a previously cancelled occurrence. Sets `isCancelled: false` on the override (field overrides are kept) and clears any confirmed registrations for that occurrence (so users must re-register).
+- `adminEditEvent(input)`: Edit a class with scope `THIS_OCCURRENCE` (write field overrides), `THIS_AND_FUTURE` (end the old series the day before and create a new recurring event from that date, migrating future registrations/counts/overrides), or `ALL` (update the existing event document).
 
 **Transactions:**
 - `createTransaction(input)`: Create transaction record with full data (type, amount, monthlyEntries, totalEntries, invoiceId, etc.)

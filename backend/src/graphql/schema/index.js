@@ -122,6 +122,7 @@ export const typeDefs = gql`
     createEvent(input: CreateEventInput!): Event!
     updateEvent(id: ID!, input: UpdateEventInput!): Event!
     deleteEvent(id: ID!): Event!
+    adminEditEvent(input: AdminEditEventInput!): Event!
 
     # Registrations (Authenticated users)
     registerForEvent(input: RegisterForEventInput!): EventRegistration!
@@ -129,8 +130,8 @@ export const typeDefs = gql`
     adminCancelRegistration(id: ID!): EventRegistration!
     adminReserveSpot(input: AdminReserveSpotInput!): EventRegistration!
     adminRemoveReservedSpot(input: AdminRemoveReservedSpotInput!): EventRegistration!
-    adminCancelEventOccurrence(input: AdminCancelEventOccurrenceInput!): EventCancellation!
-    adminReenableEventOccurrence(input: AdminReenableEventOccurrenceInput!): EventCancellation!
+    adminCancelEventOccurrence(input: AdminCancelEventOccurrenceInput!): EventOccurrenceOverride!
+    adminReenableEventOccurrence(input: AdminReenableEventOccurrenceInput!): EventOccurrenceOverride!
 
     # Transactions
     createTransaction(input: CreateTransactionInput!): Transaction!

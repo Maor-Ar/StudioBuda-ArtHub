@@ -34,6 +34,7 @@ Art studio events/classes.
 - `description`: string
 - `isRecurring`: boolean
 - `recurringIntervalDays`: number | null
+- `recurrenceEndDate`: timestamp | null (inclusive; omit/null means the series continues indefinitely)
 - `instructorName`: string
 - `maxRegistrations`: number
 - `eventType`: 'trial' | 'subscription_only' | 'paid_workshop'
@@ -50,7 +51,24 @@ Art studio events/classes.
 - `eventType` (for filtering)
 - `createdBy` (for manager queries)
 
-**Note**: Recurring events are stored as single documents. Instances generated on-the-fly.
+**Note**: Recurring events are stored as single documents. Instances generated on-the-fly. `recurrenceEndDate` stops generation after that date.
+
+### event_occurrence_overrides
+Per-occurrence edits and cancellations for a specific event date. Document id is `{eventId}_{YYYY-MM-DD}`.
+
+**Fields**:
+- `eventId`: string
+- `dateKey`: string (`YYYY-MM-DD`)
+- `isCancelled`: boolean
+- `cancellationReason`: string | null
+- `cancelledBy`: string | null
+- `cancelledAt`: timestamp | null
+- `overrides`: map of optional fields (`title`, `description`, `startTime`, `duration`, `instructorName`, `maxRegistrations`)
+- `createdAt`: timestamp
+- `updatedAt`: timestamp
+- `updatedBy`: string | null
+
+**Note**: The legacy `event_cancellations` collection is kept until the trial site is migrated.
 
 ### payment_sessions (temporary)
 Short-lived metadata for the Hyp Pay checkout flow. **Required** — do not remove in favor of only `transactions`.

@@ -4,7 +4,7 @@ Rules file: `firestore.rules`
 
 These rules allow the public trial website (YaaraArtStudioClassesSite) to:
 
-1. **Read** active `events`, confirmed registrations, cancellations, and `occurrence_counts` (for open-spot filtering)
+1. **Read** active `events`, confirmed registrations, occurrence overrides (and legacy `event_cancellations` until the trial site migrates), and `occurrence_counts` (for open-spot filtering)
 2. **Create** manual reservations in `event_manual_registrations` only when the customer name contains `אוטומטי שיעור נסיון` (must include `dateKey`)
 3. **Create/update** `occurrence_counts` so trial reservations stay in sync with ArtHub capacity checks
    - create: seed/heal a missing counter (`count` 0–50)
