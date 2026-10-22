@@ -9,8 +9,17 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --omit=dev
+# Install dependencies. Cloud Build often hits npm ECONNRESET; retry a few times.
+RUN npm config set fetch-retries 5 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 120000 \
+    && for i in 1 2 3 4 5; do \
+         npm ci --omit=dev && break; \
+         echo "npm ci attempt $i failed, retrying..."; \
+         rm -rf node_modules; \
+         sleep 10; \
+       done \
+    && test -d node_modules
 
 # Stage 2: Production
 FROM node:20-alpine
