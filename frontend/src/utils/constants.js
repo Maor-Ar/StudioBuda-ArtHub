@@ -136,6 +136,12 @@ export const USER_ROLES = {
   ADMIN: 'admin',
 };
 
+// Close registration when an occurrence still has 0 signups this many hours before start
+export const REGISTRATION_AUTO_CLOSE_HOURS_BEFORE = 1;
+export const REGISTRATION_AUTO_CLOSED_LABEL = 'השיעור נסגר להרשמה';
+export const REGISTRATION_AUTO_CLOSED_HELP =
+  'שיעור שלא נרשמו אליו עד שעה לפני תחילתו מתבטל';
+
 // Studio location (profile display + calendar invites)
 export const STUDIO_LOCATION = 'התע״ש 14, כפר סבא. מתחם חאן בבא, קומה ראשונה';
 export const STUDIO_LOCATION_LINES = ['התע״ש 14, כפר סבא', 'מתחם חאן בבא, קומה ראשונה'];

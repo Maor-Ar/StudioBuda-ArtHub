@@ -115,6 +115,12 @@ export const getGraphQLErrorMessage = (error) => {
   if (lowerMessage.includes('full capacity') || lowerMessage.includes('event is at full capacity')) {
     return 'השיעור מלא, אין מקומות פנויים.';
   }
+  if (
+    lowerMessage.includes('registration closed') ||
+    errorMessage.includes('השיעור נסגר להרשמה')
+  ) {
+    return 'השיעור נסגר להרשמה: שיעור שלא נרשמו אליו עד שעה לפני תחילתו מתבטל';
+  }
 
   // Authentication errors
   if (lowerMessage.includes('invalid email') || lowerMessage.includes('invalid password')) {

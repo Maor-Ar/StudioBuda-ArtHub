@@ -1,5 +1,9 @@
 import { Linking, Platform } from 'react-native';
-import { STUDIO_LOCATION, STUDIO_NAME } from './constants';
+import {
+  REGISTRATION_AUTO_CLOSE_HOURS_BEFORE,
+  STUDIO_LOCATION,
+  STUDIO_NAME,
+} from './constants';
 
 const pad = (value) => String(value).padStart(2, '0');
 
@@ -35,6 +39,24 @@ export const getEventDateRange = (event) => {
   end.setMinutes(end.getMinutes() + durationMinutes);
 
   return { start, end };
+};
+
+/**
+ * Auto-close registration when nobody signed up by 1 hour before start.
+ * Prefer the backend flag when present; also recompute locally for live UI.
+ */
+export const isRegistrationClosedForNoSignups = (event, now = Date.now()) => {
+  if (!event || event.isCancelled) return false;
+  if (Number(event.registeredCount || 0) > 0) return false;
+
+  const range = getEventDateRange(event);
+  if (!range?.start) {
+    return event.isRegistrationClosed === true;
+  }
+
+  const closeAt =
+    range.start.getTime() - REGISTRATION_AUTO_CLOSE_HOURS_BEFORE * 60 * 60 * 1000;
+  return now >= closeAt;
 };
 
 const toUtcCompact = (date) =>

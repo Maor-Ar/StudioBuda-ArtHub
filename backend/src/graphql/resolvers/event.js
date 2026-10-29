@@ -3,7 +3,7 @@ import registrationService from '../../services/registrationService.js';
 import occurrenceOverrideService from '../../services/occurrenceOverrideService.js';
 import { requireAdmin, requireManager } from '../middleware/permissions.js';
 import { db } from '../../config/firebase.js';
-import { toUtcDateKey } from '../../utils/helpers.js';
+import { isRegistrationClosedForNoSignups, toUtcDateKey } from '../../utils/helpers.js';
 
 const getOccurrenceKeyFromEvent = (event) => {
   const eventId = event.baseEventId || event.id;
@@ -105,6 +105,16 @@ export const eventResolvers = {
   Event: {
     availableSpots: (event) => {
       if (event.isCancelled) return 0;
+      if (
+        isRegistrationClosedForNoSignups({
+          dateValue: event.occurrenceDate || event.date,
+          startTime: event.startTime,
+          registeredCount: event.registeredCount || 0,
+          isCancelled: event.isCancelled === true,
+        })
+      ) {
+        return 0;
+      }
       const count = event.registeredCount || 0;
       return Math.max(0, (event.maxRegistrations || 0) - count);
     },
@@ -113,6 +123,13 @@ export const eventResolvers = {
     description: (event) => event.description || '',
     isCancelled: (event) => event.isCancelled === true,
     cancellationReason: (event) => event.cancellationReason || null,
+    isRegistrationClosed: (event) =>
+      isRegistrationClosedForNoSignups({
+        dateValue: event.occurrenceDate || event.date,
+        startTime: event.startTime,
+        registeredCount: event.registeredCount || 0,
+        isCancelled: event.isCancelled === true,
+      }),
     hasOccurrenceOverride: (event) => event.hasOccurrenceOverride === true,
     overriddenFields: (event) => event.overriddenFields || [],
     date: (event) => toIsoDate(event.date),

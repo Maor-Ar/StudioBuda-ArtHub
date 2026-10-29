@@ -1,7 +1,17 @@
 import admin, { db } from '../config/firebase.js';
-import { CACHE_TTL, EVENT_TYPES, TRANSACTION_TYPES, REGISTRATION_STATUS } from '../config/constants.js';
+import {
+  CACHE_TTL,
+  EVENT_TYPES,
+  TRANSACTION_TYPES,
+  REGISTRATION_STATUS,
+  REGISTRATION_AUTO_CLOSED_MESSAGE,
+} from '../config/constants.js';
 import { NotFoundError, ConflictError, ValidationError } from '../utils/errors.js';
-import { buildMonthlyEntriesExhaustedMessage, parseEventOccurrenceId } from '../utils/helpers.js';
+import {
+  buildMonthlyEntriesExhaustedMessage,
+  isRegistrationClosedForNoSignups,
+  parseEventOccurrenceId,
+} from '../utils/helpers.js';
 import eventService from './eventService.js';
 import transactionService from './transactionService.js';
 import cacheService from './cacheService.js';
@@ -181,6 +191,9 @@ class RegistrationService {
     eventId,
     dateKey,
     maxRegistrations,
+    startTime = null,
+    occurrenceDate = null,
+    enforceAutoClose = false,
   }) {
     if (!eventId || !dateKey || !Number.isFinite(Number(maxRegistrations))) {
       throw new ValidationError('Invalid capacity reservation parameters', 'eventId');
@@ -198,6 +211,18 @@ class RegistrationService {
       await db.runTransaction(async (transaction) => {
         const snap = await transaction.get(countRef);
         const count = snap.exists ? (snap.data().count || 0) : 0;
+
+        if (
+          enforceAutoClose &&
+          isRegistrationClosedForNoSignups({
+            dateValue: occurrenceDate,
+            startTime,
+            registeredCount: count,
+            isCancelled: false,
+          })
+        ) {
+          throw new ConflictError(REGISTRATION_AUTO_CLOSED_MESSAGE, 'eventId');
+        }
 
         if (count >= max) {
           throw new ConflictError('Event is at full capacity', 'eventId');
@@ -221,6 +246,9 @@ class RegistrationService {
       }
       if (error?.message === 'Event is at full capacity') {
         throw new ConflictError('Event is at full capacity', 'eventId');
+      }
+      if (error?.message === REGISTRATION_AUTO_CLOSED_MESSAGE) {
+        throw new ConflictError(REGISTRATION_AUTO_CLOSED_MESSAGE, 'eventId');
       }
       throw error;
     }
@@ -342,6 +370,19 @@ class RegistrationService {
 
     // Block registration after occurrence end time has passed.
     this.ensureEventHasNotEnded(eventDate, resolvedEvent);
+
+    // Auto-close: no signups by 1 hour before start → class is closed for registration.
+    const registeredCount = await this.getOccurrenceCount(actualEventId, dateKey);
+    if (
+      isRegistrationClosedForNoSignups({
+        dateValue: eventDate,
+        startTime: resolvedEvent.startTime,
+        registeredCount,
+        isCancelled: false,
+      })
+    ) {
+      throw new ConflictError(REGISTRATION_AUTO_CLOSED_MESSAGE, 'eventId');
+    }
 
     // Fast-fail capacity check (authoritative reserve happens just before write).
     if (!(await eventService.checkEventCapacity(actualEventId, eventDate))) {
@@ -473,6 +514,9 @@ class RegistrationService {
       eventId: actualEventId,
       dateKey,
       maxRegistrations: resolvedEvent.maxRegistrations,
+      startTime: resolvedEvent.startTime,
+      occurrenceDate: eventDateObj,
+      enforceAutoClose: true,
     });
 
     // Note: registeredCount is now calculated on-the-fly from registrations

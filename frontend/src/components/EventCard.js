@@ -2,6 +2,11 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import UserHeadIcon from '../assets/icons/user-head.svg';
 import UsersFourIcon from '../assets/icons/users-four.svg';
+import TooltipIcon from './admin-dashboard/TooltipIcon';
+import {
+  REGISTRATION_AUTO_CLOSED_HELP,
+  REGISTRATION_AUTO_CLOSED_LABEL,
+} from '../utils/constants';
 
 const EventCard = ({
   event,
@@ -15,6 +20,7 @@ const EventCard = ({
   showDate = false,
   isPast = false,
   isCancelled = false,
+  isRegistrationClosed = false,
   cancellationReason = null,
 }) => {
   const formatTime = (time) => {
@@ -45,8 +51,9 @@ const EventCard = ({
   };
 
   const isCardCancelled = event?.isCancelled ?? isCancelled;
+  const isCardRegistrationClosed = !isCardCancelled && !isPast && isRegistrationClosed;
   const cardCancellationReason = event?.cancellationReason ?? cancellationReason;
-  const showRegisteredActions = !isCardCancelled && !isPast && isRegistered;
+  const showRegisteredActions = !isCardCancelled && !isPast && !isCardRegistrationClosed && isRegistered;
   const showCalendarButton = showRegisteredActions && typeof onAddToCalendar === 'function';
 
   return (
@@ -54,6 +61,7 @@ const EventCard = ({
       style={[
         styles.card,
         isCardCancelled && styles.cardCancelled,
+        isCardRegistrationClosed && styles.cardRegistrationClosed,
         showCalendarButton && styles.cardWithCalendar,
       ]} 
       onPress={onPress}
@@ -90,7 +98,7 @@ const EventCard = ({
         </View>
       </View>
 
-      {/* Button States: Past, Cancel, Full, or Register */}
+      {/* Button States: Cancelled, Past, Closed, Registered, Full, or Register */}
       {isCardCancelled ? (
         <View style={styles.cancelledButton}>
           <Text style={styles.cancelledButtonText}>השיעור בוטל</Text>
@@ -98,6 +106,16 @@ const EventCard = ({
       ) : isPast ? (
         <View style={styles.pastButton}>
           <Text style={styles.pastButtonText}>הרשמה סגורה</Text>
+        </View>
+      ) : isCardRegistrationClosed ? (
+        <View style={styles.closedButton}>
+          <Text style={styles.closedButtonText}>{REGISTRATION_AUTO_CLOSED_LABEL}</Text>
+          <TooltipIcon
+            label="?"
+            text={REGISTRATION_AUTO_CLOSED_HELP}
+            color="#FFFFFF"
+            maxWidth={260}
+          />
         </View>
       ) : isRegistered ? (
         <View style={styles.registeredActions}>
@@ -164,6 +182,28 @@ const styles = StyleSheet.create({
   cardCancelled: {
     backgroundColor: '#D9D9D9',
     opacity: 0.7,
+  },
+  cardRegistrationClosed: {
+    opacity: 0.85,
+  },
+  closedButton: {
+    position: 'absolute',
+    bottom: 15,
+    left: 15,
+    right: 15,
+    minHeight: 31,
+    paddingHorizontal: 12,
+    backgroundColor: '#B0A0B8',
+    borderRadius: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
+  closedButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   leftSection: {
     width: '45%',

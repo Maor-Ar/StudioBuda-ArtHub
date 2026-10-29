@@ -4,6 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { useAuth } from '../context/AuthContext';
 import AuthNavigator from './AuthNavigator';
 import TabNavigator from './TabNavigator';
+import SandboxRegistrationClosedScreen from '../screens/sandbox/SandboxRegistrationClosedScreen';
 
 const Stack = createStackNavigator();
 
@@ -28,6 +29,12 @@ const AppNavigator = () => {
       ) : (
         <Stack.Screen name="Auth" component={AuthNavigator} />
       )}
+      {/* Direct-URL only mock preview — never linked from app navigation */}
+      <Stack.Screen
+        name="SandboxRegistrationClosed"
+        component={SandboxRegistrationClosedScreen}
+        options={{ gestureEnabled: false }}
+      />
     </Stack.Navigator>
   );
 };

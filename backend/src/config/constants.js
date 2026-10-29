@@ -46,6 +46,12 @@ export const CACHE_TTL = {
 // Date range limits
 export const MAX_EVENT_DATE_RANGE_DAYS = 31; // Max 1 month
 
+// Close registration automatically when an occurrence still has 0 signups
+// this many hours before start time.
+export const REGISTRATION_AUTO_CLOSE_HOURS_BEFORE = 1;
+export const REGISTRATION_AUTO_CLOSED_MESSAGE =
+  'השיעור נסגר להרשמה: שיעור שלא נרשמו אליו עד שעה לפני תחילתו מתבטל';
+
 // Error codes
 export const ERROR_CODES = {
   AUTHENTICATION_ERROR: 'AUTHENTICATION_ERROR',

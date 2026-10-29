@@ -5,6 +5,11 @@ import UsersFourIcon from '../assets/icons/users-four.svg';
 import LeftArrow from '../assets/icons/LeftArrow.svg';
 import { useShouldShowLocalLoader } from '../context/LoadingContext';
 import EventEditModal from './EventEditModal';
+import TooltipIcon from './admin-dashboard/TooltipIcon';
+import {
+  REGISTRATION_AUTO_CLOSED_HELP,
+  REGISTRATION_AUTO_CLOSED_LABEL,
+} from '../utils/constants';
 
 const EDIT_SCOPE_OPTIONS = [
   { id: 'THIS_OCCURRENCE', label: 'ערוך את התאריך הזה בלבד', title: 'עריכת תאריך זה' },
@@ -31,6 +36,7 @@ const EventDetailModal = ({
   onRemoveRegistration,
   removingRegistrationId = null,
   isCancelled = false,
+  isRegistrationClosed = false,
   cancellationReason = null,
   onAdminCancelOccurrence,
   adminCancelLoading = false,
@@ -177,7 +183,7 @@ const EventDetailModal = ({
               </View>
             )}
 
-            {/* Button States: Past, Cancel, Full, or Register */}
+            {/* Button States: Cancelled, Past, Closed, Registered, Full, or Register */}
             {isCancelled ? (
               <View style={styles.cancelledButton}>
                 <Text style={styles.cancelledButtonText}>הרשמה בוטלה</Text>
@@ -185,6 +191,16 @@ const EventDetailModal = ({
             ) : isPast ? (
               <View style={styles.pastButton}>
                 <Text style={styles.pastButtonText}>הרשמה סגורה</Text>
+              </View>
+            ) : isRegistrationClosed ? (
+              <View style={styles.closedButton}>
+                <Text style={styles.closedButtonText}>{REGISTRATION_AUTO_CLOSED_LABEL}</Text>
+                <TooltipIcon
+                  label="?"
+                  text={REGISTRATION_AUTO_CLOSED_HELP}
+                  color="#FFFFFF"
+                  maxWidth={280}
+                />
               </View>
             ) : isRegistered ? (
               <>
@@ -643,6 +659,25 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   pastButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  closedButton: {
+    width: '100%',
+    minHeight: 50,
+    paddingHorizontal: 16,
+    backgroundColor: '#B0A0B8',
+    borderRadius: 25,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 20,
+  },
+  closedButtonText: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',

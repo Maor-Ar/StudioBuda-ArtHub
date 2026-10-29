@@ -48,6 +48,7 @@ export const eventTypeDefs = gql`
     isActive: Boolean!
     isCancelled: Boolean!
     cancellationReason: String
+    isRegistrationClosed: Boolean!
     hasOccurrenceOverride: Boolean!
     overriddenFields: [String!]!
     registeredCount: Int!

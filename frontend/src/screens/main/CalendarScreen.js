@@ -22,6 +22,7 @@ import { getGraphQLErrorMessage } from '../../utils/errorMessages';
 import { useAuth } from '../../context/AuthContext';
 import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 import { USER_ROLES } from '../../utils/constants';
+import { isRegistrationClosedForNoSignups } from '../../utils/calendarEvent';
 import LeftArrow from '../../assets/icons/LeftArrow.svg';
 import RightArrow from '../../assets/icons/RightArrow.svg';
 
@@ -958,7 +959,8 @@ const CalendarScreen = () => {
                   const isRegistered = !!registration;
                   const isFull = event.availableSpots === 0;
                   const isPastEvent = hasEventEnded(event);
-                  
+                  const isRegistrationClosed = isRegistrationClosedForNoSignups(event);
+
                   return (
                     <EventCard
                       key={event.id}
@@ -969,8 +971,9 @@ const CalendarScreen = () => {
                       onPress={() => handleEventPress(event)}
                       isRegistered={isRegistered}
                       isFull={isFull}
-                      disabled={registering || cancelling || event.isCancelled}
+                      disabled={registering || cancelling || event.isCancelled || isRegistrationClosed}
                       isPast={isPastEvent}
+                      isRegistrationClosed={isRegistrationClosed}
                     />
                   );
                 })
@@ -985,6 +988,7 @@ const CalendarScreen = () => {
         {/* Event Detail Modal */}
         {selectedEvent && (() => {
           const isPastModal = hasEventEnded(selectedEvent);
+          const isRegistrationClosedModal = isRegistrationClosedForNoSignups(selectedEvent);
           return (
             <EventDetailModal
               event={selectedEvent}
@@ -1003,10 +1007,11 @@ const CalendarScreen = () => {
               }
               isRegistered={!!selectedEventRegistration}
               isFull={selectedEvent.availableSpots === 0}
-              disabled={registering || cancelling || selectedEvent?.isCancelled}
+              disabled={registering || cancelling || selectedEvent?.isCancelled || isRegistrationClosedModal}
               isPast={isPastModal}
               isAdmin={isAdmin}
               isCancelled={selectedEvent?.isCancelled ?? false}
+              isRegistrationClosed={isRegistrationClosedModal}
               cancellationReason={selectedEvent?.cancellationReason ?? null}
               onReserveSpot={
                 selectedEvent?.isCancelled

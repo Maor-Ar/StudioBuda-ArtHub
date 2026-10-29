@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Sandbox · השיעור נסגר להרשמה | ArtHub</title>
+  <style>
+    :root {
+      --purple-bg: #5D3587;
+      --purple-dark: #4E0D66;
+      --purple-mid: #AB5FBD;
+      --pink: #FFD1E3;
+      --muted: #B0A0B8;
+      --card: #FFD1E3;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--purple-bg);
+      font-family: Miriam Libre, Segoe UI, Tahoma, Arial, sans-serif;
+      color: #fff;
+    }
+    body {
+      max-width: 430px;
+      margin: 0 auto;
+      padding: 12px 0 40px;
+    }
+    .banner {
+      margin: 8px 16px 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(255, 209, 227, 0.92);
+      border: 1px solid rgba(78, 13, 102, 0.18);
+      color: var(--purple-dark);
+    }
+    .banner-eye {
+      color: var(--purple-mid);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      margin-bottom: 4px;
+    }
+    .banner h1 {
+      margin: 0;
+      font-size: 18px;
+    }
+    .banner p {
+      margin: 4px 0 0;
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--purple-bg);
+    }
+    .header {
+      background: var(--pink);
+      padding: 10px 20px;
+      text-align: center;
+      color: var(--purple-dark);
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 28px;
+      padding: 14px 0 8px;
+    }
+    .tab {
+      color: rgba(255, 209, 227, 0.7);
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .tab.active {
+      color: var(--pink);
+      border-bottom: 3px solid var(--pink);
+      padding-bottom: 4px;
+    }
+    .week {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 18px 16px;
+    }
+    .day {
+      width: 40px;
+      text-align: center;
+    }
+    .day-label {
+      font-size: 13px;
+      color: rgba(255, 209, 227, 0.75);
+      margin-bottom: 6px;
+    }
+    .day-num {
+      width: 34px;
+      height: 34px;
+      margin: 0 auto;
+      border-radius: 17px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--pink);
+      font-weight: 600;
+    }
+    .day.selected .day-label { color: var(--pink); font-weight: 700; }
+    .day.selected .day-num {
+      background: var(--pink);
+      color: var(--purple-dark);
+    }
+    .content { padding: 0 16px; }
+    .hint {
+      text-align: right;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--pink);
+      margin-bottom: 4px;
+    }
+    .subhint {
+      text-align: right;
+      font-size: 13px;
+      color: rgba(255, 209, 227, 0.8);
+      margin-bottom: 14px;
+    }
+    .card {
+      position: relative;
+      background: var(--card);
+      border-radius: 20px;
+      padding: 15px 15px 55px;
+      min-height: 106px;
+      display: flex;
+      box-shadow: 0 4px 4px rgba(78, 13, 102, 0.25);
+      opacity: 0.85;
+      cursor: pointer;
+    }
+    .left, .right { width: 50%; }
+    .left { padding-left: 10px; }
+    .right {
+      text-align: right;
+      padding-right: 10px;
+    }
+    .meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--purple-mid);
+      font-size: 16px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+    .title {
+      color: var(--purple-dark);
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      text-shadow: 0 4px 4px rgba(0,0,0,0.25);
+    }
+    .time {
+      color: var(--purple-dark);
+      font-size: 16px;
+    }
+    .closed-btn {
+      position: absolute;
+      left: 15px;
+      right: 15px;
+      bottom: 15px;
+      min-height: 31px;
+      border-radius: 20px;
+      background: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 0 12px;
+    }
+    .q {
+      width: 22px;
+      height: 22px;
+      border-radius: 11px;
+      border: 1px solid rgba(255,255,255,0.55);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      background: transparent;
+      color: #fff;
+      position: relative;
+    }
+    .tooltip {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 10px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: 240px;
+      background: #3D225F;
+      border: 1px solid rgba(255, 209, 227, 0.35);
+      border-radius: 10px;
+      padding: 8px 10px;
+      color: #FFE2ED;
+      font-size: 12px;
+      line-height: 18px;
+      text-align: right;
+      z-index: 5;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    }
+    .q:hover .tooltip,
+    .q:focus .tooltip,
+    .q.open .tooltip { display: block; }
+    .open-modal {
+      margin-top: 12px;
+      width: 100%;
+      border-radius: 999px;
+      border: 1.5px solid var(--pink);
+      background: rgba(255, 209, 227, 0.18);
+      color: var(--pink);
+      font-size: 15px;
+      font-weight: 700;
+      padding: 12px;
+      cursor: pointer;
+    }
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(26, 15, 46, 0.72);
+      align-items: flex-end;
+      justify-content: center;
+      z-index: 20;
+      padding: 16px;
+    }
+    .overlay.open { display: flex; }
+    .modal {
+      width: min(430px, 100%);
+      background: #fff;
+      border-radius: 24px 24px 16px 16px;
+      padding: 18px 18px 24px;
+      color: var(--purple-dark);
+      max-height: 90vh;
+      overflow: auto;
+    }
+    .back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--purple-dark);
+      font-weight: 600;
+      background: none;
+      border: 0;
+      cursor: pointer;
+      margin-bottom: 12px;
+      font-size: 15px;
+    }
+    .modal h2 {
+      margin: 0 0 16px;
+      text-align: right;
+      font-size: 24px;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(78, 13, 102, 0.08);
+      font-size: 15px;
+    }
+    .row .label { color: var(--purple-bg); font-weight: 500; }
+    .row .value { font-weight: 700; }
+    .desc {
+      margin-top: 14px;
+      text-align: right;
+      color: #333;
+      line-height: 1.5;
+    }
+    .modal-closed {
+      margin-top: 20px;
+      min-height: 50px;
+      border-radius: 25px;
+      background: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: #fff;
+      font-size: 18px;
+      font-weight: 600;
+      padding: 0 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <div class="banner-eye">SANDBOX · MOCK ONLY</div>
+    <h1>תצוגת שיעור שנסגר להרשמה</h1>
+    <p>דף זה לא מחובר ליומן האמיתי ולא משנה נתונים. כניסה רק דרך כתובת ישירה.</p>
+  </div>
+
+  <div class="header">סטודיו בודה</div>
+
+  <div class="tabs">
+    <div class="tab">הרישומים שלי</div>
+    <div class="tab active">יומן</div>
+  </div>
+
+  <div class="week" id="week"></div>
+
+  <div class="content">
+    <div class="hint">מצב מדומה: 0 נרשמות, פחות משעה לתחילה → השיעור נסגר להרשמה</div>
+    <div class="subhint">שיעור שלא נרשמו אליו עד שעה לפני תחילתו מתבטל</div>
+
+    <div class="card" id="card" role="button" tabindex="0">
+      <div class="left">
+        <div class="meta">👤 יערה בודה</div>
+        <div class="meta">👥 0/8</div>
+      </div>
+      <div class="right">
+        <div class="title">ציור בשמן - מתחילות</div>
+        <div class="time" id="timeRange">18:00 - 19:30</div>
+      </div>
+      <div class="closed-btn">
+        <span>השיעור נסגר להרשמה</span>
+        <button class="q" type="button" aria-label="הסבר" onclick="event.stopPropagation(); this.classList.toggle('open')">
+          ?
+          <span class="tooltip">שיעור שלא נרשמו אליו עד שעה לפני תחילתו מתבטל</span>
+        </button>
+      </div>
+    </div>
+
+    <button class="open-modal" type="button" id="openModal">פתח את חלון הפרטים</button>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="modal" role="dialog" aria-modal="true">
+      <button class="back" type="button" id="closeModal">← חזרה</button>
+      <h2>ציור בשמן - מתחילות</h2>
+      <div class="row"><span class="value" id="modalDate">היום</span><span class="label">תאריך:</span></div>
+      <div class="row"><span class="value" id="modalTime">18:00 - 19:30</span><span class="label">שעה:</span></div>
+      <div class="row"><span class="value">יערה בודה</span><span class="label">מדריכה</span></div>
+      <div class="row"><span class="value">0 מתוך 8 משתתפים</span><span class="label">משתתפים</span></div>
+      <div class="desc">שיעור דמו לסימולציה בלבד. אין שינוי בנתונים אמיתיים.</div>
+      <div class="modal-closed">
+        <span>השיעור נסגר להרשמה</span>
+        <button class="q" type="button" aria-label="הסבר" onclick="this.classList.toggle('open')">
+          ?
+          <span class="tooltip">שיעור שלא נרשמו אליו עד שעה לפני תחילתו מתבטל</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const days = ["א'", "ב'", "ג'", "ד'", "ה'", "ו'", "ש'"];
+    const now = new Date();
+    const start = new Date(now.getTime() + 30 * 60 * 1000);
+    const end = new Date(start.getTime() + 90 * 60 * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    const range = `${pad(start.getHours())}:${pad(start.getMinutes())} - ${pad(end.getHours())}:${pad(end.getMinutes())}`;
+    document.getElementById('timeRange').textContent = range;
+    document.getElementById('modalTime').textContent = range;
+    document.getElementById('modalDate').textContent = start.toLocaleDateString('he-IL', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    const week = document.getElementById('week');
+    const selected = new Date(start);
+    selected.setHours(0,0,0,0);
+    const sunday = new Date(selected);
+    sunday.setDate(selected.getDate() - selected.getDay());
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(sunday);
+      d.setDate(sunday.getDate() + i);
+      const el = document.createElement('div');
+      el.className = 'day' + (d.toDateString() === selected.toDateString() ? ' selected' : '');
+      el.innerHTML = `<div class="day-label">${days[i]}</div><div class="day-num">${d.getDate()}</div>`;
+      week.appendChild(el);
+    }
+
+    const overlay = document.getElementById('overlay');
+    const open = () => overlay.classList.add('open');
+    const close = () => overlay.classList.remove('open');
+    document.getElementById('card').addEventListener('click', open);
+    document.getElementById('openModal').addEventListener('click', open);
+    document.getElementById('closeModal').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  </script>
+</body>
+</html>

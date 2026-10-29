@@ -270,6 +270,7 @@ export const ADMIN_EDIT_EVENT = gql`
       isActive
       isCancelled
       cancellationReason
+      isRegistrationClosed
       hasOccurrenceOverride
       overriddenFields
       registeredCount

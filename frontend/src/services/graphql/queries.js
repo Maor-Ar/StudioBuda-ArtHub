@@ -38,6 +38,7 @@ export const GET_EVENTS = gql`
       isActive
       isCancelled
       cancellationReason
+      isRegistrationClosed
       hasOccurrenceOverride
       overriddenFields
       registeredCount
@@ -68,6 +69,7 @@ export const GET_EVENT = gql`
       isActive
       isCancelled
       cancellationReason
+      isRegistrationClosed
       hasOccurrenceOverride
       overriddenFields
       registeredCount
@@ -105,6 +107,7 @@ export const GET_MY_REGISTRATIONS = gql`
         availableSpots
         isCancelled
         cancellationReason
+        isRegistrationClosed
         hasOccurrenceOverride
         overriddenFields
         recurrenceEndDate

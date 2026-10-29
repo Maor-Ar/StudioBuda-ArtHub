@@ -1,4 +1,7 @@
-import { MAX_EVENT_DATE_RANGE_DAYS } from '../config/constants.js';
+import {
+  MAX_EVENT_DATE_RANGE_DAYS,
+  REGISTRATION_AUTO_CLOSE_HOURS_BEFORE,
+} from '../config/constants.js';
 import { randomBytes } from 'crypto';
 
 export const toUtcDateKey = (dateValue) => {
@@ -245,6 +248,50 @@ export const buildMonthlyEntriesExhaustedMessage = (subscriptions = []) => {
   }
 
   return 'נגמרו לך הכניסות החודש';
+};
+
+/**
+ * Local start DateTime for an occurrence (same convention as registrationService).
+ */
+export const getEventStartDateTime = (dateValue, startTime) => {
+  if (!dateValue) return null;
+  const eventDate = dateValue?.toDate ? dateValue.toDate() : new Date(dateValue);
+  if (Number.isNaN(eventDate.getTime())) return null;
+
+  const [hours = 0, minutes = 0] = String(startTime || '00:00')
+    .split(':')
+    .map((part) => parseInt(part, 10));
+
+  const startDateTime = new Date(eventDate);
+  startDateTime.setHours(
+    Number.isFinite(hours) ? hours : 0,
+    Number.isFinite(minutes) ? minutes : 0,
+    0,
+    0
+  );
+  return startDateTime;
+};
+
+/**
+ * True when an occurrence still has 0 registrations and we are within
+ * REGISTRATION_AUTO_CLOSE_HOURS_BEFORE of (or past) the start time.
+ */
+export const isRegistrationClosedForNoSignups = ({
+  dateValue,
+  startTime,
+  registeredCount = 0,
+  isCancelled = false,
+  now = Date.now(),
+  hoursBefore = REGISTRATION_AUTO_CLOSE_HOURS_BEFORE,
+} = {}) => {
+  if (isCancelled) return false;
+  if (Number(registeredCount) > 0) return false;
+
+  const startDateTime = getEventStartDateTime(dateValue, startTime);
+  if (!startDateTime) return false;
+
+  const closeAt = startDateTime.getTime() - Number(hoursBefore) * 60 * 60 * 1000;
+  return now >= closeAt;
 };
 
 /**

@@ -64,10 +64,23 @@ function RootNavigation() {
     if (!navReady || isLoading) return;
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
     if (deepLinkAppliedRef.current) return;
-    if (isAuthenticated) return;
     if (!navigationRef.isReady()) return;
 
     const path = (window.location.pathname || '').replace(/\/$/, '') || '/';
+
+    // Direct-URL sandbox preview (not linked from any in-app navigation).
+    if (path.includes('sandbox/registration-closed')) {
+      deepLinkAppliedRef.current = true;
+      navigationRef.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'SandboxRegistrationClosed' }],
+        })
+      );
+      return;
+    }
+
+    if (isAuthenticated) return;
     if (!path.includes('reset-password')) return;
 
     const sp = new URLSearchParams(window.location.search);
