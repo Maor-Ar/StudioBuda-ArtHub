@@ -25,6 +25,7 @@ export const TRANSACTION_TYPES = {
   SUBSCRIPTION: 'subscription',
   PUNCH_CARD: 'punch_card',
   TRIAL_LESSON: 'trial_lesson',
+  RESERVED_SUBSCRIPTION: 'reserved_subscription',
 };
 
 // Registration status

@@ -16,6 +16,7 @@ import {
   validateDateRange,
 } from '../utils/helpers.js';
 import { sanitizeOverridePatch, validateOverridePatch } from '../utils/occurrenceOverrides.js';
+import { occupiedSeatCount, reservedRegularIds } from '../utils/reservedRegulars.js';
 import cacheService from './cacheService.js';
 import occurrenceOverrideService from './occurrenceOverrideService.js';
 
@@ -102,6 +103,7 @@ class EventService {
       isActive: true,
       // Note: registeredCount is calculated on-the-fly from registrations
       registeredUsers: [],
+      reservedRegularUserIds: [],
       createdAt: new Date(),
       updatedAt: new Date(),
       createdBy: managerId,
@@ -284,8 +286,9 @@ class EventService {
 
     const registrationService = (await import('./registrationService.js')).default;
     const count = await registrationService.getOccurrenceCount(actualEventId, dateKey);
+    const occupied = occupiedSeatCount(count, event);
 
-    return count < resolvedEvent.maxRegistrations;
+    return occupied < resolvedEvent.maxRegistrations;
   }
 
   async resolveOccurrence(eventId) {
@@ -342,6 +345,7 @@ class EventService {
     const previousDateKey = subtractOneUtcDayKey(splitDateKey);
     const previousDate = new Date(`${previousDateKey}T00:00:00.000Z`);
 
+    const regulars = reservedRegularIds(event);
     const newEventDoc = {
       date: splitDate,
       startTime: patch.startTime ?? event.startTime,
@@ -356,6 +360,7 @@ class EventService {
       price: event.price ?? null,
       isActive: true,
       registeredUsers: [],
+      reservedRegularUserIds: regulars,
       createdAt: new Date(),
       updatedAt: new Date(),
       createdBy: adminId,
@@ -367,6 +372,7 @@ class EventService {
 
     await db.collection('events').doc(event.id).update({
       recurrenceEndDate: previousDate,
+      reservedRegularUserIds: [],
       updatedAt: new Date(),
     });
 
@@ -380,6 +386,9 @@ class EventService {
       ...overrideOps,
       ...registrationMigration.operations,
     ]);
+
+    const reservedRegularService = (await import('./reservedRegularService.js')).default;
+    await reservedRegularService.moveHoldersToSeries(event.id, newRef.id, regulars);
 
     await cacheService.delPattern('events:*');
     await cacheService.del(cacheService.getEventKey(event.id));

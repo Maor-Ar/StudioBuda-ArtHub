@@ -337,8 +337,8 @@ export const CANCEL_SUBSCRIPTION = gql`
 
 // Payment Mutations
 export const CREATE_PAYMENT_SESSION = gql`
-  mutation CreatePaymentSession($productId: String!) {
-    createPaymentSession(productId: $productId) {
+  mutation CreatePaymentSession($productId: String!, $reservedEventId: ID) {
+    createPaymentSession(productId: $productId, reservedEventId: $reservedEventId) {
       sessionId
       sessionUrl
       uniqueId
@@ -409,6 +409,18 @@ export const ADMIN_UPDATE_USER = gql`
       createdAt
       updatedAt
     }
+  }
+`;
+
+export const ADMIN_REMOVE_RESERVED_REGULAR = gql`
+  mutation AdminRemoveReservedRegular($eventId: ID!, $userId: ID!) {
+    adminRemoveReservedRegular(eventId: $eventId, userId: $userId)
+  }
+`;
+
+export const ADMIN_ADD_RESERVED_REGULAR = gql`
+  mutation AdminAddReservedRegular($eventId: ID!, $userId: ID!) {
+    adminAddReservedRegular(eventId: $eventId, userId: $userId)
   }
 `;
 

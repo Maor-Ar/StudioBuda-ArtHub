@@ -19,7 +19,12 @@ import { resolve as resolvePath, isAbsolute } from 'path';
 import { google } from 'googleapis';
 import { loadGmailOAuthClientJson } from '../src/config/gmailFromEnv.js';
 
-const SCOPE = 'https://www.googleapis.com/auth/gmail.send';
+// Include readonly so the daily Grow email sync can read payment receipts.
+// Password-reset sending still uses gmail.send.
+const SCOPE = [
+  'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/gmail.readonly',
+];
 
 function loadClientJson() {
   const fromEnv = loadGmailOAuthClientJson();
@@ -81,7 +86,7 @@ async function main() {
   const oauth2 = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
   const authUrl = oauth2.generateAuthUrl({
     access_type: 'offline',
-    scope: [SCOPE],
+    scope: SCOPE,
     prompt: 'consent',
   });
 

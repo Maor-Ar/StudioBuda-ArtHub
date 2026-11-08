@@ -1,6 +1,8 @@
 import transactionService from '../../services/transactionService.js';
+import eventService from '../../services/eventService.js';
 import { requireManager, requireAuthenticated } from '../middleware/permissions.js';
 import { AuthorizationError, NotFoundError } from '../../utils/errors.js';
+import { accessEndsDateFromTransaction } from '../../utils/reservedRegulars.js';
 
 export const transactionResolvers = {
   Query: {
@@ -86,38 +88,25 @@ export const transactionResolvers = {
     hypTransactionId: (transaction) => transaction.hypTransactionId ?? null,
     hypHkId: (transaction) => transaction.hypHkId ?? null,
     hypOrderId: (transaction) => transaction.hypOrderId ?? null,
-    accessEndsDate: (transaction) => {
-      // Only applicable to subscriptions
-      if (transaction.transactionType !== 'subscription') {
-        return null;
+    reservedEventId: (transaction) => transaction.reservedEventId ?? null,
+    reservationReleaseAt: (transaction) => {
+      if (!transaction.reservationReleaseAt) return null;
+      if (transaction.reservationReleaseAt?.toDate) {
+        return transaction.reservationReleaseAt.toDate().toISOString();
       }
-
-      // Use lastRenewalDate (start of current billing period); fallback to lastPaymentDate or purchaseDate
-      let periodStart;
-      if (transaction.lastRenewalDate?.toDate) {
-        periodStart = transaction.lastRenewalDate.toDate();
-      } else if (transaction.lastRenewalDate) {
-        periodStart = new Date(transaction.lastRenewalDate);
-      } else if (transaction.lastPaymentDate?.toDate) {
-        periodStart = transaction.lastPaymentDate.toDate();
-      } else if (transaction.lastPaymentDate) {
-        periodStart = new Date(transaction.lastPaymentDate);
-      } else {
-        periodStart = transaction.purchaseDate?.toDate
-          ? transaction.purchaseDate.toDate()
-          : new Date(transaction.purchaseDate);
-      }
-
-      if (!periodStart || isNaN(periodStart.getTime())) {
-        return null;
-      }
-
-      // Access ends one month after the start of the current period
-      const accessEndsDate = new Date(periodStart);
-      accessEndsDate.setMonth(accessEndsDate.getMonth() + 1);
-
-      return accessEndsDate.toISOString();
+      return new Date(transaction.reservationReleaseAt).toISOString();
     },
+    reservedEventTitle: async (transaction) => {
+      if (!transaction.reservedEventId) return null;
+      try {
+        const event = await eventService.getEvent(transaction.reservedEventId);
+        return event?.title || null;
+      } catch (error) {
+        if (error instanceof NotFoundError) return null;
+        return null;
+      }
+    },
+    accessEndsDate: (transaction) => accessEndsDateFromTransaction(transaction),
     createdAt: (transaction) => {
       if (transaction.createdAt?.toDate) {
         return transaction.createdAt.toDate().toISOString();

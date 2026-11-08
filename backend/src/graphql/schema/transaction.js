@@ -29,6 +29,9 @@ export const transactionTypeDefs = gql`
     accessEndsDate: String
     paymentSource: String
     adminNote: String
+    reservedEventId: String
+    reservedEventTitle: String
+    reservationReleaseAt: String
   }
 
   input CreateTransactionInput {
@@ -55,6 +58,7 @@ export const transactionTypeDefs = gql`
     amount: Float
     purchaseDate: String
     adminNote: String
+    reservedEventId: ID
   }
 `;
 

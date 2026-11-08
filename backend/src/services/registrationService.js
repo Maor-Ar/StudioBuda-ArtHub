@@ -16,6 +16,7 @@ import eventService from './eventService.js';
 import transactionService from './transactionService.js';
 import cacheService from './cacheService.js';
 import occurrenceOverrideService from './occurrenceOverrideService.js';
+import { evaluateDropInCapacity, reservedRegularIds } from '../utils/reservedRegulars.js';
 
 const DUMMY_USER_ID = 'DummyUser';
 const DUMMY_TRANSACTION_ID = 'DUMMY_RESERVATION';
@@ -207,24 +208,32 @@ class RegistrationService {
       .doc(this.getOccurrenceCountDocId(eventId, dateKey));
     const registrationRef = db.collection(collectionName).doc();
 
+    const eventRef = db.collection('events').doc(eventId);
+
     try {
       await db.runTransaction(async (transaction) => {
         const snap = await transaction.get(countRef);
+        const eventSnap = await transaction.get(eventRef);
         const count = snap.exists ? (snap.data().count || 0) : 0;
-
-        if (
-          enforceAutoClose &&
-          isRegistrationClosedForNoSignups({
+        const regulars = reservedRegularIds(eventSnap.exists ? eventSnap.data() : []);
+        const decision = evaluateDropInCapacity({
+          dropInCount: count,
+          reservedRegularUserIds: regulars,
+          maxRegistrations: max,
+          enforceAutoClose,
+          autoCloseClosed: isRegistrationClosedForNoSignups({
             dateValue: occurrenceDate,
             startTime,
             registeredCount: count,
             isCancelled: false,
-          })
-        ) {
+          }),
+        });
+
+        if (!decision.ok && decision.reason === 'auto_close') {
           throw new ConflictError(REGISTRATION_AUTO_CLOSED_MESSAGE, 'eventId');
         }
 
-        if (count >= max) {
+        if (!decision.ok) {
           throw new ConflictError('Event is at full capacity', 'eventId');
         }
 
@@ -372,8 +381,14 @@ class RegistrationService {
     this.ensureEventHasNotEnded(eventDate, resolvedEvent);
 
     // Auto-close: no signups by 1 hour before start → class is closed for registration.
+    // Regulars count as signups, so a class with only regulars stays open.
     const registeredCount = await this.getOccurrenceCount(actualEventId, dateKey);
+    const regulars = reservedRegularIds(event);
+    if (regulars.includes(userId)) {
+      throw new ConflictError('המקום שלך שמור בשיעור הזה', 'eventId');
+    }
     if (
+      regulars.length === 0 &&
       isRegistrationClosedForNoSignups({
         dateValue: eventDate,
         startTime: resolvedEvent.startTime,

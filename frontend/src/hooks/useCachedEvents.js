@@ -65,18 +65,21 @@ export const useCachedEvents = (dateRange) => {
   const eventsData = cachedData?.events || data?.events || null;
   const isLoading = !cachedData && loading;
 
-  // Custom refetch that clears both cache and state
   const refetch = async () => {
-    // Clear cache for this key before refetching
     if (cacheKey) {
       eventsCache.delete(cacheKey);
-      // Also clear the cachedData state to force re-render with fresh data
-      setCachedData(null);
     }
-    // Force network fetch by using fetchPolicy: 'network-only'
-    const result = await apolloRefetch({
-      fetchPolicy: 'network-only',
-    });
+    // refetch() always hits the network. Do not pass { fetchPolicy } — Apollo
+    // treats that argument as query variables and can leave the UI on stale data.
+    const result = await apolloRefetch();
+    if (cacheKey && result?.data?.events) {
+      const cacheEntry = {
+        events: result.data.events,
+        timestamp: Date.now(),
+      };
+      eventsCache.set(cacheKey, cacheEntry);
+      setCachedData(cacheEntry);
+    }
     return result;
   };
 

@@ -43,6 +43,8 @@ export const GET_EVENTS = gql`
       overriddenFields
       registeredCount
       availableSpots
+      reservedRegularCount
+      viewerIsReservedRegular
       occurrenceDate
       isInstance
       baseEventId
@@ -74,9 +76,35 @@ export const GET_EVENT = gql`
       overriddenFields
       registeredCount
       availableSpots
+      reservedRegularCount
+      viewerIsReservedRegular
       occurrenceDate
       isInstance
       baseEventId
+    }
+  }
+`;
+
+export const GET_WEEKLY_SUBSCRIPTION_CLASSES = gql`
+  query GetWeeklySubscriptionClasses {
+    weeklySubscriptionClasses {
+      id
+      title
+      startTime
+      instructorName
+      maxRegistrations
+      reservedRegularCount
+      weekday
+    }
+  }
+`;
+
+export const GET_EVENT_RESERVED_REGULARS = gql`
+  query GetEventReservedRegulars($eventId: ID!) {
+    eventReservedRegulars(eventId: $eventId) {
+      id: userId
+      userId
+      displayName
     }
   }
 `;
@@ -161,6 +189,9 @@ export const GET_MY_TRANSACTIONS = gql`
       accessEndsDate
       cardLast4
       cardBrand
+      reservedEventId
+      reservedEventTitle
+      reservationReleaseAt
     }
   }
 `;
@@ -217,6 +248,9 @@ export const GET_ALL_TRANSACTIONS = gql`
       amount
       createdAt
       updatedAt
+      reservedEventId
+      reservedEventTitle
+      reservationReleaseAt
     }
   }
 `;
@@ -348,6 +382,18 @@ export const GET_ADMIN_DASHBOARD_METRICS = gql`
         baseUsers
       }
       avgDaysBetweenPunchCardPurchases
+      regulars {
+        seatedRegulars
+        activeReservedSubscriptions
+        classesWithRegulars
+        byClass {
+          key
+          fullLabel
+          shortLabel
+          regularsCount
+          maxRegistrations
+        }
+      }
     }
   }
 `;

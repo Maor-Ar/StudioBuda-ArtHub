@@ -127,6 +127,7 @@ export const TRANSACTION_TYPES = {
   SUBSCRIPTION: 'subscription',
   PUNCH_CARD: 'punch_card',
   TRIAL_LESSON: 'trial_lesson',
+  RESERVED_SUBSCRIPTION: 'reserved_subscription',
 };
 
 // User Roles
@@ -148,6 +149,8 @@ export const STUDIO_LOCATION_LINES = ['התע״ש 14, כפר סבא', 'מתחם 
 export const STUDIO_NAME = 'סטודיו בודה';
 export const MAIN_SITE_URL = 'https://www.studiobuda.co.il';
 export const ARTHUB_SITE_URL = 'https://arthub.studiobuda.co.il';
+export const STUDIO_WHATSAPP_GROUP_URL =
+  'https://chat.whatsapp.com/CLR5D9XXbpyKJPauVRfkvQ?s=cl&p=i&ilr=4&iam=0';
 
 // OAuth Providers
 export const OAUTH_PROVIDERS = {

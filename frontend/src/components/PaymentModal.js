@@ -7,10 +7,11 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Platform,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShouldShowLocalLoader } from '../context/LoadingContext';
-import { GRAPHQL_ENDPOINT } from '../utils/constants';
+import { GRAPHQL_ENDPOINT, STUDIO_WHATSAPP_GROUP_URL } from '../utils/constants';
 
 let WebView = null;
 if (Platform.OS !== 'web') {
@@ -273,6 +274,14 @@ const PaymentModal = ({
     );
   };
 
+  const openWhatsAppGroup = useCallback(async () => {
+    try {
+      await Linking.openURL(STUDIO_WHATSAPP_GROUP_URL);
+    } catch (err) {
+      console.warn('[PAYMENT] Failed to open WhatsApp group link:', err);
+    }
+  }, []);
+
   const renderSuccess = () => (
     <View style={styles.resultContainer}>
       <View style={styles.successBadge} accessibilityLabel="התשלום אושר">
@@ -280,15 +289,34 @@ const PaymentModal = ({
       </View>
       <Text style={styles.resultTitle}>התשלום בוצע בהצלחה</Text>
       <Text style={styles.resultSubtitle}>
-        הרכישה נרשמה בחשבון שלך. אפשר להמשיך ליומן ולהירשם לשיעורים.
+        {isRecurring
+          ? 'המנוי נרשם בחשבון שלך. הצטרפי לקבוצת הוואטסאפ של הסטודיו לעדכונים, ואחר כך אפשר להמשיך ליומן ולהירשם לשיעורים.'
+          : 'הרכישה נרשמה בחשבון שלך. אפשר להמשיך ליומן ולהירשם לשיעורים.'}
       </Text>
+      {isRecurring ? (
+        <TouchableOpacity
+          style={styles.whatsappButton}
+          onPress={openWhatsAppGroup}
+          accessibilityRole="button"
+          accessibilityLabel="הצטרפות לקבוצת הוואטסאפ של הסטודיו"
+        >
+          <Text style={styles.whatsappButtonText}>הצטרפי לקבוצת הוואטסאפ</Text>
+        </TouchableOpacity>
+      ) : null}
       <TouchableOpacity
-        style={styles.continueButton}
+        style={[styles.continueButton, isRecurring && styles.continueButtonSecondary]}
         onPress={handleContinue}
         accessibilityRole="button"
         accessibilityLabel="המשך ליומן"
       >
-        <Text style={styles.continueButtonText}>המשך ליומן</Text>
+        <Text
+          style={[
+            styles.continueButtonText,
+            isRecurring && styles.continueButtonSecondaryText,
+          ]}
+        >
+          המשך ליומן
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -528,6 +556,22 @@ const styles = StyleSheet.create({
     marginBottom: 32,
     opacity: 0.85,
   },
+  whatsappButton: {
+    backgroundColor: '#25D366',
+    minHeight: 48,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 240,
+    marginBottom: 12,
+  },
+  whatsappButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   continueButton: {
     backgroundColor: '#4E0D66',
     minHeight: 48,
@@ -538,10 +582,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 200,
   },
+  continueButtonSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: '#4E0D66',
+  },
   continueButtonText: {
     color: '#FFD1E3',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  continueButtonSecondaryText: {
+    color: '#4E0D66',
   },
   footer: {
     paddingHorizontal: 16,

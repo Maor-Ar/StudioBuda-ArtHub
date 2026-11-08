@@ -8,6 +8,8 @@ import { CREATE_PAYMENT_SESSION } from '../../services/graphql/mutations';
 import { GET_ME, GET_MY_TRANSACTIONS, GET_PRODUCTS } from '../../services/graphql/queries';
 import ProductCard from '../../components/ProductCard';
 import PaymentModal from '../../components/PaymentModal';
+import ReservedClassPicker from '../../components/ReservedClassPicker';
+import { TRANSACTION_TYPES } from '../../utils/constants';
 import { showErrorToast } from '../../utils/toast';
 import { getGraphQLErrorMessage } from '../../utils/errorMessages';
 import { useShouldShowLocalLoader } from '../../context/LoadingContext';
@@ -17,6 +19,7 @@ const ProductsScreen = () => {
   const navigation = useNavigation();
   const { user, updateUser, updateTransactions } = useAuth();
   const [purchasingProductId, setPurchasingProductId] = useState(null);
+  const [pickerProduct, setPickerProduct] = useState(null);
 
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [paymentSessionUrl, setPaymentSessionUrl] = useState(null);
@@ -56,11 +59,23 @@ const ProductsScreen = () => {
       return;
     }
 
+    if (product.type === TRANSACTION_TYPES.RESERVED_SUBSCRIPTION) {
+      setPickerProduct(product);
+      return;
+    }
+
+    await startCheckout(product, null);
+  };
+
+  const startCheckout = async (product, reservedEventId) => {
     setPurchasingProductId(product.id);
 
     try {
       await createPaymentSession({
-        variables: { productId: product.id },
+        variables: {
+          productId: product.id,
+          reservedEventId: reservedEventId || undefined,
+        },
       });
     } catch (error) {
       console.error('[Products] Purchase failed:', error);
@@ -147,6 +162,15 @@ const ProductsScreen = () => {
         onCancel={handlePaymentCancel}
         onClose={closePaymentModal}
         isRecurring={isRecurring}
+      />
+      <ReservedClassPicker
+        visible={!!pickerProduct}
+        onClose={() => setPickerProduct(null)}
+        onSelect={(selectedClass) => {
+          const product = pickerProduct;
+          setPickerProduct(null);
+          if (product) startCheckout(product, selectedClass.id);
+        }}
       />
     </View>
   );

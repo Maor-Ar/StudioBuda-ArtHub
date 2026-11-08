@@ -103,7 +103,7 @@ class CacheService {
   }
 
   getDashboardMetricsKey() {
-    return 'dashboard:metrics';
+    return 'dashboard:metrics:v2';
   }
 }
 

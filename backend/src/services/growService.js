@@ -1,36 +1,30 @@
-import config from '../config/environment.js';
-import { ExternalServiceError } from '../utils/errors.js';
+import growEmailSyncService from './growEmailSyncService.js';
+import logger from '../utils/logger.js';
 
+/**
+ * Grow has no usable public API for this project.
+ * Verification is based on payment receipts synced from Gmail
+ * (`growEmailSyncService` / daily payment sync job).
+ */
 class GrowService {
   async verifyPayment(invoiceId, userId) {
-    // Placeholder implementation
-    // TODO: Integrate with actual Grow API
-    // logger.info('Grow verify (placeholder)', { invoiceId, userId });
-
-    // In production, implement actual API call:
-    // const response = await fetch(`${config.grow.apiUrl}/verify-payment`, {
-    //   method: 'POST',
-    //   headers: {
-    //     'Authorization': `Bearer ${config.grow.apiKey}`,
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify({ invoiceId, userId }),
-    // });
-    // return response.json();
-
-    // For now, return true as placeholder
-    return { verified: true, paymentDate: new Date() };
+    try {
+      return await growEmailSyncService.verifyPayment(invoiceId, userId);
+    } catch (error) {
+      logger.error('Grow verifyPayment failed', {
+        invoiceId,
+        userId,
+        message: error.message,
+      });
+      return { verified: false, paymentDate: null };
+    }
   }
 
-  async initiatePayment(amount, userId, transactionType) {
-    // Placeholder implementation
-    // logger.info('Grow initiate (placeholder)', { amount, userId, transactionType });
-
-    // In production, implement actual API call
-    // Return placeholder invoice ID
-    return { invoiceId: `INV_${Date.now()}_${userId}`, paymentUrl: '' };
+  async initiatePayment() {
+    throw new Error(
+      'Grow checkout is not used in-app. Use Hyp for new purchases; Grow renewals sync from email.'
+    );
   }
 }
 
 export default new GrowService();
-

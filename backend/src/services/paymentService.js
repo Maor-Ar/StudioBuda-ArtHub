@@ -118,7 +118,10 @@ class PaymentService {
   }
 
   isRecurringType(transactionType) {
-    return transactionType === TRANSACTION_TYPES.SUBSCRIPTION;
+    return (
+      transactionType === TRANSACTION_TYPES.SUBSCRIPTION ||
+      transactionType === TRANSACTION_TYPES.RESERVED_SUBSCRIPTION
+    );
   }
 
   /**
@@ -216,6 +219,7 @@ class PaymentService {
         amount: productData.price,
         monthlyEntries: productData.monthlyEntries || null,
         totalEntries: productData.totalEntries || null,
+        reservedEventId: options.reservedEventId || null,
       });
 
       return {

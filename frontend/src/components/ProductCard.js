@@ -8,6 +8,8 @@ const getProductTypeLabel = (type) => {
   switch (type) {
     case TRANSACTION_TYPES.SUBSCRIPTION:
       return 'מנוי';
+    case TRANSACTION_TYPES.RESERVED_SUBSCRIPTION:
+      return 'מנוי';
     case TRANSACTION_TYPES.PUNCH_CARD:
       return 'כרטיסייה';
     case TRANSACTION_TYPES.TRIAL_LESSON:
@@ -28,6 +30,9 @@ const getFeatures = (product) => {
       return 'כניסות ללא הגבלה';
     }
     return `${product.monthlyEntries} כניסות בחודש`;
+  }
+  if (product.type === TRANSACTION_TYPES.RESERVED_SUBSCRIPTION) {
+    return 'שיעור שבועי קבוע';
   }
   if (product.type === TRANSACTION_TYPES.PUNCH_CARD) {
     return `${product.totalEntries} כניסות • בתוקף ${product.validityMonths} חודשים`;

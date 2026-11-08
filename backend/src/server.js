@@ -15,6 +15,7 @@ import logger from './utils/logger.js';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
 import paymentWebhooks from './routes/webhooks.js';
+import jobsRouter from './routes/jobs.js';
 
 const app = express();
 
@@ -167,6 +168,7 @@ app.get('/favicon.ico', (req, res) => {
 
 // Payment redirects and webhooks (Hyp Pay)
 app.use('/api/payment', paymentWebhooks);
+app.use('/api/jobs', jobsRouter);
 
 // Swagger configuration
 const swaggerOptions = {

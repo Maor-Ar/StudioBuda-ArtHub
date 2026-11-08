@@ -16,8 +16,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_ALL_USERS, GET_ALL_PRODUCTS } from '../../services/graphql/queries';
 import { ADMIN_UPDATE_USER, ADMIN_CREATE_TRANSACTION_FOR_USER } from '../../services/graphql/mutations';
+import ReservedClassPicker from '../../components/ReservedClassPicker';
 import { useAuth } from '../../context/AuthContext';
-import { USER_ROLES, OAUTH_PROVIDERS } from '../../utils/constants';
+import { USER_ROLES, OAUTH_PROVIDERS, TRANSACTION_TYPES } from '../../utils/constants';
 import { showSuccessToast, showErrorToast } from '../../utils/toast';
 import { getGraphQLErrorMessage } from '../../utils/errorMessages';
 import { useShouldShowLocalLoader } from '../../context/LoadingContext';
@@ -44,6 +45,8 @@ const AdminUsersScreen = ({ navigation }) => {
   const [purchaseAmount, setPurchaseAmount] = useState('');
   const [purchaseDateStr, setPurchaseDateStr] = useState('');
   const [purchaseNote, setPurchaseNote] = useState('');
+  const [purchaseEvent, setPurchaseEvent] = useState(null);
+  const [classPickerVisible, setClassPickerVisible] = useState(false);
 
   const { data, loading, refetch } = useQuery(GET_ALL_USERS, { fetchPolicy: 'network-only' });
   const { data: productsData } = useQuery(GET_ALL_PRODUCTS, { fetchPolicy: 'cache-first' });
@@ -68,6 +71,8 @@ const AdminUsersScreen = ({ navigation }) => {
       setPurchaseAmount('');
       setPurchaseDateStr('');
       setPurchaseNote('');
+      setPurchaseEvent(null);
+      setClassPickerVisible(false);
     },
     onError: (e) => showErrorToast(getGraphQLErrorMessage(e)),
   });
@@ -156,13 +161,20 @@ const AdminUsersScreen = ({ navigation }) => {
     setPurchaseAmount(first != null ? String(first.price) : '');
     setPurchaseDateStr(new Date().toISOString().slice(0, 10));
     setPurchaseNote('');
+    setPurchaseEvent(null);
     setPurchaseModalVisible(true);
   };
 
   const onSelectPurchaseProduct = (p) => {
     setPurchaseProductId(p.id);
     setPurchaseAmount(String(p.price));
+    if (p.type !== TRANSACTION_TYPES.RESERVED_SUBSCRIPTION) {
+      setPurchaseEvent(null);
+    }
   };
+
+  const selectedPurchaseProduct = activeProducts.find((p) => p.id === purchaseProductId);
+  const purchaseNeedsClass = selectedPurchaseProduct?.type === TRANSACTION_TYPES.RESERVED_SUBSCRIPTION;
 
   const submitPurchase = () => {
     if (!selectedUser || !purchaseProductId) {
@@ -172,6 +184,10 @@ const AdminUsersScreen = ({ navigation }) => {
     const amountNum = parseFloat(purchaseAmount);
     if (Number.isNaN(amountNum) || amountNum <= 0) {
       showErrorToast('סכום לא תקין');
+      return;
+    }
+    if (purchaseNeedsClass && !purchaseEvent?.id) {
+      showErrorToast('יש לבחור שיעור קבוע');
       return;
     }
     let purchaseDate;
@@ -187,6 +203,7 @@ const AdminUsersScreen = ({ navigation }) => {
           amount: amountNum,
           purchaseDate: purchaseDate || undefined,
           adminNote: purchaseNote.trim() || undefined,
+          reservedEventId: purchaseNeedsClass ? purchaseEvent.id : undefined,
         },
       },
     });
@@ -408,6 +425,18 @@ const AdminUsersScreen = ({ navigation }) => {
                 </TouchableOpacity>
               ))}
             </ScrollView>
+            {purchaseNeedsClass ? (
+              <>
+                <Text style={styles.fieldLabel}>שיעור קבוע</Text>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={() => setClassPickerVisible(true)}>
+                  <Text style={styles.secondaryBtnText}>
+                    {purchaseEvent
+                      ? `${purchaseEvent.title} · ${String(purchaseEvent.startTime || '').slice(0, 5)}`
+                      : 'בחירת שיעור'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
             <Text style={styles.fieldLabel}>סכום (₪)</Text>
             <TextInput
               style={styles.input}
@@ -448,6 +477,15 @@ const AdminUsersScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+      <ReservedClassPicker
+        visible={classPickerVisible}
+        confirmLabel="בחירת שיעור"
+        onClose={() => setClassPickerVisible(false)}
+        onSelect={(selectedClass) => {
+          setPurchaseEvent(selectedClass);
+          setClassPickerVisible(false);
+        }}
+      />
     </View>
   );
 };

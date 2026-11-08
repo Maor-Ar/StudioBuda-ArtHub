@@ -1,8 +1,11 @@
 import paymentService from '../../services/paymentService.js';
 import transactionService from '../../services/transactionService.js';
 import productService from '../../services/productService.js';
+import reservedRegularService from '../../services/reservedRegularService.js';
 import { requireAuthenticated } from '../middleware/permissions.js';
 import { ValidationError } from '../../utils/errors.js';
+import { TRANSACTION_TYPES } from '../../config/constants.js';
+import { accessEndsDateFromTransaction } from '../../utils/reservedRegulars.js';
 
 export const paymentResolvers = {
   Query: {
@@ -44,7 +47,7 @@ export const paymentResolvers = {
   },
 
   Mutation: {
-    createPaymentSession: async (_, { productId, product: productInput }, context) => {
+    createPaymentSession: async (_, { productId, product: productInput, reservedEventId }, context) => {
       await requireAuthenticated(context);
 
       const userId = context.user.id;
@@ -64,6 +67,19 @@ export const paymentResolvers = {
         }
       }
 
+      let sessionEventId = null;
+      if (serverProduct.type === TRANSACTION_TYPES.RESERVED_SUBSCRIPTION) {
+        if (!reservedEventId) {
+          throw new ValidationError('יש לבחור שיעור קבוע', 'reservedEventId');
+        }
+        await reservedRegularService.releaseExpiredSeatsForUser(userId);
+        await reservedRegularService.assertNoHoldingReservation(userId);
+        const event = await reservedRegularService.assertClassAvailable(reservedEventId);
+        sessionEventId = event.id;
+      } else if (reservedEventId) {
+        throw new ValidationError('reservedEventId is only valid for a reserved subscription', 'reservedEventId');
+      }
+
       const session = await paymentService.createCheckoutSession(
         userId,
         productId,
@@ -78,6 +94,7 @@ export const paymentResolvers = {
           customerEmail: context.user.email,
           customerName: `${context.user.firstName} ${context.user.lastName}`.trim() || null,
           customerPhone: context.user.phone || null,
+          reservedEventId: sessionEventId,
         }
       );
 
@@ -90,29 +107,5 @@ export const paymentResolvers = {
  * Transaction field resolver for accessEndsDate
  * Calculates when access will end (lastRenewalDate + 1 month, i.e. end of current billing period)
  */
-export const transactionAccessEndsDateResolver = (transaction) => {
-  if (transaction.transactionType !== 'subscription') {
-    return null;
-  }
-
-  let periodStart;
-  if (transaction.lastRenewalDate?.toDate) {
-    periodStart = transaction.lastRenewalDate.toDate();
-  } else if (transaction.lastRenewalDate) {
-    periodStart = new Date(transaction.lastRenewalDate);
-  } else if (transaction.lastPaymentDate?.toDate) {
-    periodStart = transaction.lastPaymentDate.toDate();
-  } else {
-    periodStart = new Date(transaction.lastPaymentDate);
-  }
-
-  if (!periodStart || isNaN(periodStart.getTime())) {
-    return null;
-  }
-
-  // Access ends one month after the start of the current period
-  const accessEndsDate = new Date(periodStart);
-  accessEndsDate.setMonth(accessEndsDate.getMonth() + 1);
-
-  return accessEndsDate.toISOString();
-};
+export const transactionAccessEndsDateResolver = (transaction) =>
+  accessEndsDateFromTransaction(transaction);

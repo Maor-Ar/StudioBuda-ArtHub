@@ -9,7 +9,12 @@ import { GET_ALL_TRANSACTIONS, GET_ALL_USERS } from '../../services/graphql/quer
 import { UPDATE_TRANSACTION, RENEW_SUBSCRIPTION, CANCEL_SUBSCRIPTION } from '../../services/graphql/mutations';
 import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 
-const TYPE_LABELS = { subscription: 'מנוי', punch_card: 'כרטיסייה', trial_lesson: 'שיעור ניסיון' };
+const TYPE_LABELS = {
+  subscription: 'מנוי',
+  reserved_subscription: 'מנוי שיעור קבוע',
+  punch_card: 'כרטיסייה',
+  trial_lesson: 'שיעור ניסיון',
+};
 
 const AdminTransactionsScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -200,6 +205,8 @@ const AdminTransactionsScreen = ({ navigation }) => {
               <Text style={styles.txMeta}>
                 ₪{tx.amount} | {formatDate(tx.purchaseDate)}
                 {tx.transactionType === 'subscription' && ` | ${tx.entriesUsedThisMonth ?? 0}/${tx.monthlyEntries ?? 0} כניסות`}
+                {tx.transactionType === 'reserved_subscription' &&
+                  ` | ${tx.reservedEventTitle || tx.reservedEventId || 'שיעור קבוע'}`}
                 {tx.transactionType === 'punch_card' && ` | ${tx.entriesRemaining ?? 0}/${tx.totalEntries ?? 0} נותרו`}
               </Text>
             </TouchableOpacity>
@@ -221,6 +228,19 @@ const AdminTransactionsScreen = ({ navigation }) => {
                 <Text style={styles.modalTitle}>{TYPE_LABELS[selectedTx.transactionType]}</Text>
                 <Text style={styles.modalField}>משתמש: {getUserName(selectedTx.userId)}</Text>
                 <Text style={styles.modalField}>סכום: ₪{selectedTx.amount}</Text>
+                {selectedTx.transactionType === 'reserved_subscription' ? (
+                  <>
+                    <Text style={styles.modalField}>
+                      שיעור שמור: {selectedTx.reservedEventTitle || 'לא זמין'}
+                    </Text>
+                    <Text style={styles.modalField}>מזהה שיעור: {selectedTx.reservedEventId || '-'}</Text>
+                    {selectedTx.reservationReleaseAt ? (
+                      <Text style={styles.modalField}>
+                        שחרור מקום: {formatDate(selectedTx.reservationReleaseAt)}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : null}
                 <Text style={styles.sectionLabel}>עריכת שדות רכישה</Text>
 
                 <Text style={styles.inputLabel}>סטטוס</Text>

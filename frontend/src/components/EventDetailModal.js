@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, TextInput } from 'react-native';
+import { useMutation, useQuery } from '@apollo/client';
 import UserHeadIcon from '../assets/icons/user-head.svg';
 import UsersFourIcon from '../assets/icons/users-four.svg';
 import LeftArrow from '../assets/icons/LeftArrow.svg';
@@ -10,12 +11,47 @@ import {
   REGISTRATION_AUTO_CLOSED_HELP,
   REGISTRATION_AUTO_CLOSED_LABEL,
 } from '../utils/constants';
+import { GET_ALL_USERS, GET_EVENT_RESERVED_REGULARS } from '../services/graphql/queries';
+import {
+  ADMIN_ADD_RESERVED_REGULAR,
+  ADMIN_REMOVE_RESERVED_REGULAR,
+} from '../services/graphql/mutations';
+import { showErrorToast, showSuccessToast } from '../utils/toast';
+import { getGraphQLErrorMessage } from '../utils/errorMessages';
 
 const EDIT_SCOPE_OPTIONS = [
   { id: 'THIS_OCCURRENCE', label: 'ערוך את התאריך הזה בלבד', title: 'עריכת תאריך זה' },
   { id: 'THIS_AND_FUTURE', label: 'ערוך מתאריך זה והלאה', title: 'עריכה מתאריך זה והלאה' },
   { id: 'ALL', label: 'ערוך את כל השיעורים (עבר, הווה ועתיד)', title: 'עריכת כל השיעורים' },
 ];
+
+const PersonRow = ({ name, badge, onRemove, removing, removeLabel = 'הסר' }) => (
+  <View style={styles.personRow}>
+    {onRemove ? (
+      <TouchableOpacity
+        onPress={onRemove}
+        disabled={removing}
+        accessibilityRole="button"
+        accessibilityLabel={removeLabel}
+        style={[styles.personRemoveHit, removing && styles.adminButtonDisabled]}
+      >
+        <Text style={styles.personRemoveText}>{removing ? 'מסיר...' : removeLabel}</Text>
+      </TouchableOpacity>
+    ) : (
+      <View />
+    )}
+    <View style={styles.personIdentity}>
+      {badge ? (
+        <View style={[styles.personBadge, badge.tone === 'regular' && styles.personBadgeRegular]}>
+          <Text style={styles.personBadgeText}>{badge.label}</Text>
+        </View>
+      ) : null}
+      <Text style={styles.personName} numberOfLines={1}>
+        {name}
+      </Text>
+    </View>
+  </View>
+);
 
 const EventDetailModal = ({
   event,
@@ -44,6 +80,9 @@ const EventDetailModal = ({
   adminReenableLoading = false,
   onAdminEdit,
   adminEditLoading = false,
+  isReservedRegular = false,
+  canManageRegulars = false,
+  onRegularsChanged,
 }) => {
   if (!event) return null;
 
@@ -53,6 +92,50 @@ const EventDetailModal = ({
   const [scopeMenuVisible, setScopeMenuVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editScope, setEditScope] = useState('THIS_OCCURRENCE');
+  const [regularSearch, setRegularSearch] = useState('');
+  const [addRegularOpen, setAddRegularOpen] = useState(false);
+  const [cancelFormOpen, setCancelFormOpen] = useState(false);
+  const seriesId = event?.baseEventId || event?.id || null;
+  const { data: regularsData, refetch: refetchRegulars } = useQuery(GET_EVENT_RESERVED_REGULARS, {
+    variables: { eventId: seriesId },
+    skip: !canManageRegulars || !visible || !seriesId,
+    fetchPolicy: 'network-only',
+  });
+  const { data: usersData } = useQuery(GET_ALL_USERS, {
+    skip: !canManageRegulars || !visible || !addRegularOpen,
+    fetchPolicy: 'cache-first',
+  });
+  const [addRegular, { loading: addingRegular }] = useMutation(ADMIN_ADD_RESERVED_REGULAR, {
+    onCompleted: async () => {
+      showSuccessToast('הקבוע נוסף לשיעור');
+      setRegularSearch('');
+      setAddRegularOpen(false);
+      await refetchRegulars();
+      await onRegularsChanged?.();
+    },
+    onError: (error) => showErrorToast(getGraphQLErrorMessage(error)),
+  });
+  const [removeRegular, { loading: removingRegular }] = useMutation(ADMIN_REMOVE_RESERVED_REGULAR, {
+    onCompleted: async () => {
+      showSuccessToast('הקבוע הוסר מהשיעור');
+      await refetchRegulars();
+      await onRegularsChanged?.();
+    },
+    onError: (error) => showErrorToast(getGraphQLErrorMessage(error)),
+  });
+  const reservedRegulars = regularsData?.eventReservedRegulars || [];
+  const regularUserMatches = useMemo(() => {
+    const query = regularSearch.trim().toLowerCase();
+    const existing = new Set(reservedRegulars.map((member) => member.userId));
+    return (usersData?.users || [])
+      .filter((user) => !existing.has(user.id))
+      .filter((user) => {
+        if (!query) return true;
+        const name = `${user.firstName || ''} ${user.lastName || ''} ${user.email || ''}`.toLowerCase();
+        return name.includes(query);
+      })
+      .slice(0, 8);
+  }, [regularSearch, reservedRegulars, usersData]);
   const showRegistrationsLoading = useShouldShowLocalLoader(registrationsLoading);
   const isRecurringOccurrence = !!(event.isRecurring || event.isInstance);
   const selectedScopeOption = EDIT_SCOPE_OPTIONS.find((option) => option.id === editScope) || EDIT_SCOPE_OPTIONS[0];
@@ -64,6 +147,9 @@ const EventDetailModal = ({
       setManualCustomerName('');
       setScopeMenuVisible(false);
       setEditModalVisible(false);
+      setAddRegularOpen(false);
+      setRegularSearch('');
+      setCancelFormOpen(false);
     }
   }, [visible]);
 
@@ -183,7 +269,7 @@ const EventDetailModal = ({
               </View>
             )}
 
-            {/* Button States: Cancelled, Past, Closed, Registered, Full, or Register */}
+            {/* Personal registration — one primary CTA, separate from admin tools */}
             {isCancelled ? (
               <View style={styles.cancelledButton}>
                 <Text style={styles.cancelledButtonText}>הרשמה בוטלה</Text>
@@ -202,6 +288,10 @@ const EventDetailModal = ({
                   maxWidth={280}
                 />
               </View>
+            ) : isReservedRegular ? (
+              <View style={styles.reservedButton}>
+                <Text style={styles.reservedButtonText}>המקום שלך שמור</Text>
+              </View>
             ) : isRegistered ? (
               <>
                 {typeof onAddToCalendar === 'function' ? (
@@ -213,8 +303,8 @@ const EventDetailModal = ({
                     <Text style={styles.calendarButtonText}>הוסף ליומן האישי</Text>
                   </TouchableOpacity>
                 ) : null}
-                <TouchableOpacity 
-                  style={[styles.cancelButton, disabled && styles.cancelButtonDisabled]} 
+                <TouchableOpacity
+                  style={[styles.cancelButton, disabled && styles.cancelButtonDisabled]}
                   onPress={onCancel}
                   disabled={disabled}
                 >
@@ -226,8 +316,8 @@ const EventDetailModal = ({
                 <Text style={styles.fullButtonText}>השיעור מלא</Text>
               </View>
             ) : (
-              <TouchableOpacity 
-                style={[styles.registerButton, disabled && styles.registerButtonDisabled]} 
+              <TouchableOpacity
+                style={[styles.registerButton, disabled && styles.registerButtonDisabled]}
                 onPress={onRegister}
                 disabled={disabled}
               >
@@ -236,34 +326,23 @@ const EventDetailModal = ({
             )}
 
             {isAdmin && !isPast && (
-              <View style={styles.adminActionsContainer}>
+              <View style={styles.adminSection}>
+                <Text style={[styles.sectionKicker, styles.sectionKickerSpaced]}>ניהול השיעור</Text>
                 <TouchableOpacity
-                  style={[styles.editEventButton, adminEditLoading && styles.adminButtonDisabled]}
+                  style={[
+                    styles.adminGhostButton,
+                    styles.adminGhostButtonSolo,
+                    adminEditLoading && styles.adminButtonDisabled,
+                  ]}
                   onPress={openAdminEdit}
                   disabled={adminEditLoading}
                 >
-                  <Text style={styles.editEventButtonText}>עריכה</Text>
+                  <Text style={styles.adminGhostButtonText}>עריכה</Text>
                 </TouchableOpacity>
-                {!isCancelled && (
-                  <TouchableOpacity
-                    style={[styles.reserveSpotButton, adminActionLoading && styles.adminButtonDisabled]}
-                    onPress={() => setManualNameModalVisible(true)}
-                    disabled={adminActionLoading}
-                  >
-                    <Text style={styles.reserveSpotButtonText}>
-                      {adminActionLoading ? 'שומר...' : 'שריון מקום ידני'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-
-            {isAdmin && !isPast && (
-              <View style={styles.adminCancelContainer}>
                 {isCancelled ? (
-                  <>
+                  <View style={styles.adminDangerBlock}>
                     <Text style={styles.adminCancelInfoText}>
-                      בוטל: {cancellationReason || 'ללא סיבה'}
+                      בוטל לתאריך זה: {cancellationReason || 'ללא סיבה'}
                     </Text>
                     <TouchableOpacity
                       style={[
@@ -277,10 +356,10 @@ const EventDetailModal = ({
                         {adminReenableLoading ? 'מפעיל...' : 'הפעל מחדש'}
                       </Text>
                     </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.adminCancelLabel}>סיבת ביטול (לתאריך הזה)</Text>
+                  </View>
+                ) : cancelFormOpen ? (
+                  <View style={styles.adminDangerBlock}>
+                    <Text style={styles.adminCancelLabel}>ביטול התאריך הזה בלבד</Text>
                     <TextInput
                       style={styles.adminCancelInput}
                       value={adminCancelReason}
@@ -289,63 +368,146 @@ const EventDetailModal = ({
                       placeholderTextColor="#999"
                       multiline
                     />
-                    <TouchableOpacity
-                      style={[styles.adminCancelButton, adminCancelLoading && styles.adminButtonDisabled]}
-                      onPress={() => onAdminCancelOccurrence?.(adminCancelReason)}
-                      disabled={adminCancelLoading || !adminCancelReason.trim()}
-                    >
-                      <Text style={styles.adminCancelButtonText}>
-                        {adminCancelLoading ? 'מבטל...' : 'בטל לתאריך'}
-                      </Text>
-                    </TouchableOpacity>
-                  </>
+                    <View style={styles.adminActionRow}>
+                      <TouchableOpacity
+                        style={styles.adminGhostButton}
+                        onPress={() => {
+                          setCancelFormOpen(false);
+                          setAdminCancelReason('');
+                        }}
+                      >
+                        <Text style={styles.adminGhostButtonText}>לא עכשיו</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.adminCancelButton, adminCancelLoading && styles.adminButtonDisabled]}
+                        onPress={() => onAdminCancelOccurrence?.(adminCancelReason)}
+                        disabled={adminCancelLoading || !adminCancelReason.trim()}
+                      >
+                        <Text style={styles.adminCancelButtonText}>
+                          {adminCancelLoading ? 'מבטל...' : 'בטל תאריך'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.adminDangerLink}
+                    onPress={() => setCancelFormOpen(true)}
+                  >
+                    <Text style={styles.adminDangerLinkText}>בטל את התאריך הזה</Text>
+                  </TouchableOpacity>
                 )}
               </View>
             )}
 
-            {isAdmin && (
-              <View style={styles.registrationsContainer}>
-                <Text style={styles.registrationsTitle}>נרשמים לאירוע</Text>
-                {registrationsLoading ? (
-                  showRegistrationsLoading ? (
-                  <Text style={styles.registrationsLoadingText}>טוען רשימת נרשמים...</Text>
-                  ) : null
-                ) : registrations.length === 0 ? (
-                  <Text style={styles.emptyRegistrationsText}>אין נרשמים כרגע</Text>
-                ) : (
-                  registrations.map((registration) => {
-                    const fullName = registration.isManual
-                      ? (registration.displayName || 'ללא שם')
-                      : registration.user
-                      ? `${registration.user.firstName} ${registration.user.lastName}`
-                      : registration.userId === 'DummyUser'
-                        ? 'Dummy User'
-                        : 'משתמש לא ידוע';
-                    const isRemoving = removingRegistrationId === registration.id;
-                    return (
-                      <View key={registration.id} style={styles.registrationRow}>
-                        <TouchableOpacity
-                          style={[styles.removeRegistrationButton, isRemoving && styles.adminButtonDisabled]}
-                          onPress={() => onRemoveRegistration && onRemoveRegistration(registration.id)}
-                          disabled={isRemoving}
-                        >
-                          <Text style={styles.removeRegistrationButtonText}>
-                            {isRemoving ? 'מסיר...' : 'הסר'}
-                          </Text>
-                        </TouchableOpacity>
-                        <View style={styles.registrationNameWrap}>
-                          <Text style={styles.registrationName}>
-                            {fullName}
-                            {registration.isManual ? ' ' : ''}
-                          </Text>
-                          {registration.isManual ? (
-                            <Text style={styles.manualBadgeText}>(הוזן ידנית)</Text>
-                          ) : null}
-                        </View>
-                      </View>
-                    );
-                  })
-                )}
+            {(isAdmin || canManageRegulars) && (
+              <View style={styles.adminSection}>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionCount}>
+                    {event.registeredCount ?? 0}/{event.maxRegistrations ?? 0}
+                  </Text>
+                  <Text style={styles.sectionKicker}>משתתפים</Text>
+                </View>
+
+                {canManageRegulars ? (
+                  <View style={styles.rosterGroup}>
+                    <Text style={styles.rosterGroupTitle}>קבועים בסדרה</Text>
+                    <Text style={styles.regularsHelp}>
+                      שמורים לכל המפגשים. הסרה משחררת את המקום הקבוע, לא שבוע בודד.
+                    </Text>
+                    {reservedRegulars.length === 0 ? (
+                      <Text style={styles.emptyRegistrationsText}>אין קבועים בשיעור זה</Text>
+                    ) : (
+                      reservedRegulars.map((member) => (
+                        <PersonRow
+                          key={member.userId}
+                          name={member.displayName}
+                          badge={{ label: 'קבוע', tone: 'regular' }}
+                          removing={removingRegular}
+                          removeLabel="הסר קבוע"
+                          onRemove={() =>
+                            removeRegular({ variables: { eventId: seriesId, userId: member.userId } })
+                          }
+                        />
+                      ))
+                    )}
+                    <TouchableOpacity
+                      style={styles.addRegularButton}
+                      onPress={() => setAddRegularOpen((open) => !open)}
+                    >
+                      <Text style={styles.addRegularButtonText}>
+                        {addRegularOpen ? 'סגור חיפוש' : '+ הוסף קבוע'}
+                      </Text>
+                    </TouchableOpacity>
+                    {addRegularOpen ? (
+                      <>
+                        <TextInput
+                          style={styles.regularSearchInput}
+                          value={regularSearch}
+                          onChangeText={setRegularSearch}
+                          placeholder="חיפוש לפי שם או אימייל"
+                          placeholderTextColor="#B0A0B8"
+                        />
+                        {regularUserMatches.map((user) => (
+                          <TouchableOpacity
+                            key={user.id}
+                            style={styles.userPickRow}
+                            disabled={addingRegular}
+                            onPress={() => addRegular({ variables: { eventId: seriesId, userId: user.id } })}
+                          >
+                            <Text style={styles.personName}>
+                              {user.firstName} {user.lastName}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {isAdmin ? (
+                  <View style={[styles.rosterGroup, canManageRegulars && styles.rosterGroupDivided]}>
+                    <Text style={styles.rosterGroupTitle}>נרשמים לתאריך זה</Text>
+                    {registrationsLoading ? (
+                      showRegistrationsLoading ? (
+                        <Text style={styles.registrationsLoadingText}>טוען רשימת נרשמים...</Text>
+                      ) : null
+                    ) : registrations.length === 0 ? (
+                      <Text style={styles.emptyRegistrationsText}>אין נרשמים נוספים לתאריך זה</Text>
+                    ) : (
+                      registrations.map((registration) => {
+                        const fullName = registration.isManual
+                          ? (registration.displayName || 'ללא שם')
+                          : registration.user
+                            ? `${registration.user.firstName} ${registration.user.lastName}`
+                            : registration.userId === 'DummyUser'
+                              ? 'Dummy User'
+                              : 'משתמש לא ידוע';
+                        const isRemoving = removingRegistrationId === registration.id;
+                        return (
+                          <PersonRow
+                            key={registration.id}
+                            name={fullName}
+                            badge={registration.isManual ? { label: 'ידני' } : null}
+                            removing={isRemoving}
+                            onRemove={() => onRemoveRegistration && onRemoveRegistration(registration.id)}
+                          />
+                        );
+                      })
+                    )}
+                    {isAdmin && !isPast && !isCancelled ? (
+                      <TouchableOpacity
+                        style={[styles.addRegularButton, adminActionLoading && styles.adminButtonDisabled]}
+                        onPress={() => setManualNameModalVisible(true)}
+                        disabled={adminActionLoading || !onReserveSpot}
+                      >
+                        <Text style={styles.addRegularButtonText}>
+                          {adminActionLoading ? 'שומר...' : '+ שריון מקום'}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ) : null}
               </View>
             )}
           </ScrollView>
@@ -684,10 +846,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     writingDirection: 'rtl',
   },
-  adminActionsContainer: {
-    marginTop: 14,
-    gap: 10,
-  },
   cancelledButton: {
     width: '100%',
     height: 50,
@@ -705,54 +863,102 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     writingDirection: 'rtl',
   },
-  editEventButton: {
-    width: '100%',
-    height: 46,
-    backgroundColor: 'rgba(255, 209, 227, 0.16)',
-    borderRadius: 23,
+  adminButtonDisabled: {
+    opacity: 0.6,
+  },
+  adminSection: {
+    marginTop: 22,
+    backgroundColor: 'rgba(255, 209, 227, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 209, 227, 0.22)',
+    borderRadius: 18,
+    padding: 14,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  sectionKicker: {
+    color: '#FFD1E3',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textAlign: 'right',
+    writingDirection: 'rtl',
+    marginBottom: 0,
+  },
+  sectionKickerSpaced: {
+    marginBottom: 10,
+  },
+  sectionCount: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  adminActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  adminGhostButton: {
+    flexGrow: 1,
+    minHeight: 52,
+    paddingVertical: 14,
+    borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: '#FFD1E3',
+    borderColor: 'rgba(255, 209, 227, 0.55)',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  editEventButtonText: {
+  adminGhostButtonSolo: {
+    flexGrow: 0,
+    alignSelf: 'stretch',
+    minHeight: 52,
+  },
+  adminGhostButtonText: {
     color: '#FFD1E3',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',
     writingDirection: 'rtl',
   },
-  reserveSpotButton: {
-    width: '100%',
-    height: 46,
-    backgroundColor: '#8E44AD',
-    borderRadius: 23,
+  adminSecondaryButton: {
+    flexGrow: 1,
+    minHeight: 52,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(171, 95, 189, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  reserveSpotButtonText: {
+  adminSecondaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     textAlign: 'center',
     writingDirection: 'rtl',
   },
-  adminButtonDisabled: {
-    opacity: 0.6,
+  adminDangerLink: {
+    alignSelf: 'flex-end',
+    marginTop: 12,
+    paddingVertical: 4,
   },
-  registrationsContainer: {
-    marginTop: 18,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 209, 227, 0.35)',
-    paddingTop: 14,
-  },
-  registrationsTitle: {
+  adminDangerLinkText: {
     color: '#FFD1E3',
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
     textAlign: 'right',
-    marginBottom: 10,
     writingDirection: 'rtl',
+    opacity: 0.85,
+  },
+  adminDangerBlock: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 209, 227, 0.18)',
   },
   registrationsLoadingText: {
     color: '#FFE2ED',
@@ -762,63 +968,78 @@ const styles = StyleSheet.create({
   },
   emptyRegistrationsText: {
     color: '#D4B8E0',
-    fontSize: 14,
+    fontSize: 13,
     textAlign: 'right',
     writingDirection: 'rtl',
+    marginBottom: 6,
   },
-  registrationRow: {
+  rosterGroup: {
+    marginTop: 8,
+  },
+  rosterGroupDivided: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 209, 227, 0.16)',
+  },
+  rosterGroupTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+    marginBottom: 4,
+  },
+  personRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 209, 227, 0.14)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 209, 227, 0.12)',
   },
-  registrationNameWrap: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'flex-end',
+  personIdentity: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
     marginLeft: 10,
-    flexWrap: 'wrap',
   },
-  registrationName: {
+  personName: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '500',
     textAlign: 'right',
     writingDirection: 'rtl',
   },
-  manualBadgeText: {
-    color: '#FFD1E3',
-    fontSize: 13,
-    fontStyle: 'italic',
-    marginRight: 4,
+  personBadge: {
+    backgroundColor: 'rgba(255, 209, 227, 0.16)',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
-  removeRegistrationButton: {
-    backgroundColor: '#4E0D66',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  personBadgeRegular: {
+    backgroundColor: 'rgba(171, 95, 189, 0.45)',
   },
-  removeRegistrationButtonText: {
+  personBadgeText: {
     color: '#FFD1E3',
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '700',
-    textAlign: 'center',
-    writingDirection: 'rtl',
   },
-  adminCancelContainer: {
-    marginTop: 18,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 209, 227, 0.35)',
+  personRemoveHit: {
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  personRemoveText: {
+    color: '#FFD1E3',
+    fontSize: 13,
+    fontWeight: '600',
+    opacity: 0.8,
   },
   adminCancelLabel: {
     color: '#FFD1E3',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     textAlign: 'right',
     marginBottom: 6,
@@ -828,34 +1049,36 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 209, 227, 0.15)',
     borderRadius: 14,
     padding: 12,
-    minHeight: 70,
+    minHeight: 64,
     color: '#FFFFFF',
     borderWidth: 1,
     borderColor: 'rgba(255, 209, 227, 0.25)',
     textAlign: 'right',
     writingDirection: 'rtl',
+    marginBottom: 10,
   },
   adminCancelButton: {
-    width: '100%',
-    height: 46,
+    flexGrow: 1,
+    minHeight: 52,
+    paddingVertical: 14,
     backgroundColor: '#4E0D66',
-    borderRadius: 23,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 12,
   },
   adminCancelButtonText: {
     color: '#FFE2ED',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     textAlign: 'center',
     writingDirection: 'rtl',
   },
   adminReenableButton: {
     width: '100%',
-    height: 46,
+    minHeight: 52,
+    paddingVertical: 14,
     backgroundColor: '#AB5FBD',
-    borderRadius: 23,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 12,
@@ -920,11 +1143,13 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   inlineModalPrimaryButton: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: '#AB5FBD',
-    borderRadius: 12,
-    paddingVertical: 10,
+    borderRadius: 16,
+    minHeight: 52,
+    paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   inlineModalPrimaryButtonText: {
     color: '#FFFFFF',
@@ -932,11 +1157,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   inlineModalSecondaryButton: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: 'rgba(255, 209, 227, 0.16)',
-    borderRadius: 12,
-    paddingVertical: 10,
+    borderRadius: 16,
+    minHeight: 52,
+    paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   inlineModalSecondaryButtonText: {
     color: '#FFD1E3',
@@ -945,14 +1172,17 @@ const styles = StyleSheet.create({
   },
   scopeOptionButton: {
     backgroundColor: 'rgba(255, 209, 227, 0.16)',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
+    borderRadius: 16,
+    minHeight: 52,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
     marginTop: 10,
+    justifyContent: 'center',
   },
   scopeCancelButton: {
     marginTop: 14,
-    flex: 0,
+    flexGrow: 0,
+    alignSelf: 'stretch',
   },
   scopeOptionText: {
     color: '#FFFFFF',
@@ -960,6 +1190,61 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'right',
     writingDirection: 'rtl',
+  },
+  reservedButton: {
+    backgroundColor: '#4E0D66',
+    borderRadius: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  reservedButtonText: {
+    color: '#FFD1E3',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  regularsHelp: {
+    color: '#FFD1E3',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+    marginBottom: 8,
+    fontSize: 12,
+    lineHeight: 18,
+    opacity: 0.9,
+  },
+  addRegularButton: {
+    alignSelf: 'stretch',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 209, 227, 0.45)',
+    borderStyle: 'dashed',
+    minHeight: 52,
+    paddingVertical: 14,
+    marginTop: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addRegularButtonText: {
+    color: '#FFD1E3',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  regularSearchInput: {
+    marginTop: 8,
+    backgroundColor: 'rgba(255, 209, 227, 0.15)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    color: '#FFFFFF',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  userPickRow: {
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'flex-end',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 209, 227, 0.12)',
   },
 });
 

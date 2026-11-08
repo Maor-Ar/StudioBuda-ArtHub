@@ -60,6 +60,8 @@ export const eventTypeDefs = gql`
     occurrenceDate: String
     isInstance: Boolean
     baseEventId: ID
+    reservedRegularCount: Int!
+    viewerIsReservedRegular: Boolean!
   }
 
   input DateRangeInput {
@@ -84,6 +86,21 @@ export const eventTypeDefs = gql`
     maxRegistrations: Int!
     eventType: String!
     price: Float
+  }
+
+  type WeeklySubscriptionClass {
+    id: ID!
+    title: String!
+    startTime: String!
+    instructorName: String!
+    maxRegistrations: Int!
+    reservedRegularCount: Int!
+    weekday: Int!
+  }
+
+  type ReservedRegularMember {
+    userId: ID!
+    displayName: String!
   }
 
   input UpdateEventInput {

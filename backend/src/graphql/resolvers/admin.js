@@ -5,7 +5,7 @@ import productService from '../../services/productService.js';
 import { requireManager, requireAdmin } from '../middleware/permissions.js';
 import { USER_ROLES } from '../../config/constants.js';
 import { TRANSACTION_TYPES } from '../../config/constants.js';
-import { ValidationError } from '../../utils/errors.js';
+import { ValidationError, ConflictError } from '../../utils/errors.js';
 import { validateEmail, validatePhone, validateName } from '../../utils/validators.js';
 import logger from '../../utils/logger.js';
 
@@ -149,6 +149,28 @@ export const adminResolvers = {
       } else if (product.type === TRANSACTION_TYPES.PUNCH_CARD) {
         payload.totalEntries = product.totalEntries;
         payload.entriesRemaining = product.totalEntries;
+      } else if (product.type === TRANSACTION_TYPES.RESERVED_SUBSCRIPTION) {
+        if (!input.reservedEventId) {
+          throw new ValidationError('יש לבחור שיעור קבוע', 'reservedEventId');
+        }
+        const reservedRegularService = (await import('../../services/reservedRegularService.js')).default;
+        await reservedRegularService.releaseExpiredSeatsForUser(userId);
+        await reservedRegularService.assertNoHoldingReservation(userId);
+        await reservedRegularService.assertClassAvailable(input.reservedEventId);
+        const claim = await reservedRegularService.tryClaimSeat(input.reservedEventId, userId);
+        if (!claim.claimed) {
+          throw new ConflictError(reservedRegularService.claimFailureMessage(claim.reason), 'reservedEventId');
+        }
+        payload.reservedEventId = claim.eventId;
+        payload.lastRenewalDate = purchaseDate;
+        try {
+          const created = await transactionService.createTransaction(payload);
+          await reservedRegularService.notifyIfOverbooked(claim.event, userId);
+          return created;
+        } catch (error) {
+          await reservedRegularService.removeUser(claim.eventId, userId);
+          throw error;
+        }
       }
 
       return transactionService.createTransaction(payload);

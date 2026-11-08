@@ -33,6 +33,8 @@ class TransactionService {
       entriesRemaining,
       paymentSource,
       adminNote,
+      reservedEventId,
+      reservationReleaseAt,
     } = transactionData;
 
     // Validate transaction type
@@ -60,6 +62,14 @@ class TransactionService {
         throw new ValidationError('totalEntries is required for punch card', 'totalEntries');
       }
       validatePositiveNumber(totalEntries, 'totalEntries');
+    }
+
+    if (
+      transactionType === TRANSACTION_TYPES.RESERVED_SUBSCRIPTION &&
+      isActive !== false &&
+      !reservedEventId
+    ) {
+      throw new ValidationError('reservedEventId is required for reserved subscription', 'reservedEventId');
     }
 
     const paymentReference = invoiceId || hypTransactionId || zcreditReferenceNumber;
@@ -99,6 +109,14 @@ class TransactionService {
     if (transactionType === TRANSACTION_TYPES.PUNCH_CARD) {
       transactionDoc.totalEntries = totalEntries;
       transactionDoc.entriesRemaining = entriesRemaining !== undefined ? entriesRemaining : totalEntries;
+    }
+
+    if (transactionType === TRANSACTION_TYPES.RESERVED_SUBSCRIPTION) {
+      transactionDoc.reservedEventId = reservedEventId || null;
+      transactionDoc.lastRenewalDate = lastRenewalDate || now;
+      if (reservationReleaseAt) {
+        transactionDoc.reservationReleaseAt = reservationReleaseAt;
+      }
     }
 
     const docRef = await db.collection('transactions').add(transactionDoc);
@@ -151,10 +169,26 @@ class TransactionService {
     
     for (const transaction of transactions) {
       if (transaction.transactionType === TRANSACTION_TYPES.SUBSCRIPTION) {
-        const lastRenewalDate = transaction.lastRenewalDate?.toDate();
+        const lastRenewalDate = transaction.lastRenewalDate?.toDate
+          ? transaction.lastRenewalDate.toDate()
+          : transaction.lastRenewalDate
+            ? new Date(transaction.lastRenewalDate)
+            : null;
+
+        // Hyp subscriptions renew via Hyp webhook / daily Hyp entry-reset job.
+        if (transaction.hypHkId) {
+          updatedTransactions.push(transaction);
+          continue;
+        }
+
+        // Manual cash stays as admin-managed.
+        if (transaction.paymentSource === 'manual_cash') {
+          updatedTransactions.push(transaction);
+          continue;
+        }
         
         if (lastRenewalDate && isPreviousMonth(lastRenewalDate)) {
-          // Verify payment with Grow
+          // Grow / legacy non-Hyp: only renew when daily Gmail sync stored a receipt.
           try {
             const paymentResult = await growService.verifyPayment(
               transaction.invoiceId,
@@ -162,10 +196,13 @@ class TransactionService {
             );
 
             if (paymentResult.verified) {
-              // Update renewal date and reset entries
-              const newRenewalDate = updateToCurrentMonth(transaction.purchaseDate.toDate());
+              const purchaseDate = transaction.purchaseDate?.toDate
+                ? transaction.purchaseDate.toDate()
+                : new Date(transaction.purchaseDate);
+              const newRenewalDate = updateToCurrentMonth(purchaseDate);
               await this.updateTransaction(transaction.id, {
                 lastRenewalDate: newRenewalDate,
+                lastPaymentDate: paymentResult.paymentDate || new Date(),
                 entriesUsedThisMonth: 0,
               });
 
@@ -173,13 +210,12 @@ class TransactionService {
               transaction.entriesUsedThisMonth = 0;
               updatedTransactions.push(transaction);
             } else {
-              // Payment not verified, deactivate
-              await this.updateTransaction(transaction.id, { isActive: false });
-              // Don't add to active transactions
+              // Keep active until the daily job deactivates after grace — avoid
+              // cutting access on every login while waiting for the Grow email.
+              updatedTransactions.push(transaction);
             }
           } catch (error) {
             logger.error('Error verifying payment:', error);
-            // On error, keep transaction active but don't renew
             updatedTransactions.push(transaction);
           }
         } else {
@@ -195,7 +231,7 @@ class TransactionService {
 
   async updateTransaction(transactionId, data) {
     const normalizedData = { ...data };
-    const dateFields = ['purchaseDate', 'lastRenewalDate', 'lastPaymentDate'];
+    const dateFields = ['purchaseDate', 'lastRenewalDate', 'lastPaymentDate', 'reservationReleaseAt'];
     dateFields.forEach((field) => {
       if (normalizedData[field] !== undefined && normalizedData[field] !== null) {
         if (normalizedData[field] === '') {
@@ -250,6 +286,30 @@ class TransactionService {
     await transactionRef.update(updateData);
 
     const transaction = transactionDoc.data();
+    if (
+      transaction.transactionType === TRANSACTION_TYPES.RESERVED_SUBSCRIPTION &&
+      updateData.isActive === false &&
+      transaction.reservedEventId
+    ) {
+      const reservedRegularService = (await import('./reservedRegularService.js')).default;
+      const releaseAt =
+        updateData.reservationReleaseAt !== undefined
+          ? updateData.reservationReleaseAt
+          : transaction.reservationReleaseAt;
+      const releaseDate = releaseAt?.toDate
+        ? releaseAt.toDate()
+        : releaseAt
+          ? new Date(releaseAt)
+          : null;
+      const keepsSeat =
+        releaseDate && !Number.isNaN(releaseDate.getTime()) && releaseDate.getTime() > Date.now();
+      if (keepsSeat) {
+        await reservedRegularService.markRelease(transaction.userId, transaction.reservedEventId, releaseDate);
+      } else {
+        await reservedRegularService.removeUser(transaction.reservedEventId, transaction.userId);
+      }
+    }
+
     // Invalidate cache
     await cacheService.invalidateUserCache(transaction.userId);
 
@@ -276,7 +336,15 @@ class TransactionService {
       const paymentService = (await import('./paymentService.js')).default;
       await paymentService.cancelHypAgreement(transaction.hypHkId);
     }
-    return await this.updateTransaction(transactionId, { isActive: false });
+    const updates = { isActive: false };
+    if (transaction.transactionType === TRANSACTION_TYPES.RESERVED_SUBSCRIPTION) {
+      const { accessEndsDateFromTransaction } = await import('../utils/reservedRegulars.js');
+      const ends = accessEndsDateFromTransaction(transaction);
+      if (ends) {
+        updates.reservationReleaseAt = new Date(ends);
+      }
+    }
+    return await this.updateTransaction(transactionId, updates);
   }
 
   async getTransactionByHypOrderId(hypOrderId) {

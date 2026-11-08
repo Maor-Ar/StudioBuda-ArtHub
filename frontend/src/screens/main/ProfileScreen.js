@@ -19,7 +19,11 @@ import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 import { GET_ME, GET_MY_REGISTRATIONS, GET_MY_TRANSACTIONS, GET_PRODUCTS } from '../../services/graphql/queries';
 import TextModal from '../../components/TextModal';
 import TooltipIcon from '../../components/admin-dashboard/TooltipIcon';
-import { MAIN_SITE_URL, STUDIO_LOCATION_LINES } from '../../utils/constants';
+import {
+  MAIN_SITE_URL,
+  STUDIO_LOCATION_LINES,
+  STUDIO_WHATSAPP_GROUP_URL,
+} from '../../utils/constants';
 
 const STUDIO_MAP_IMAGE = require('../../assets/images/Map.jpeg');
 
@@ -158,12 +162,17 @@ const ProfileScreen = () => {
   const now = new Date();
   const activeTransactions = transactions.filter(t => {
     if (!t.isActive) return false;
-    if (t.transactionType === 'subscription' && t.accessEndsDate) {
+    if (t.transactionType === 'subscription' || t.transactionType === 'reserved_subscription') {
+      if (!t.accessEndsDate) return true;
       const end = new Date(t.accessEndsDate);
       return !isNaN(end.getTime()) && end >= now;
     }
     return true;
   });
+
+  const hasActiveSubscription = activeTransactions.some(
+    (t) => t.transactionType === 'subscription' || t.transactionType === 'reserved_subscription'
+  );
 
   // Filter future registrations only (today+)
   const futureRegistrations = registrations.filter(r => {
@@ -192,6 +201,10 @@ const ProfileScreen = () => {
         return pMonthly != null && txMonthly != null && Number(pMonthly) === Number(txMonthly);
       }
 
+      if (txType === 'reserved_subscription') {
+        return true;
+      }
+
       if (txType === 'punch_card') {
         const pTotal = p.totalEntries;
         const txTotal = transaction.totalEntries;
@@ -208,6 +221,8 @@ const ProfileScreen = () => {
     switch (transaction.transactionType) {
       case 'subscription':
         return `מנוי ${transaction.monthlyEntries} כניסות בחודש`;
+      case 'reserved_subscription':
+        return 'מנוי שיעור קבוע';
       case 'punch_card':
         return `כרטיסייה ${transaction.totalEntries} כניסות`;
       case 'trial_lesson':
@@ -326,6 +341,19 @@ const ProfileScreen = () => {
                         
                       </>
                     )}
+
+                    {transaction.transactionType === 'reserved_subscription' && (
+                      <>
+                        {transaction.reservedEventTitle ? (
+                          <Text style={styles.cardText}>שיעור שמור: {transaction.reservedEventTitle}</Text>
+                        ) : null}
+                        {transaction.accessEndsDate && (
+                          <Text style={styles.cardText}>
+                            תוקף עד: {formatDate(transaction.accessEndsDate)}
+                          </Text>
+                        )}
+                      </>
+                    )}
                     
                     {/* Punch card details */}
                     {transaction.transactionType === 'punch_card' && (
@@ -415,6 +443,15 @@ const ProfileScreen = () => {
         {/* Contact Information - RTL: field name on right, details on left */}
         <View style={styles.contactSection}>
           <Text style={styles.contactTitle}>פרטי קשר</Text>
+          {hasActiveSubscription ? (
+            <TouchableOpacity
+              style={styles.whatsappItem}
+              onPress={() => Linking.openURL(STUDIO_WHATSAPP_GROUP_URL)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.whatsappItemText}>הצטרפי לקבוצת הוואטסאפ של הסטודיו</Text>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity 
             style={styles.contactItem}
             onPress={() => Linking.openURL('tel:0556646033')}
@@ -776,6 +813,20 @@ const styles = StyleSheet.create({
     color: '#4E0D66',
     textAlign: 'right',
     marginBottom: 15,
+  },
+  whatsappItem: {
+    backgroundColor: '#25D366',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  whatsappItemText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   contactItem: {
     flexDirection: 'row',

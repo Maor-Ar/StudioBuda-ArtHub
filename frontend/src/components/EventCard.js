@@ -22,6 +22,7 @@ const EventCard = ({
   isCancelled = false,
   isRegistrationClosed = false,
   cancellationReason = null,
+  isReservedRegular = false,
 }) => {
   const formatTime = (time) => {
     if (!time) return '';
@@ -116,6 +117,10 @@ const EventCard = ({
             color="#FFFFFF"
             maxWidth={260}
           />
+        </View>
+      ) : isReservedRegular ? (
+        <View style={[styles.reservedButton, styles.cancelButtonAbsolute]}>
+          <Text style={styles.reservedButtonText}>המקום שלך שמור</Text>
         </View>
       ) : isRegistered ? (
         <View style={styles.registeredActions}>
@@ -329,6 +334,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     opacity: 0.6,
+  },
+  reservedButton: {
+    height: 31,
+    backgroundColor: '#4E0D66',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reservedButtonText: {
+    color: '#FFD1E3',
+    fontSize: 14,
+    fontWeight: '600',
   },
   fullButtonText: {
     color: '#FFFFFF',

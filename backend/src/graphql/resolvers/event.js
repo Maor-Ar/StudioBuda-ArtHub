@@ -4,6 +4,13 @@ import occurrenceOverrideService from '../../services/occurrenceOverrideService.
 import { requireAdmin, requireManager } from '../middleware/permissions.js';
 import { db } from '../../config/firebase.js';
 import { isRegistrationClosedForNoSignups, toUtcDateKey } from '../../utils/helpers.js';
+import { occupiedSeatCount, reservedRegularIds } from '../../utils/reservedRegulars.js';
+
+const withOccupiedCount = (event, dropInCount) => ({
+  ...event,
+  registeredCount: occupiedSeatCount(dropInCount, event),
+  reservedRegularCount: reservedRegularIds(event).length,
+});
 
 const getOccurrenceKeyFromEvent = (event) => {
   const eventId = event.baseEventId || event.id;
@@ -44,10 +51,7 @@ export const eventResolvers = {
         const overrideDoc = overridesByDocId.get(`${eventId}_${dateKey}`);
         const resolved = occurrenceOverrideService.applyToEvent(event, overrideDoc);
 
-        return {
-          ...resolved,
-          registeredCount: perDateCount,
-        };
+        return withOccupiedCount(resolved, perDateCount);
       });
     },
 
@@ -59,10 +63,18 @@ export const eventResolvers = {
         { eventId, dateKey },
       ]);
 
-      return {
-        ...resolved,
-        registeredCount: registrationCounts[`${eventId}:${dateKey}`] || 0,
-      };
+      return withOccupiedCount(resolved, registrationCounts[`${eventId}:${dateKey}`] || 0);
+    },
+
+    weeklySubscriptionClasses: async () => {
+      const reservedRegularService = (await import('../../services/reservedRegularService.js')).default;
+      return reservedRegularService.listWeeklySubscriptionClasses();
+    },
+
+    eventReservedRegulars: async (_, { eventId }, context) => {
+      await requireManager(context);
+      const reservedRegularService = (await import('../../services/reservedRegularService.js')).default;
+      return reservedRegularService.listMembers(eventId);
     },
   },
 
@@ -95,10 +107,19 @@ export const eventResolvers = {
       const registrationCounts = await registrationService.countRegistrationsByEventAndDate([
         { eventId, dateKey },
       ]);
-      return {
-        ...resolved,
-        registeredCount: registrationCounts[`${eventId}:${dateKey}`] || 0,
-      };
+      return withOccupiedCount(resolved, registrationCounts[`${eventId}:${dateKey}`] || 0);
+    },
+
+    adminAddReservedRegular: async (_, { eventId, userId }, context) => {
+      await requireManager(context);
+      const reservedRegularService = (await import('../../services/reservedRegularService.js')).default;
+      return reservedRegularService.addRegular(eventId, userId);
+    },
+
+    adminRemoveReservedRegular: async (_, { eventId, userId }, context) => {
+      await requireManager(context);
+      const reservedRegularService = (await import('../../services/reservedRegularService.js')).default;
+      return reservedRegularService.removeRegular(eventId, userId);
     },
   },
 
@@ -119,6 +140,17 @@ export const eventResolvers = {
       return Math.max(0, (event.maxRegistrations || 0) - count);
     },
     registeredCount: (event) => event.registeredCount || 0,
+    reservedRegularCount: (event) =>
+      event.reservedRegularCount != null
+        ? event.reservedRegularCount
+        : reservedRegularIds(event).length,
+    viewerIsReservedRegular: (event, _args, context) => {
+      const ids = reservedRegularIds(event);
+      if (Array.isArray(event.reservedRegularUserIds)) {
+        return !!(context?.user?.id && ids.includes(context.user.id));
+      }
+      return event.viewerIsReservedRegular === true;
+    },
     registeredUsers: (event) => event.registeredUsers || [],
     description: (event) => event.description || '',
     isCancelled: (event) => event.isCancelled === true,

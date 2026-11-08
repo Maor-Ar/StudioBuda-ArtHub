@@ -84,6 +84,7 @@ const CalendarScreen = () => {
   const { user, updateTransactions } = useAuth();
   const apolloClient = useApolloClient();
   const isAdmin = user?.role === USER_ROLES.ADMIN;
+  const canManageRegulars = user?.role === USER_ROLES.ADMIN || user?.role === USER_ROLES.MANAGER;
   const [selectedTab, setSelectedTab] = useState('יומן'); // 'יומן' or 'הרישומים שלי'
   const [tabLabelWidths, setTabLabelWidths] = useState({
     calendar: 0,
@@ -96,6 +97,7 @@ const CalendarScreen = () => {
   const [calendarModalMode, setCalendarModalMode] = useState('success');
   const pendingRegisterEventRef = useRef(null);
   const pendingEditScopeRef = useRef(null);
+  const refreshCalendarDataRef = useRef(null);
   const didAutoSwitchInitialDateRef = useRef(false);
 
   // Initialize with current date
@@ -159,11 +161,26 @@ const CalendarScreen = () => {
   }, [data]);
 
   // Keep the modal's selected event in sync with the latest events query result
-  // (so cancellationReason / isCancelled updates are immediately visible).
+  // (counts, cancellation, and reserved-regular flags after admin actions).
   useEffect(() => {
     if (!selectedEvent?.id || !data?.events) return;
     const updated = data.events.find((e) => e.id === selectedEvent.id);
-    if (updated) setSelectedEvent(updated);
+    if (!updated) return;
+    setSelectedEvent((current) => {
+      if (!current || current.id !== updated.id) return current;
+      if (
+        current.registeredCount === updated.registeredCount &&
+        current.reservedRegularCount === updated.reservedRegularCount &&
+        current.availableSpots === updated.availableSpots &&
+        current.isCancelled === updated.isCancelled &&
+        current.viewerIsReservedRegular === updated.viewerIsReservedRegular &&
+        current.title === updated.title &&
+        current.startTime === updated.startTime
+      ) {
+        return current;
+      }
+      return updated;
+    });
   }, [data?.events, selectedEvent?.id]);
 
   // Fetch user registrations
@@ -197,7 +214,7 @@ const CalendarScreen = () => {
       const registeredEvent = pendingRegisterEventRef.current;
       pendingRegisterEventRef.current = null;
       try {
-        await refreshCalendarData({ includeTransactions: true });
+        await refreshCalendarDataRef.current?.({ includeTransactions: true });
         if (modalVisible) {
           setModalVisible(false);
           setSelectedEvent(null);
@@ -241,7 +258,7 @@ const CalendarScreen = () => {
   const [cancelRegistration, { loading: cancelling }] = useMutation(CANCEL_REGISTRATION, {
     onCompleted: async () => {
       try {
-        await refreshCalendarData({ includeTransactions: true });
+        await refreshCalendarDataRef.current?.({ includeTransactions: true });
         showSuccessToast('הרישום בוטל בהצלחה');
       } catch (error) {
         console.error('[CANCELLATION] Error refetching after cancellation:', error);
@@ -262,7 +279,7 @@ const CalendarScreen = () => {
   const [adminReserveSpot, { loading: reservingSpot }] = useMutation(ADMIN_RESERVE_SPOT, {
     onCompleted: async () => {
       try {
-        await refreshCalendarData();
+        await refreshCalendarDataRef.current?.({ includeEventRegs: true });
         showSuccessToast('המקום שוריין בהצלחה');
       } catch (error) {
         console.error('[ADMIN RESERVE] Error refetching after reserve:', error);
@@ -280,7 +297,7 @@ const CalendarScreen = () => {
     {
       onCompleted: async () => {
         try {
-          await refreshCalendarData({ includeEventRegs: true });
+          await refreshCalendarDataRef.current?.({ includeEventRegs: true });
           showSuccessToast('האירוע בוטל לתאריך הנבחר');
         } catch (error) {
           console.error('[ADMIN CANCEL EVENT OCCURRENCE] Error refetching:', error);
@@ -301,7 +318,7 @@ const CalendarScreen = () => {
         const shouldCloseModal = pendingEditScopeRef.current === 'THIS_AND_FUTURE';
         pendingEditScopeRef.current = null;
         try {
-          await refreshCalendarData({ includeEventRegs: true });
+          await refreshCalendarDataRef.current?.({ includeEventRegs: true });
           showSuccessToast('השיעור עודכן בהצלחה');
         } catch (error) {
           console.error('[ADMIN EDIT EVENT] Error refetching:', error);
@@ -324,7 +341,7 @@ const CalendarScreen = () => {
     {
       onCompleted: async () => {
         try {
-          await refreshCalendarData({ includeEventRegs: true });
+          await refreshCalendarDataRef.current?.({ includeEventRegs: true });
           showSuccessToast('האירוע הופעל מחדש לתאריך הנבחר');
         } catch (error) {
           console.error('[ADMIN REENABLE EVENT OCCURRENCE] Error refetching:', error);
@@ -345,7 +362,7 @@ const CalendarScreen = () => {
   } = useQuery(GET_EVENT_REGISTRATIONS, {
     variables: { eventId: selectedEvent?.id || '' },
     skip: !isAdmin || !selectedEvent || !modalVisible,
-    fetchPolicy: 'cache-first',
+    fetchPolicy: 'network-only',
   });
 
   const refreshCalendarData = async ({ includeTransactions = false, includeEventRegs = false } = {}) => {
@@ -359,11 +376,12 @@ const CalendarScreen = () => {
       await refreshMyTransactions();
     }
   };
+  refreshCalendarDataRef.current = refreshCalendarData;
 
   const [adminCancelRegistration] = useMutation(ADMIN_CANCEL_REGISTRATION, {
     onCompleted: async () => {
       try {
-        await refreshCalendarData({ includeEventRegs: true });
+        await refreshCalendarDataRef.current?.({ includeEventRegs: true });
         showSuccessToast('הרישום הוסר בהצלחה');
       } catch (error) {
         console.error('[ADMIN CANCEL REGISTRATION] Error refetching after removal:', error);
@@ -974,6 +992,7 @@ const CalendarScreen = () => {
                       disabled={registering || cancelling || event.isCancelled || isRegistrationClosed}
                       isPast={isPastEvent}
                       isRegistrationClosed={isRegistrationClosed}
+                      isReservedRegular={!!event.viewerIsReservedRegular}
                     />
                   );
                 })
@@ -1060,6 +1079,9 @@ const CalendarScreen = () => {
               registrationsLoading={eventRegistrationsLoading}
               onRemoveRegistration={handleAdminRemoveRegistration}
               removingRegistrationId={removingRegistrationId}
+              isReservedRegular={!!selectedEvent.viewerIsReservedRegular}
+              canManageRegulars={canManageRegulars}
+              onRegularsChanged={() => refreshCalendarDataRef.current?.({ includeEventRegs: true })}
             />
           );
         })()}

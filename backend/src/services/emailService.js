@@ -218,6 +218,29 @@ class EmailService {
     );
   }
 
+  async sendHtmlEmail({ to, subject, html }) {
+    const payload = { to, subject, html };
+    const canSendGrid = !!config.email.apiKey && !!config.email.fromAddress;
+    const provider = (config.email.provider || 'sendgrid').toLowerCase();
+    const gmailReady = Boolean(config.email.gmail?.isReady);
+
+    if (canSendGrid && provider !== 'gmail') {
+      await this.sendWithSendGrid(payload);
+      return true;
+    }
+
+    const useGmail =
+      gmailReady &&
+      (provider === 'gmail' || provider !== 'sendgrid' || !canSendGrid);
+
+    if (useGmail) {
+      await this.sendWithGmailApi(payload);
+      return true;
+    }
+
+    throw new Error('Email is not configured');
+  }
+
   async sendWelcomeEmail(email, name) {
     // Placeholder
     // logger.info('Welcome email (placeholder)', { email, name, provider: config.email.provider });

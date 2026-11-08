@@ -83,7 +83,7 @@ export const validateDate = (date, fieldName = 'date') => {
 
 // Transaction type validation
 export const validateTransactionType = (type) => {
-  const validTypes = ['subscription', 'punch_card', 'trial_lesson'];
+  const validTypes = ['subscription', 'punch_card', 'trial_lesson', 'reserved_subscription'];
   if (!validTypes.includes(type)) {
     throw new ValidationError(
       `Invalid transaction type. Must be one of: ${validTypes.join(', ')}`,

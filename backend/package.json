@@ -12,8 +12,11 @@
     "test:coverage": "jest --coverage",
     "seed:classes": "node scripts/seedWeeklyClasses.js",
     "seed:transactions": "node scripts/seedUserTransactions.js",
+    "seed:reserved-subscription": "node scripts/seedReservedSubscriptionProduct.js",
     "clean:db": "node scripts/cleanDatabase.js",
-    "gmail:refresh-token": "node scripts/gmail-get-refresh-token.mjs"
+    "gmail:refresh-token": "node scripts/gmail-get-refresh-token.mjs",
+    "sync:payments": "node scripts/dailyPaymentSync.js",
+    "sync:payments:dry": "node scripts/dailyPaymentSync.js --dry-run"
   },
   "keywords": [
     "graphql",

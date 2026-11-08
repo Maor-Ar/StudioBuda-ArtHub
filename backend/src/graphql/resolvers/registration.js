@@ -3,6 +3,7 @@ import eventService from '../../services/eventService.js';
 import userService from '../../services/userService.js';
 import occurrenceOverrideService from '../../services/occurrenceOverrideService.js';
 import { requireAdmin, requireAuthenticated } from '../middleware/permissions.js';
+import { occupiedSeatCount } from '../../utils/reservedRegulars.js';
 
 const enrichRegistrationsWithEvents = async (registrations) => {
   if (!registrations.length) {
@@ -43,7 +44,7 @@ const enrichRegistrationsWithEvents = async (registrations) => {
       _enrichedEvent: resolved
         ? {
             ...resolved,
-            registeredCount: registrationCounts[countKey] || 0,
+            registeredCount: occupiedSeatCount(registrationCounts[countKey] || 0, event),
           }
         : null,
     };
@@ -153,7 +154,10 @@ export const registrationResolvers = {
 
       return {
         ...resolved,
-        registeredCount: registrationCounts[`${registration.eventId}:${dateKey}`] || 0,
+        registeredCount: occupiedSeatCount(
+          registrationCounts[`${registration.eventId}:${dateKey}`] || 0,
+          event
+        ),
       };
     },
     occurrenceDate: (registration) => {

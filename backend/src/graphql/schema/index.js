@@ -93,6 +93,22 @@ export const typeDefs = gql`
     subscriptionRetention: [DashboardRetentionPoint!]!
     punchCardReturnRate: [DashboardRetentionPoint!]!
     avgDaysBetweenPunchCardPurchases: Float!
+    regulars: DashboardRegulars!
+  }
+
+  type DashboardRegularClass {
+    key: String!
+    fullLabel: String!
+    shortLabel: String!
+    regularsCount: Int!
+    maxRegistrations: Int!
+  }
+
+  type DashboardRegulars {
+    seatedRegulars: Int!
+    activeReservedSubscriptions: Int!
+    classesWithRegulars: Int!
+    byClass: [DashboardRegularClass!]!
   }
 
   type Query {
@@ -108,6 +124,8 @@ export const typeDefs = gql`
     products: [Product!]!
     allProducts: [Product!]!
     adminDashboardMetrics(forceRefresh: Boolean): AdminDashboardMetrics!
+    weeklySubscriptionClasses: [WeeklySubscriptionClass!]!
+    eventReservedRegulars(eventId: ID!): [ReservedRegularMember!]!
   }
 
   type Mutation {
@@ -123,6 +141,8 @@ export const typeDefs = gql`
     updateEvent(id: ID!, input: UpdateEventInput!): Event!
     deleteEvent(id: ID!): Event!
     adminEditEvent(input: AdminEditEventInput!): Event!
+    adminAddReservedRegular(eventId: ID!, userId: ID!): Boolean!
+    adminRemoveReservedRegular(eventId: ID!, userId: ID!): Boolean!
 
     # Registrations (Authenticated users)
     registerForEvent(input: RegisterForEventInput!): EventRegistration!

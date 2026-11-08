@@ -50,11 +50,13 @@ const HELP_TEXTS = {
   punchMonthly:
     'הגרף מציג רכישות של כרטיסיות לפי תאריך רכישה, ולא רישומים לשיעורים. לכן יכול להיות פער מול גרף התפלגות רישומים.',
   registrationByType:
-    'המדד מחושב לפי רישומים ב-30 הימים האחרונים (לא רכישות). לכל רישום משויך סוג העסקה ששימשה אותו: מנוי, כרטיסיה, שיעור ניסיון או חד פעמי.',
+    'המדד מחושב לפי רישומים ב-30 הימים האחרונים (לא רכישות). לכל רישום משויך סוג העסקה ששימשה אותו: מנוי, כרטיסיה, שיעור ניסיון או חד פעמי. קבועים במנוי שיעור קבוע לא נכללים, כי אין להם רישום נפרד לכל שבוע.',
   avgStudents:
-    'הממוצע הכללי מחושב לפי כל מופעי השיעורים בפועל ב-30 הימים האחרונים (לפי תאריך שיעור), כולל כל סוגי השיעורים (למשל בוטניקה). מופעים שבוטלו לא נכללים. מתחת מוצג ממוצע לכל שם שיעור בנפרד.',
+    'הממוצע הכללי מחושב לפי כל מופעי השיעורים בפועל ב-30 הימים האחרונים (לפי תאריך שיעור), כולל כל סוגי השיעורים (למשל בוטניקה). מופעים שבוטלו לא נכללים. מתחת מוצג ממוצע לכל שם שיעור בנפרד. קבועים לא נספרים בממוצע הזה.',
   classDistribution:
-    'החישוב דינמי לפי שם השיעור בפועל. שמות ארוכים מוצגים בקיצור (2 מילים), ובלחיצה/hover רואים את השם המלא.',
+    'החישוב דינמי לפי שם השיעור בפועל. שמות ארוכים מוצגים בקיצור (2 מילים), ובלחיצה/hover רואים את השם המלא. הרישומים כאן הם מזדמנים בלבד, בלי קבועים.',
+  regulars:
+    'קבועים הם משתמשים ששמורים על סדרת השיעור לכל מפגש. הם לא מופיעים ברישומים המזדמנים. התרשים מציג כמה קבועים יש בכל שיעור.',
   averageTenure:
     'מנויים: ממוצע חודשי פעילות במנויים שהסתיימו. כרטיסיות: ממוצע מספר רכישות כרטיסיה לכל משתמש.',
   subRetention:
@@ -144,7 +146,7 @@ const AdminHubScreen = ({ navigation }) => {
                   title="מספר מנויים פעילים"
                   value={metrics.activeSubscriptions}
                   compact
-                  infoText="מספר עסקאות מנוי פעילות כרגע."
+                  infoText="מספר עסקאות מנוי פעילות כרגע. מנוי שיעור קבוע נספר בכרטיס הקבועים, לא כאן."
                 />
               </View>
               <View style={styles.kpiCell}>
@@ -219,6 +221,28 @@ const AdminHubScreen = ({ navigation }) => {
               title="התפלגות רישומים לפי שיעורים (30 ימים אחרונים)"
               items={dynamicClassItems}
               infoText={HELP_TEXTS.classDistribution}
+            />
+
+            <Text style={styles.regularsNote}>
+              הרישומים והממוצעים למעלה סופרים רק נרשמים מזדמנים. קבועים במנוי שיעור קבוע לא נרשמים לכל שבוע, ולכן הם מוצגים בנפרד.
+            </Text>
+            <KpiCard
+              title="קבועים בשיעורים"
+              value={Number(metrics.regulars?.seatedRegulars || 0)}
+              subtitle={`מנויים פעילים: ${metrics.regulars?.activeReservedSubscriptions || 0} · שיעורים עם קבועים: ${metrics.regulars?.classesWithRegulars || 0}`}
+              infoText={HELP_TEXTS.regulars}
+            />
+            <BarChartCard
+              title="קבועים לפי שיעור"
+              data={(metrics.regulars?.byClass || []).map((item) => ({
+                monthKey: item.key,
+                monthLabel: item.shortLabel || item.fullLabel,
+                count: item.regularsCount,
+              }))}
+              keys={[{ key: 'count', label: 'קבועים', color: '#AB5FBD' }]}
+              showValuesAbove
+              maxBars={12}
+              infoText={HELP_TEXTS.regulars}
             />
 
             <KpiCard
@@ -331,6 +355,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     textAlign: 'right',
+    marginBottom: 12,
+  },
+  regularsNote: {
+    color: '#FFE2ED',
+    fontSize: 14,
+    textAlign: 'right',
+    lineHeight: 20,
     marginBottom: 12,
   },
   dashboardHeaderRow: {

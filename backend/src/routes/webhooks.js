@@ -2,6 +2,7 @@ import express from 'express';
 import paymentService, { getParam } from '../services/paymentService.js';
 import transactionService from '../services/transactionService.js';
 import userService from '../services/userService.js';
+import reservedRegularService from '../services/reservedRegularService.js';
 import logger from '../utils/logger.js';
 import { TRANSACTION_TYPES } from '../config/constants.js';
 import { ValidationError } from '../utils/errors.js';
@@ -100,6 +101,10 @@ async function createTransactionFromPayment(paymentData) {
     throw new ValidationError('User not found', 'userId');
   }
 
+  if (productType === TRANSACTION_TYPES.RESERVED_SUBSCRIPTION) {
+    return fulfillReservedSubscriptionPayment(paymentData, userId);
+  }
+
   const now = new Date();
   let transactionData = {
     userId,
@@ -142,6 +147,71 @@ async function createTransactionFromPayment(paymentData) {
   }
 
   return transactionService.createTransaction(transactionData);
+}
+
+async function fulfillReservedSubscriptionPayment(paymentData, userId) {
+  const { reservedEventId, amount } = paymentData.metadata || {};
+  const now = new Date();
+  await reservedRegularService.releaseExpiredSeatsForUser(userId);
+
+  let claim = { claimed: false, reason: 'missing', eventId: reservedEventId || null, event: null };
+  const holding = reservedEventId ? await reservedRegularService.findHolding(userId) : null;
+  if (!reservedEventId) {
+    claim = { claimed: false, reason: 'missing', eventId: null, event: null };
+  } else if (holding) {
+    claim = { claimed: false, reason: 'other_seat', eventId: reservedEventId, event: null };
+  } else {
+    claim = await reservedRegularService.tryClaimSeat(reservedEventId, userId);
+  }
+
+  try {
+    const transaction = await transactionService.createTransaction({
+      userId,
+      transactionType: TRANSACTION_TYPES.RESERVED_SUBSCRIPTION,
+      amount: paymentData.amount || amount,
+      hypTransactionId: paymentData.hypTransactionId,
+      hypOrderId: paymentData.uniqueId || null,
+      invoiceId: paymentData.hypTransactionId || paymentData.uniqueId,
+      cardLast4: paymentData.cardLast4 || null,
+      cardBrand: paymentData.cardBrand || null,
+      lastPaymentDate: now,
+      purchaseDate: now,
+      lastRenewalDate: now,
+      hypHkId: paymentData.hypHkId || null,
+      reservedEventId: reservedEventId || null,
+      isActive: claim.claimed === true,
+    });
+
+    if (!claim.claimed) {
+      if (paymentData.hypHkId) {
+        try {
+          await paymentService.cancelHypAgreement(paymentData.hypHkId);
+        } catch (error) {
+          logger.error('Failed to cancel Hyp agreement after reserved seat was not claimed', {
+            userId,
+            reservedEventId,
+            reason: claim.reason,
+            error: error.message,
+          });
+        }
+      }
+      logger.warn('Reserved subscription payment recorded without a seat', {
+        userId,
+        reservedEventId,
+        reason: claim.reason,
+        transactionId: transaction.id,
+      });
+    } else if (claim.event) {
+      await reservedRegularService.notifyIfOverbooked(claim.event, userId);
+    }
+
+    return transaction;
+  } catch (error) {
+    if (claim.claimed) {
+      await reservedRegularService.removeUser(claim.eventId, userId);
+    }
+    throw error;
+  }
 }
 
 /**

@@ -20,6 +20,7 @@ import { useShouldShowLocalLoader } from '../../context/LoadingContext';
 
 const TYPE_LABELS = {
   [TRANSACTION_TYPES.SUBSCRIPTION]: 'מנוי',
+  [TRANSACTION_TYPES.RESERVED_SUBSCRIPTION]: 'מנוי שיעור קבוע',
   [TRANSACTION_TYPES.PUNCH_CARD]: 'כרטיסייה',
   [TRANSACTION_TYPES.TRIAL_LESSON]: 'שיעור ניסיון',
 };

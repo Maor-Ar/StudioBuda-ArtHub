@@ -1,5 +1,6 @@
 import { db } from '../config/firebase.js';
 import { TRANSACTION_TYPES, CACHE_TTL } from '../config/constants.js';
+import { holdsReservedSeat, reservedRegularIds } from '../utils/reservedRegulars.js';
 import cacheService from './cacheService.js';
 
 const MONTH_LABELS_HE = [
@@ -474,6 +475,28 @@ class AdminDashboardService {
     });
     const avgDaysBetweenPunchCardPurchases = average(punchIntervalsDays);
 
+    const activeReservedSubscriptions = transactions.filter((tx) => holdsReservedSeat(tx)).length;
+    const regularsByClass = [...eventsMap.values()]
+      .filter((event) => event.isActive !== false && reservedRegularIds(event).length > 0)
+      .map((event) => {
+        const fullLabel = normalizeClassLabel(event);
+        return {
+          key: event.id,
+          fullLabel,
+          shortLabel: shortClassLabel(fullLabel) || fullLabel,
+          regularsCount: reservedRegularIds(event).length,
+          maxRegistrations: Number(event.maxRegistrations || 0),
+        };
+      })
+      .sort((a, b) => b.regularsCount - a.regularsCount || a.fullLabel.localeCompare(b.fullLabel, 'he'));
+    const seatedRegulars = regularsByClass.reduce((sum, item) => sum + item.regularsCount, 0);
+    const regulars = {
+      seatedRegulars,
+      activeReservedSubscriptions,
+      classesWithRegulars: regularsByClass.length,
+      byClass: regularsByClass,
+    };
+
     return {
       activeSubscriptions,
       activePunchCards,
@@ -488,6 +511,7 @@ class AdminDashboardService {
       subscriptionRetention,
       punchCardReturnRate,
       avgDaysBetweenPunchCardPurchases,
+      regulars,
     };
   }
 }
